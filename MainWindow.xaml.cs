@@ -233,15 +233,14 @@ public partial class MainWindow : Window
         if (pendingRecord is not null) { ShowEnd(); return; }
         if (!RequireLogin()) return;
         BeginPanel("games", "AKC MINI GAMES", "어떤 게임을 할까요?", "목록에서 플레이할 게임을 고르세요.");
-        AddGameItem("똥 피하기", "하늘에서 떨어지는 똥을 피하세요. 시간이 지날수록 더 빠르게, 더 많이 떨어집니다.", "←  →  /  A  D 이동   ·   10점 / 생존 1초 + 25점 / 피한 똥", StartGame);
+        AddGameItem("똥 피하기", "←  →  /  A  D   이동     ·     SPACE   일시정지", StartGame);
         AddButton("돌아가기", ShowHome);
     }
-    private void AddGameItem(string title, string description, string detail, Action start)
+    private void AddGameItem(string title, string keys, Action start)
     {
         var body = new StackPanel();
         body.Children.Add(new TextBlock { Text = title, FontSize = 16, FontWeight = FontWeights.Bold });
-        body.Children.Add(new TextBlock { Text = description, FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(168, 188, 175)), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) });
-        body.Children.Add(new TextBlock { Text = detail, FontSize = 10, Foreground = new SolidColorBrush(Color.FromRgb(114, 143, 125)), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) });
+        body.Children.Add(new TextBlock { Text = keys, FontSize = 11, Foreground = new SolidColorBrush(Color.FromRgb(145, 171, 156)), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) });
         var button = new Button { Content = body, HorizontalContentAlignment = HorizontalAlignment.Left, Padding = new Thickness(16, 14, 16, 14), Margin = new Thickness(0, 0, 0, 8) };
         System.Windows.Automation.AutomationProperties.SetName(button, title);
         button.Click += (_, _) => { if (!busy) start(); };
