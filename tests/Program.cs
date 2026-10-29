@@ -179,8 +179,8 @@ try
     });
     Check("리듬: 왼손·오른손 키 배치와 노트 생성", () =>
     {
-        Assert(RhythmEngine.LaneOf('a') == 0 && RhythmEngine.LaneOf('B') == 0 && RhythmEngine.LaneOf('Y') == 1 && RhythmEngine.LaneOf('/') == 1 && RhythmEngine.LaneOf('1') == -1, "키 라인 배치 오류");
-        Assert(string.Concat(RhythmEngine.LaneKeys).Length == 31 && string.Concat(RhythmEngine.LaneKeys).Distinct().Count() == 31 && !string.Concat(RhythmEngine.LaneKeys).Any(c => c is '[' or ']'), "영문 26자 + ;',./ 5개 구성 오류");
+        Assert(RhythmEngine.LaneOf('s') == 0 && RhythmEngine.LaneOf('D') == 0 && RhythmEngine.LaneOf('K') == 1 && RhythmEngine.LaneOf('l') == 1 && RhythmEngine.LaneOf('A') == -1 && RhythmEngine.LaneOf('J') == -1, "키 라인 배치 오류");
+        Assert(string.Concat(RhythmEngine.LaneKeys) == "SDKL", "왼손 S D · 오른손 K L 구성 오류");
         var game = new RhythmEngine(3); game.Reset(); for (int i = 0; i < 30; i++) game.Update(.1);
         Assert(game.Notes.Count > 0 && game.Notes.All(n => RhythmEngine.LaneOf(n.Key) == n.Lane), "노트 생성 또는 라인 불일치");
     });
@@ -224,7 +224,7 @@ try
     {
         Assert(RhythmEngine.LabelOf('q') == "ㅂ" && RhythmEngine.LabelOf('R') == "ㄱ" && RhythmEngine.LabelOf('K') == "ㅏ" && RhythmEngine.LabelOf('M') == "ㅡ" && RhythmEngine.LabelOf('/') == "/", "한글 자판 표기 오류");
         var labels = string.Concat(RhythmEngine.LaneKeys).Select(RhythmEngine.LabelOf).ToList();
-        Assert(labels.Distinct().Count() == 31 && labels.Count(l => l[0] is >= 'ㄱ' and <= 'ㅣ') == 26, "영문 키 26개가 모두 서로 다른 한글로 표시되지 않음");
+        Assert(labels.SequenceEqual(["ㄴ", "ㅇ", "ㅏ", "ㅣ"]), "S D K L 한글 표기 오류");
     });
     Check("리듬: 양손 동시 블록과 각 라인 판정", () =>
     {
