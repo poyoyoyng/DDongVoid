@@ -205,6 +205,28 @@ try
         }
         Assert(game.SpeedMultiplier > 2.99, "120초 이후 3배 속도 미도달");
     });
+    Check("리듬: 블록 글자는 한글 자판 표기", () =>
+    {
+        Assert(RhythmEngine.LabelOf('q') == "ㅂ" && RhythmEngine.LabelOf('R') == "ㄱ" && RhythmEngine.LabelOf('K') == "ㅏ" && RhythmEngine.LabelOf('M') == "ㅡ" && RhythmEngine.LabelOf('/') == "/", "한글 자판 표기 오류");
+        var labels = string.Concat(RhythmEngine.LaneKeys).Select(RhythmEngine.LabelOf).ToList();
+        Assert(labels.Distinct().Count() == 33 && labels.Count(l => l[0] is >= 'ㄱ' and <= 'ㅣ') == 26, "영문 키 26개가 모두 서로 다른 한글로 표시되지 않음");
+    });
+    Check("리듬: 양손 동시 블록과 각 라인 판정", () =>
+    {
+        var game = new RhythmEngine(7); game.Reset();
+        List<RhythmNote> pair = [];
+        for (int i = 0; i < 600 && pair.Count == 0; i++)
+        {
+            game.Update(.05);
+            pair = game.Notes.GroupBy(n => n.Time).Where(g => g.Count() == 2).Select(g => g.ToList()).FirstOrDefault() ?? [];
+        }
+        Assert(pair.Count == 2 && pair[0].Lane != pair[1].Lane, "양손 동시 블록이 나오지 않음");
+        game.Notes.RemoveAll(n => !pair.Contains(n));
+        while (pair[0].Time - game.Seconds > 1e-9) game.Update(Math.Min(.1, pair[0].Time - game.Seconds));
+        var combo = game.Combo;
+        Assert(game.Hit(pair[0].Key) == RhythmJudgement.Perfect && game.Hit(pair[1].Key) == RhythmJudgement.Perfect && game.Combo == combo + 2, "양손 동시 입력 판정 오류");
+        Assert(game.LastJudgement[0] == RhythmJudgement.Perfect && game.LastJudgement[1] == RhythmJudgement.Perfect, "라인별 판정 표시 오류");
+    });
     Check("리듬: 타이밍 판정과 콤보 점수", () =>
     {
         var game = new RhythmEngine(4); game.Reset();
@@ -213,6 +235,7 @@ try
         Assert(game.Hit(note.Key) is null && game.Combo == 1, "이미 처리한 노트가 다시 판정됨");
         var next = AdvanceTo(game, -.08);
         Assert(game.Hit(next.Key) == RhythmJudgement.Great && game.Combo == 2 && game.Score == 300 + 200 + 2, "GREAT 판정 또는 콤보 보너스 오류");
+        game.Notes.RemoveAll(n => Math.Abs(n.Time - game.Seconds) <= RhythmEngine.GoodWindow);
         var early = game.Notes.MinBy(n => n.Time)!;
         Assert(early.Time - game.Seconds > RhythmEngine.GoodWindow && game.Hit(early.Key) is null && game.Notes.Contains(early) && game.Combo == 2, "판정 범위 밖 입력이 노트를 소모함");
     });

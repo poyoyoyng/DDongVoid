@@ -15,6 +15,8 @@ public sealed class RhythmEngine
 {
     public const double PerfectWindow = .05, GreatWindow = .1, GoodWindow = .16;
     public static readonly string[] LaneKeys = ["QWERTASDFGZXCVB", "YUIOPHJKLNM[];',./"];
+    // Labels follow the Korean 2-set layout printed on the same physical keys.
+    private const string Latin = "QWERTYUIOPASDFGHJKLZXCVBNM", Hangul = "ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔㅁㄴㅇㄹㅎㅗㅓㅏㅣㅋㅌㅊㅍㅠㅜㅡ";
     private readonly int? seed;
     private Random random;
     private double nextNoteTime;
@@ -35,19 +37,24 @@ public sealed class RhythmEngine
     // Fall time shrinks steadily: 2x speed at 60s, 3x at 120s, capped near 3.3x.
     public double TravelTime => Math.Max(.55, 1.8 / (1 + Seconds / 60));
     public double SpeedMultiplier => 1.8 / TravelTime;
-    public RhythmJudgement? LastJudgement { get; private set; }
-    public int LastJudgementLane { get; private set; }
-    public double LastJudgementTime { get; private set; } = double.NegativeInfinity;
-    public int LastPressLane { get; private set; } = -1;
-    public double LastPressTime { get; private set; } = double.NegativeInfinity;
-    public RhythmEngine(int? seed = null) { this.seed = seed; random = NewRandom(); }
+    // Share of beats that drop one note in each lane at the same moment.
+    public double BothHandsChance => Math.Min(.45, .2 + Seconds / 300);
+    public RhythmJudgement?[] LastJudgement { get; } = new RhythmJudgement?[2];
+    public double[] LastJudgementTime { get; } = new double[2];
+    public double[] LastPressTime { get; } = new double[2];
+    public RhythmEngine(int? seed = null) { this.seed = seed; random = NewRandom(); Reset(); }
     // Unseeded runs draw a fresh random seed every game, so no two plays share a pattern.
     private Random NewRandom() => seed.HasValue ? new Random(seed.Value) : new Random(Random.Shared.Next());
     public static int LaneOf(char key) => Array.FindIndex(LaneKeys, keys => keys.Contains(char.ToUpperInvariant(key)));
+    public static string LabelOf(char key)
+    {
+        var index = Latin.IndexOf(char.ToUpperInvariant(key));
+        return index < 0 ? key.ToString() : Hangul[index].ToString();
+    }
     public void Reset()
     {
-        random = NewRandom(); Notes.Clear(); Seconds = 0; Score = Combo = MaxCombo = Perfect = Great = Good = Miss = 0; Life = 100;
-        nextNoteTime = 2; LastJudgement = null; LastJudgementTime = LastPressTime = double.NegativeInfinity; LastPressLane = -1;
+        random = NewRandom(); Notes.Clear(); Seconds = 0; Score = Combo = MaxCombo = Perfect = Great = Good = Miss = 0; Life = 100; nextNoteTime = 2;
+        Array.Clear(LastJudgement); Array.Fill(LastJudgementTime, double.NegativeInfinity); Array.Fill(LastPressTime, double.NegativeInfinity);
     }
     public void Update(double seconds)
     {
@@ -55,18 +62,22 @@ public sealed class RhythmEngine
         Seconds += Math.Min(seconds, .1);
         while (nextNoteTime < Seconds + TravelTime)
         {
-            var lane = random.Next(LaneKeys.Length);
-            Notes.Add(new RhythmNote { Lane = lane, Key = LaneKeys[lane][random.Next(LaneKeys[lane].Length)], Time = nextNoteTime, Travel = TravelTime });
-            nextNoteTime += NoteInterval * (.85 + random.NextDouble() * .3);
+            var bothHands = random.NextDouble() < BothHandsChance;
+            if (bothHands) { AddNote(0); AddNote(1); } else AddNote(random.Next(LaneKeys.Length));
+            // A two-hand beat gets a little more room before the next one.
+            nextNoteTime += NoteInterval * (bothHands ? 1.25 : 1) * (.85 + random.NextDouble() * .3);
         }
         for (int i = Notes.Count - 1; i >= 0 && !IsOver; i--)
             if (Seconds - Notes[i].Time > GoodWindow) { var lane = Notes[i].Lane; Notes.RemoveAt(i); Judge(RhythmJudgement.Miss, lane); }
     }
+    private void AddNote(int lane) =>
+        Notes.Add(new RhythmNote { Lane = lane, Key = LaneKeys[lane][random.Next(LaneKeys[lane].Length)], Time = nextNoteTime, Travel = TravelTime });
     public RhythmJudgement? Hit(char key)
     {
         if (IsOver) return null;
         key = char.ToUpperInvariant(key);
-        LastPressLane = LaneOf(key); LastPressTime = Seconds;
+        var pressedLane = LaneOf(key);
+        if (pressedLane >= 0) LastPressTime[pressedLane] = Seconds;
         // Presses with no note in reach are ignored, so early taps are not punished.
         var note = Notes.Where(n => n.Key == key && Math.Abs(n.Time - Seconds) <= GoodWindow).MinBy(n => n.Time);
         if (note is null) return null;
@@ -89,6 +100,6 @@ public sealed class RhythmEngine
         if (judgement == RhythmJudgement.Miss) Combo = 0;
         else { Score += points + Math.Min(Combo, 100) * 2; Combo++; MaxCombo = Math.Max(MaxCombo, Combo); }
         Life = Math.Clamp(Life, 0, 100);
-        LastJudgement = judgement; LastJudgementLane = lane; LastJudgementTime = Seconds;
+        LastJudgement[lane] = judgement; LastJudgementTime[lane] = Seconds;
     }
 }

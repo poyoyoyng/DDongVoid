@@ -15,7 +15,7 @@ public sealed class RhythmSurface : FrameworkElement
     private static SolidColorBrush Brush(string color) { var b = (SolidColorBrush)new BrushConverter().ConvertFromString(color)!; b.Freeze(); return b; }
     private static readonly Brush[] LaneBrushes = [Brush("#A7F3CE"), Brush("#F4C59D")];
     private static readonly Brush Ink = Brush("#122A1E"), LaneFill = Brush("#14261E"), LaneEdge = Brush("#2C4234"), Muted = Brush("#91AB9C");
-    private static readonly Typeface KeyFace = new(new FontFamily("Consolas"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
+    private static readonly Typeface KeyFace = new(new FontFamily("Consolas, Malgun Gothic"),FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
     private static readonly Typeface LabelFace = new(new FontFamily("Malgun Gothic"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
     private static readonly Dictionary<RhythmJudgement, Brush> JudgementBrushes = new()
     {
@@ -44,7 +44,7 @@ public sealed class RhythmSurface : FrameworkElement
             dc.PushOpacity(laneOpacity);
             dc.DrawRoundedRectangle(TransparentMode ? null : LaneFill, new Pen(LaneEdge, 1), new Rect(x, 8, LaneWidth, ActualHeight - 16), 10, 10);
             dc.Pop();
-            var pressed = Engine.LastPressLane == lane && Engine.Seconds - Engine.LastPressTime < .12;
+            var pressed = Engine.Seconds - Engine.LastPressTime[lane] < .12;
             dc.PushOpacity(pressed ? .45 : .14);
             dc.DrawRoundedRectangle(LaneBrushes[lane], null, new Rect(x + 4, HitY - BlockHeight / 2, LaneWidth - 8, BlockHeight), 8, 8);
             dc.Pop();
@@ -61,13 +61,16 @@ public sealed class RhythmSurface : FrameworkElement
             var y = -BlockHeight + progress * (HitY + BlockHeight);
             var x = LaneLeft(note.Lane) + (LaneWidth - blockWidth) / 2;
             dc.DrawRoundedRectangle(LaneBrushes[note.Lane], null, new Rect(x, y - BlockHeight / 2, blockWidth, BlockHeight), 9, 9);
-            DrawText(dc, note.Key.ToString(), KeyFace, 20, Ink, x + blockWidth / 2, y, dpi);
+            DrawText(dc, RhythmEngine.LabelOf(note.Key), KeyFace, 24, Ink, x + blockWidth / 2, y, dpi);
         }
         dc.Pop();
-        var sinceJudgement = Engine.Seconds - Engine.LastJudgementTime;
-        if (Engine.LastJudgement is RhythmJudgement judgement && sinceJudgement < .45)
-            DrawText(dc, judgement.ToString().ToUpperInvariant(), KeyFace, 18, JudgementBrushes[judgement],
-                LaneLeft(Engine.LastJudgementLane) + LaneWidth / 2, HitY - 64 - sinceJudgement * 30, dpi, 1 - sinceJudgement / .45);
+        for (int lane = 0; lane < 2; lane++)
+        {
+            var sinceJudgement = Engine.Seconds - Engine.LastJudgementTime[lane];
+            if (Engine.LastJudgement[lane] is RhythmJudgement judgement && sinceJudgement < .45)
+                DrawText(dc, judgement.ToString().ToUpperInvariant(), KeyFace, 18, JudgementBrushes[judgement],
+                    LaneLeft(lane) + LaneWidth / 2, HitY - 64 - sinceJudgement * 30, dpi, 1 - sinceJudgement / .45);
+        }
         DrawText(dc, $"SPEED ×{Engine.SpeedMultiplier:0.0}", KeyFace, 11, Muted, ActualWidth / 2, 22, dpi, .7);
         if (Engine.Combo >= 2) DrawText(dc, $"{Engine.Combo} COMBO", KeyFace, 22, Brushes.White, ActualWidth / 2, ActualHeight * .3, dpi, .75);
         var lifeWidth = ActualWidth - Side * 2;

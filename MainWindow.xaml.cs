@@ -256,7 +256,7 @@ public partial class MainWindow : Window
         if (!RequireLogin()) return;
         BeginPanel("games", "AKC MINI GAMES", "어떤 게임을 할까요?", "목록에서 플레이할 게임을 고르세요.");
         AddGameItem("똥 피하기", "←  →  /  A  D   이동     ·     SPACE   일시정지", () => StartGame(MiniGame.Dodge));
-        AddGameItem("키보드 리듬", "왼손  Q W E R T  A S D F G  Z X C V B\n오른손  Y U I O P [ ]  H J K L ; '  N M , . /\n블록이 판정선에 닿을 때 블록의 키   ·   SPACE   일시정지", () => StartGame(MiniGame.Rhythm));
+        AddGameItem("키보드 리듬", "리듬게임", () => StartGame(MiniGame.Rhythm));
         AddButton("돌아가기", ShowHome);
     }
     private FrameworkElement ActiveSurface => activeGame == MiniGame.Rhythm ? RhythmView : Surface;
