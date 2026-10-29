@@ -205,6 +205,21 @@ try
         }
         Assert(game.SpeedMultiplier > 2.99, "120초 이후 3배 속도 미도달");
     });
+    Check("리듬: 정박·엇박·따닥·연속 패턴이 섞여 나옴", () =>
+    {
+        var game = new RhythmEngine(11); game.Reset();
+        var times = new SortedSet<double>();
+        for (int i = 0; i < 1500; i++) { game.Update(.1); foreach (var n in game.Notes) times.Add(Math.Round(n.Time, 6)); game.Notes.Clear(); }
+        var list = times.ToList();
+        var gaps = list.Zip(list.Skip(1), (a, b) => (Gap: b - a, At: a)).ToList();
+        Assert(gaps.All(g => g.Gap >= RhythmEngine.MinGap - 1e-6), "손으로 칠 수 없을 만큼 짧은 간격");
+        int longestQuickRun = 0, run = 0;
+        foreach (var g in gaps) { run = g.Gap < .26 ? run + 1 : 0; longestQuickRun = Math.Max(longestQuickRun, run); }
+        Assert(longestQuickRun >= 2, "3연타 이상 연속 패턴이 나오지 않음");
+        var early = gaps.Where(g => g.At < 30).Select(g => Math.Round(g.Gap, 2)).Distinct().Count();
+        Assert(early >= 4, $"초반 간격이 너무 단조로움: {early}종류");
+        Assert(gaps.Any(g => g.At < 30 && g.Gap < .3) && gaps.Any(g => g.At < 30 && g.Gap > .9), "초반에 따닥 또는 엇박(긴 간격)이 없음");
+    });
     Check("리듬: 블록 글자는 한글 자판 표기", () =>
     {
         Assert(RhythmEngine.LabelOf('q') == "ㅂ" && RhythmEngine.LabelOf('R') == "ㄱ" && RhythmEngine.LabelOf('K') == "ㅏ" && RhythmEngine.LabelOf('M') == "ㅡ" && RhythmEngine.LabelOf('/') == "/", "한글 자판 표기 오류");

@@ -60,15 +60,48 @@ public sealed class RhythmEngine
     {
         if (IsOver || seconds <= 0) return;
         Seconds += Math.Min(seconds, .1);
-        while (nextNoteTime < Seconds + TravelTime)
-        {
-            var bothHands = random.NextDouble() < BothHandsChance;
-            if (bothHands) { AddNote(0); AddNote(1); } else AddNote(random.Next(LaneKeys.Length));
-            // A two-hand beat gets a little more room before the next one.
-            nextNoteTime += NoteInterval * (bothHands ? 1.25 : 1) * (.85 + random.NextDouble() * .3);
-        }
+        while (nextNoteTime < Seconds + TravelTime) SpawnPattern();
         for (int i = Notes.Count - 1; i >= 0 && !IsOver; i--)
             if (Seconds - Notes[i].Time > GoodWindow) { var lane = Notes[i].Lane; Notes.RemoveAt(i); Judge(RhythmJudgement.Miss, lane); }
+    }
+    // Shortest gap between consecutive notes, so quick patterns stay playable at top speed.
+    public const double MinGap = .12;
+    private double Quick(double fraction) => Math.Max(MinGap, NoteInterval * fraction);
+    private int RandomLane() => random.Next(LaneKeys.Length);
+    // Mixes on-beat notes with off-beats, quick doubles and short runs; busier patterns grow more common over time.
+    private void SpawnPattern()
+    {
+        var beat = NoteInterval;
+        var busy = Math.Min(1, Seconds / 90);
+        var roll = random.NextDouble();
+        if (roll < .12 + .1 * busy)
+        {
+            // Double tap: two notes in quick succession, then a breather.
+            AddNote(RandomLane()); nextNoteTime += Quick(.3);
+            AddNote(RandomLane()); nextNoteTime += beat * 1.25;
+        }
+        else if (roll < .2 + .18 * busy)
+        {
+            // Run: 3-5 quick notes, sometimes alternating hands.
+            var count = random.Next(3, 6); var alternate = random.NextDouble() < .5; var lane = RandomLane();
+            for (int i = 0; i < count; i++)
+            {
+                AddNote(alternate ? (lane + i) % LaneKeys.Length : RandomLane());
+                nextNoteTime += i < count - 1 ? Quick(.4) : beat * 1.5;
+            }
+        }
+        else if (roll < .38 + .2 * busy)
+        {
+            // Off-beat: lands half a beat early or late against the pulse.
+            AddNote(RandomLane()); nextNoteTime += beat * (random.NextDouble() < .5 ? .5 : 1.5);
+        }
+        else
+        {
+            var bothHands = random.NextDouble() < BothHandsChance;
+            if (bothHands) { AddNote(0); AddNote(1); } else AddNote(RandomLane());
+            // A two-hand beat gets a little more room before the next one.
+            nextNoteTime += beat * (bothHands ? 1.25 : 1);
+        }
     }
     private void AddNote(int lane) =>
         Notes.Add(new RhythmNote { Lane = lane, Key = LaneKeys[lane][random.Next(LaneKeys[lane].Length)], Time = nextNoteTime, Travel = TravelTime });
