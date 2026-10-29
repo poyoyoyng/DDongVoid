@@ -124,6 +124,18 @@ public sealed class LocalStore
             throw new ArgumentException("아이디 또는 비밀번호가 일치하지 않습니다.");
         return account.Id;
     });
+    // A device session keeps a digest of the credential, never the password or its raw hash.
+    private static string SessionKeyFor(Account account) =>
+        Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("ddongvoid-session|" + account.Salt + "|" + account.PasswordHash)));
+    public string SessionKey(string id) => Access(db =>
+        db.Accounts.FirstOrDefault(a => a.Id == id) is { } account ? SessionKeyFor(account) : throw new ArgumentException("계정을 찾을 수 없습니다."));
+    public string ResumeSession(string id, string key) => Access(db =>
+    {
+        var account = db.Accounts.FirstOrDefault(a => a.Id == id);
+        if (account is null || !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(SessionKeyFor(account)), Encoding.UTF8.GetBytes(key)))
+            throw new ArgumentException("저장된 로그인이 만료되었습니다. 다시 로그인해 주세요.");
+        return account.Id;
+    });
     public void AddRecord(PlayRecord record) => Access(db =>
     {
         var accountIndex = db.Accounts.FindIndex(a => a.Id == record.UserId);

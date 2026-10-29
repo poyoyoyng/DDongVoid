@@ -35,6 +35,14 @@ try
     });
     Check("재실행 후 대소문자 무시 로그인", () => Assert(new LocalStore(store.Folder).Login("  테스트user  ", "test-password-123") == "테스트User", "로그인 실패"));
     Check("오류 비밀번호 및 없는 계정 거부", () => { Throws<ArgumentException>(() => store.Login("테스트User", "wrong-password")); Throws<ArgumentException>(() => store.Login("없는계정", "test-password-123")); });
+    Check("저장된 로그인 유지 및 잘못된 세션 거부", () =>
+    {
+        var key = store.SessionKey("테스트User");
+        Assert(!key.Contains("test-password-123") && new LocalStore(store.Folder).ResumeSession("테스트User", key) == "테스트User", "로그인 유지 실패");
+        Throws<ArgumentException>(() => store.ResumeSession("테스트User", key + "x"));
+        Throws<ArgumentException>(() => store.ResumeSession("없는계정", key));
+        Throws<ArgumentException>(() => new LocalStore(Path.Combine(root, "다른 세션 폴더")).ResumeSession("테스트User", key));
+    });
     Check("중복 아이디 및 입력 제한", () =>
     {
         Throws<ArgumentException>(() => store.Register("테스트USER", "password2"));

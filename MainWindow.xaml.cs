@@ -31,6 +31,9 @@ public partial class MainWindow : Window
         public double ScoreAlpha { get; set; } = .25;
         public double? WindowWidth { get; set; }
         public double? WindowHeight { get; set; }
+        public string? RememberedUser { get; set; }
+        public string? RememberedFolder { get; set; }
+        public string? RememberedKey { get; set; }
     }
     private readonly string preferencesPath;
     private Preferences preferences;
@@ -57,6 +60,7 @@ public partial class MainWindow : Window
     private bool checkingUpdate;
     private bool offeringUpdate;
     private bool installingUpdate;
+    private bool resumingSession;
     private Rect? sizeModeRestore;
     private const double SizeModeGrip = 24;
 
@@ -87,7 +91,7 @@ public partial class MainWindow : Window
             source.AddHook(WindowProc);
             hotkeyRegistered = RegisterHotKey(source.Handle, 1, 0x4006, 0x20);
         };
-        Loaded += async (_, _) => { ShowHome(); updateTimer.Start(); await CheckUpdatesAsync(false); };
+        Loaded += async (_, _) => { ShowHome(); updateTimer.Start(); _ = ResumeSessionAsync(); await CheckUpdatesAsync(false); };
         updateTimer.Tick += async (_, _) => await CheckUpdatesAsync(false);
         Activated += (_, _) => Dispatcher.BeginInvoke((Action)(() => OfferUpdate(false)));
         CompositionTarget.Rendering += RenderFrame;
@@ -169,7 +173,7 @@ public partial class MainWindow : Window
         var time = TimeSpan.FromSeconds(Surface.Engine.Seconds);
         TimeText.Text = $"{(int)time.TotalMinutes:00}:{time.Seconds:00}  ·  LV. {Surface.Engine.Level}";
         BestText.Text = bestScore == 0 ? "BEST  —" : $"BEST  {bestScore:N0}";
-        UserText.Text = userId is null ? "GUEST · 기록을 남기려면 로그인" : $"● {userId} · 기록 자동 저장";
+        UserText.Text = userId is not null ? $"● {userId}" : resumingSession ? "로그인 확인 중…" : "로그인이 필요합니다";
         AccountButton.Content = userId is null ? "로그인" : "계정";
         PauseButton.IsEnabled = playState is PlayState.Playing or PlayState.Paused;
         PauseButton.Content = playState == PlayState.Paused ? "계속하기" : "일시정지";
@@ -205,9 +209,10 @@ public partial class MainWindow : Window
     {
         BeginPanel("home", "A LITTLE DESKTOP ESCAPE", "오늘도, 잘 피해보자.", "하늘에서 떨어지는 똥을 피하세요.\n시간이 지날수록 더 빠르게, 더 많이 떨어집니다.");
         AddText("←  →  /  A  D     이동\nSPACE     시작 · 일시정지\nF2            설정 열기 · 닫기\nCtrl + Shift + Space     숨기기 · 복귀", 12, "#91AB9C", 2, 18);
-        AddButton("게임 시작  →", StartGame, true);
+        if (userId is not null) AddButton("게임 시작  →", StartGame, true);
+        else if (resumingSession) AddButton("로그인 확인 중…", () => { }, true).IsEnabled = false;
+        else AddButton("로그인하고 시작  →", () => ShowAuth(false), true);
         AddButton("랭킹 보기", ShowRankings);
-        if (userId is null) AddButton("로그인 / 회원가입", () => ShowAuth(false));
         AddButton("설정  /  F2", ShowSettings);
         AddText("10점 / 생존 1초  +  25점 / 피한 똥", 10, "#728F7D", 12, 0);
         if (startupError is not null) SetMessage(startupError);
@@ -217,6 +222,13 @@ public partial class MainWindow : Window
     private void StartGame()
     {
         if (pendingRecord is not null) { ShowEnd(); return; }
+        if (userId is null)
+        {
+            if (resumingSession) SetMessage("로그인을 확인하고 있습니다. 잠시만 기다려 주세요.");
+            else if (HasRememberedSession) _ = ResumeSessionAsync();
+            else { ShowAuth(false); SetMessage("게임을 시작하려면 먼저 로그인해 주세요."); }
+            return;
+        }
         Surface.Engine.Reset(); Surface.Demo = false; playState = PlayState.Playing;
         lastRecordSaved = false;
         Overlay.Visibility = Visibility.Collapsed; lastFrame = frameClock.Elapsed.TotalSeconds;
@@ -285,7 +297,7 @@ public partial class MainWindow : Window
             AddButton("한 판 더  →", StartGame, true);
             AddButton("내 기록 보기", ShowHistory);
             AddButton("메인 화면으로", QuitToMainMenu);
-            AddText(userId is null ? "게스트 플레이입니다. 로그인 후 시작한 게임부터 저장됩니다." : lastRecordSaved ? "✓ 내 기록에 저장했습니다." : "이번 기록은 저장하지 않았습니다.", 11, "#91AB9C", 12, 0);
+            AddText(lastRecordSaved ? "✓ 내 기록에 저장했습니다." : "이번 기록은 저장하지 않았습니다.", 11, "#91AB9C", 12, 0);
         }
         else
         {
@@ -300,7 +312,7 @@ public partial class MainWindow : Window
     private void ShowAuth(bool register)
     {
         if (pendingRecord is not null) { ShowEnd(); return; }
-        BeginPanel("auth", "YOUR OWN LITTLE RECORD", register ? "반가워요, 새 플레이어." : "다시 오셨네요.", "선택한 폴더의 JSON으로 계정을 확인합니다.\n비밀번호는 해시로 저장됩니다.");
+        BeginPanel("auth", "YOUR OWN LITTLE RECORD", register ? "반가워요, 새 플레이어." : "다시 오셨네요.", "");
         AddText("아이디", 12, "#B6C7BC", 0, 6);
         var idInput = new TextBox { MaxLength = 24, Margin = new Thickness(0, 0, 0, 12) };
         System.Windows.Automation.AutomationProperties.SetName(idInput, "아이디"); DialogContent.Children.Add(idInput);
@@ -327,11 +339,13 @@ public partial class MainWindow : Window
             {
                 var loggedIn = await Task.Run(() => register ? store.Register(id, secret) : store.Login(id, secret));
                 var personalBest = await Task.Run(() => store.BestScore(loggedIn));
+                var sessionKey = await Task.Run(() => store.SessionKey(loggedIn));
                 userId = loggedIn; bestScore = personalBest;
                 password.Clear(); confirm?.Clear();
-                // A paused guest run must not become a scored account run midway through.
                 playState = PlayState.Home; Surface.Engine.Reset(); Surface.Demo = true; Surface.InvalidateVisual();
-                startupError = null; ShowHome(); SetMessage(register ? "회원가입이 완료되었습니다. 로그인한 상태입니다." : "로그인했습니다. 이제 기록이 자동 저장됩니다.", true);
+                startupError = null; ShowHome(); SetMessage(register ? "회원가입이 완료되었습니다." : "로그인했습니다.", true);
+                preferences.RememberedUser = loggedIn; preferences.RememberedFolder = store.Folder; preferences.RememberedKey = sessionKey;
+                SavePreferences();
             }
             catch (Exception ex) when (IsUserError(ex)) { SetMessage(ex.Message); }
             finally
@@ -348,12 +362,12 @@ public partial class MainWindow : Window
     private void ShowAccount()
     {
         if (userId is null) { ShowAuth(false); return; }
-        BeginPanel("account", "PLAYER ACCOUNT", userId, "이 계정으로 플레이한 기록이 선택한 JSON 파일에 저장됩니다.");
+        BeginPanel("account", "PLAYER ACCOUNT", userId, "");
         AddButton("내 기록 보기", ShowHistory, true);
         AddButton("로그아웃", () =>
         {
             if (pendingRecord is not null) { ShowEnd(); return; }
-            userId = null; bestScore = 0; playState = PlayState.Home; Surface.Engine.Reset(); Surface.Demo = true; Surface.InvalidateVisual(); ShowHome();
+            ForgetSession(); userId = null; bestScore = 0; playState = PlayState.Home; Surface.Engine.Reset(); Surface.Demo = true; Surface.InvalidateVisual(); ShowHome();
         });
         AddButton("돌아가기", ReturnToGame);
     }
@@ -463,10 +477,8 @@ public partial class MainWindow : Window
         AddButton("창 크기 설정 모드…", EnterSizeMode);
         AddButton("작은 창 360 × 440", () => { preferences.Transparent = true; ApplyAppearance(); Width = 360; Height = 440; RememberWindowSize(); ShowSettings(); SavePreferences(); });
         AddButton("기본 창 480 × 740", () => { Width = 480; Height = 740; RememberWindowSize(); ShowSettings(); SavePreferences(); });
-        AddText("계정 · 기록 저장 폴더", 12, "#B6C7BC", 12, 6, true);
-        AddText(store.Folder, 11, "#91AB9C", 0, 10);
-        AddButton("저장 폴더 선택…", ChooseFolder);
-        AddText("ddongvoid.json에 계정과 기록을 함께 저장합니다.\n폴더 변경 시 로그아웃됩니다. 기존 파일은 원래 폴더에 보관됩니다.", 10, "#91AB9C", 8, 8);
+        AddText("저장 폴더", 12, "#B6C7BC", 12, 6, true);
+        AddButton("저장 폴더 선택…", ChooseFolder).ToolTip = store.Folder;
         AddButton("계정 · 로그인 / 로그아웃", ShowAccount);
         AddButton("내 기록 보기", ShowHistory);
         AddButton("완료 · 게임으로", CloseSettings, true);
@@ -577,6 +589,33 @@ public partial class MainWindow : Window
             UpdateHud(); ShowSettings(); SetMessage("저장 폴더를 변경했습니다. 이 폴더의 계정으로 로그인해 주세요.", true);
         }
         catch (Exception ex) when (IsUserError(ex)) { SetMessage(ex.Message); }
+    }
+    private bool HasRememberedSession => preferences.RememberedUser is not null && preferences.RememberedKey is not null &&
+        string.Equals(preferences.RememberedFolder, store.Folder, StringComparison.OrdinalIgnoreCase);
+    private void ForgetSession()
+    {
+        if (preferences.RememberedUser is null && preferences.RememberedKey is null) return;
+        preferences.RememberedUser = preferences.RememberedFolder = preferences.RememberedKey = null;
+        SavePreferences();
+    }
+    // Runs off the UI thread so an offline share cannot delay the game window.
+    private async Task ResumeSessionAsync()
+    {
+        if (userId is not null || resumingSession || !HasRememberedSession) return;
+        string id = preferences.RememberedUser!, key = preferences.RememberedKey!;
+        var sessionStore = store; string? error = null;
+        resumingSession = true; UpdateHud(); if (panel == "home") ShowHome();
+        try
+        {
+            var resumed = await Task.Run(() => sessionStore.ResumeSession(id, key));
+            var best = await Task.Run(() => sessionStore.BestScore(resumed));
+            if (userId is null && store == sessionStore) { userId = resumed; bestScore = best; startupError = null; }
+        }
+        catch (ArgumentException ex) { if (store == sessionStore) ForgetSession(); error = ex.Message; }
+        catch (Exception ex) when (IsUserError(ex)) { error = "저장된 로그인을 확인하지 못했습니다. 공유 폴더 연결을 확인해 주세요.\n" + ex.Message; }
+        finally { resumingSession = false; }
+        UpdateHud();
+        if (panel == "home" && !busy) { ShowHome(); if (error is not null) SetMessage(error); }
     }
     private void RememberWindowSize()
     {
