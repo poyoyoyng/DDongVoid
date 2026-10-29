@@ -207,30 +207,50 @@ public partial class MainWindow : Window
     }
     private void ShowHome()
     {
-        BeginPanel("home", "A LITTLE DESKTOP ESCAPE", "오늘도, 잘 피해보자.", "하늘에서 떨어지는 똥을 피하세요.\n시간이 지날수록 더 빠르게, 더 많이 떨어집니다.");
-        AddText("←  →  /  A  D     이동\nSPACE     시작 · 일시정지\nF2            설정 열기 · 닫기\nCtrl + Shift + Space     숨기기 · 복귀", 12, "#91AB9C", 2, 18);
-        if (userId is not null) AddButton("게임 시작  →", StartGame, true);
+        BeginPanel("home", "A LITTLE DESKTOP ESCAPE", "AKC미니게임", "잠깐 쉬어 갈 작은 게임 모음입니다.\n게임 시작을 누르고 목록에서 하나를 고르세요.");
+        AddText("SPACE     게임 선택 · 일시정지\nF2            설정 열기 · 닫기\nCtrl + Shift + Space     숨기기 · 복귀", 12, "#91AB9C", 2, 18);
+        if (userId is not null) AddButton("게임 시작  →", ShowGameList, true);
         else if (resumingSession) AddButton("로그인 확인 중…", () => { }, true).IsEnabled = false;
         else AddButton("로그인하고 시작  →", () => ShowAuth(false), true);
         AddButton("랭킹 보기", ShowRankings);
         AddButton("설정  /  F2", ShowSettings);
         if (userId is not null) AddButton($"로그아웃  ·  {userId}", Logout);
         else if (!resumingSession) AddButton("로그인 / 회원가입", () => ShowAuth(false));
-        AddText("10점 / 생존 1초  +  25점 / 피한 똥", 10, "#728F7D", 12, 0);
         if (startupError is not null) SetMessage(startupError);
         if (!hotkeyRegistered) SetMessage("숨기기 단축키를 등록하지 못했습니다. 숨기기 버튼은 최소화로 작동합니다.");
         UpdateHud();
     }
+    private bool RequireLogin()
+    {
+        if (userId is not null) return true;
+        if (resumingSession) SetMessage("로그인을 확인하고 있습니다. 잠시만 기다려 주세요.");
+        else if (HasRememberedSession) _ = ResumeSessionAsync();
+        else { ShowAuth(false); SetMessage("게임을 시작하려면 먼저 로그인해 주세요."); }
+        return false;
+    }
+    private void ShowGameList()
+    {
+        if (pendingRecord is not null) { ShowEnd(); return; }
+        if (!RequireLogin()) return;
+        BeginPanel("games", "AKC MINI GAMES", "어떤 게임을 할까요?", "목록에서 플레이할 게임을 고르세요.");
+        AddGameItem("똥 피하기", "하늘에서 떨어지는 똥을 피하세요. 시간이 지날수록 더 빠르게, 더 많이 떨어집니다.", "←  →  /  A  D 이동   ·   10점 / 생존 1초 + 25점 / 피한 똥", StartGame);
+        AddButton("돌아가기", ShowHome);
+    }
+    private void AddGameItem(string title, string description, string detail, Action start)
+    {
+        var body = new StackPanel();
+        body.Children.Add(new TextBlock { Text = title, FontSize = 16, FontWeight = FontWeights.Bold });
+        body.Children.Add(new TextBlock { Text = description, FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(168, 188, 175)), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) });
+        body.Children.Add(new TextBlock { Text = detail, FontSize = 10, Foreground = new SolidColorBrush(Color.FromRgb(114, 143, 125)), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) });
+        var button = new Button { Content = body, HorizontalContentAlignment = HorizontalAlignment.Left, Padding = new Thickness(16, 14, 16, 14), Margin = new Thickness(0, 0, 0, 8) };
+        System.Windows.Automation.AutomationProperties.SetName(button, title);
+        button.Click += (_, _) => { if (!busy) start(); };
+        DialogContent.Children.Add(button);
+    }
     private void StartGame()
     {
         if (pendingRecord is not null) { ShowEnd(); return; }
-        if (userId is null)
-        {
-            if (resumingSession) SetMessage("로그인을 확인하고 있습니다. 잠시만 기다려 주세요.");
-            else if (HasRememberedSession) _ = ResumeSessionAsync();
-            else { ShowAuth(false); SetMessage("게임을 시작하려면 먼저 로그인해 주세요."); }
-            return;
-        }
+        if (!RequireLogin()) return;
         Surface.Engine.Reset(); Surface.Demo = false; playState = PlayState.Playing;
         lastRecordSaved = false;
         Overlay.Visibility = Visibility.Collapsed; lastFrame = frameClock.Elapsed.TotalSeconds;
@@ -517,7 +537,7 @@ public partial class MainWindow : Window
         offeringUpdate = true; offeredUpdates.Add(update.Tag);
         try
         {
-            if (MessageBox.Show(this, $"업데이트가 있습니다. 업데이트하시겠습니까?\n\n현재 버전: {UpdateService.CurrentVersion}\n새 버전: {update.Version}\n\n업데이트 후 게임이 다시 실행됩니다.", "DDONG VOID 업데이트", MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
+            if (MessageBox.Show(this, $"업데이트가 있습니다. 업데이트하시겠습니까?\n\n현재 버전: {UpdateService.CurrentVersion}\n새 버전: {update.Version}\n\n업데이트 후 게임이 다시 실행됩니다.", "AKC미니게임 업데이트", MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
                 await InstallUpdateAsync(update);
         }
         finally { offeringUpdate = false; }
@@ -701,6 +721,7 @@ public partial class MainWindow : Window
         {
             if (playState == PlayState.Playing) PauseGame();
             else if (playState == PlayState.Paused) ResumeGame();
+            else if (panel == "home") ShowGameList();
             else StartGame();
             e.Handled = true;
         }

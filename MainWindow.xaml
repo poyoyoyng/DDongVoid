@@ -1,11 +1,11 @@
-<Window x:Class="DDongVoid.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:DDongVoid" Title="DDONG VOID · 똥 피하기" Width="480" Height="740" MinWidth="480" MinHeight="600" WindowStartupLocation="CenterScreen" WindowStyle="None" AllowsTransparency="True" Background="Transparent" Foreground="#EDF4F0" ResizeMode="CanResize" FontFamily="Malgun Gothic" PreviewKeyDown="Window_KeyDown" PreviewMouseLeftButtonDown="Window_MouseDown" Deactivated="Window_Deactivated">
+<Window x:Class="DDongVoid.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:DDongVoid" Title="AKC미니게임" Width="480" Height="740" MinWidth="480" MinHeight="600" WindowStartupLocation="CenterScreen" WindowStyle="None" AllowsTransparency="True" Background="Transparent" Foreground="#EDF4F0" ResizeMode="CanResize" FontFamily="Malgun Gothic" PreviewKeyDown="Window_KeyDown" PreviewMouseLeftButtonDown="Window_MouseDown" Deactivated="Window_Deactivated">
   <Grid x:Name="WindowRoot" Margin="7">
     <Border x:Name="Shell" Background="#101B17" BorderBrush="#3B5044" BorderThickness="1" CornerRadius="16"/>
     <Grid Margin="1">
       <Grid.RowDefinitions><RowDefinition x:Name="TitleRow" Height="56"/><RowDefinition x:Name="HudRow" Height="88"/><RowDefinition Height="*"/><RowDefinition x:Name="FooterRow" Height="56"/></Grid.RowDefinitions>
       <Border x:Name="TitleChrome" Background="#F2182520" CornerRadius="15,15,0,0" MouseLeftButtonDown="Title_Drag">
         <Grid Margin="20,0,12,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-          <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Ellipse Fill="#A7F3CE" Width="9" Height="9" Margin="0,0,10,0"/><TextBlock Text="DDONG VOID" FontWeight="Bold" FontSize="15"/><TextBlock Text=" / 똥 피하기" Foreground="#81988A" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"/></StackPanel>
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Ellipse Fill="#A7F3CE" Width="9" Height="9" Margin="0,0,10,0"/><TextBlock Text="AKC미니게임" FontWeight="Bold" FontSize="15"/></StackPanel>
           <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
             <Button Content="숨기기" Click="Hide_Click" ToolTip="Ctrl + Shift + Space로 숨기기 / 다시 표시" Padding="12,8" Background="Transparent"/>
             <Button Content="―" Click="Minimize_Click" ToolTip="최소화" Background="Transparent" Padding="12,8"/>

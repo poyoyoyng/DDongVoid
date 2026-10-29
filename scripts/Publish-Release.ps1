@@ -24,7 +24,7 @@ foreach ($taskName in $taskRequiredNames) {
 }
 [IO.File]::WriteAllText((Join-Path $taskPackageDirectory 'run.cmd'), "@echo off`r`nstart `"`" `"%~dp0DDongVoid.exe`"`r`n", [Text.Encoding]::ASCII)
 $taskReadme = @"
-DDONG VOID $Version
+AKC미니게임 $Version
 
 ZIP 파일을 전부 압축 해제한 뒤 DDongVoid.exe 또는 run.cmd를 실행하세요.
 .NET 10 Desktop Runtime (Windows x64)이 필요합니다.

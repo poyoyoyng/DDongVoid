@@ -30,7 +30,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            MessageBox(IntPtr.Zero, "업데이트를 완료하지 못했습니다.\n\n" + ex.Message + "\n\n게임 폴더: " + (target ?? "확인되지 않음"), "DDONG VOID 업데이트", 0x10);
+            MessageBox(IntPtr.Zero, "업데이트를 완료하지 못했습니다.\n\n" + ex.Message + "\n\n게임 폴더: " + (target ?? "확인되지 않음"), "AKC미니게임 업데이트", 0x10);
             return 1;
         }
     }
