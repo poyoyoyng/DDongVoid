@@ -29,6 +29,8 @@ public partial class MainWindow : Window
         public double HazardAlpha { get; set; } = .65;
         public bool ShowQuietScore { get; set; }
         public double ScoreAlpha { get; set; } = .25;
+        public double? WindowWidth { get; set; }
+        public double? WindowHeight { get; set; }
     }
     private readonly string preferencesPath;
     private Preferences preferences;
@@ -55,6 +57,8 @@ public partial class MainWindow : Window
     private bool checkingUpdate;
     private bool offeringUpdate;
     private bool installingUpdate;
+    private Rect? sizeModeRestore;
+    private const double SizeModeGrip = 24;
 
     public MainWindow()
     {
@@ -71,6 +75,12 @@ public partial class MainWindow : Window
             startupError = "저장 폴더를 확인해 주세요. " + ex.Message;
         }
         ApplyAppearance();
+        if (preferences.WindowWidth is double savedWidth && preferences.WindowHeight is double savedHeight)
+        {
+            Width = Math.Min(savedWidth, SystemParameters.WorkArea.Width);
+            Height = Math.Min(savedHeight, SystemParameters.WorkArea.Height);
+        }
+        SizeChanged += (_, _) => { if (sizeModeRestore is not null) UpdateSizeModeText(); };
         SourceInitialized += (_, _) =>
         {
             source = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
@@ -100,6 +110,7 @@ public partial class MainWindow : Window
             p.PlayerAlpha = double.IsFinite(p.PlayerAlpha) ? Math.Clamp(p.PlayerAlpha, 0, 1) : .8;
             p.HazardAlpha = double.IsFinite(p.HazardAlpha) ? Math.Clamp(p.HazardAlpha, 0, 1) : .65;
             p.ScoreAlpha = double.IsFinite(p.ScoreAlpha) ? Math.Clamp(p.ScoreAlpha, 0, 1) : .25;
+            if (p.WindowWidth is not (> 0 and < 100000) || p.WindowHeight is not (> 0 and < 100000)) p.WindowWidth = p.WindowHeight = null;
             return p;
         }
         catch (Exception ex) when (IsUserError(ex) || ex is JsonException)
@@ -197,7 +208,7 @@ public partial class MainWindow : Window
         AddButton("게임 시작  →", StartGame, true);
         AddButton("랭킹 보기", ShowRankings);
         if (userId is null) AddButton("로그인 / 회원가입", () => ShowAuth(false));
-        AddButton("투명도 · 저장 폴더 설정  /  F2", ShowSettings);
+        AddButton("설정  /  F2", ShowSettings);
         AddText("10점 / 생존 1초  +  25점 / 피한 똥", 10, "#728F7D", 12, 0);
         if (startupError is not null) SetMessage(startupError);
         if (!hotkeyRegistered) SetMessage("숨기기 단축키를 등록하지 못했습니다. 숨기기 버튼은 최소화로 작동합니다.");
@@ -447,8 +458,11 @@ public partial class MainWindow : Window
         var top = new CheckBox { Content = "항상 다른 창 위에 표시", IsChecked = preferences.AlwaysOnTop };
         top.Click += (_, _) => { preferences.AlwaysOnTop = top.IsChecked == true; ApplyAppearance(); SavePreferences(); };
         DialogContent.Children.Add(top);
-        AddButton("작은 창 360 × 440", () => { preferences.Transparent = true; ApplyAppearance(); Width = 360; Height = 440; ShowSettings(); SavePreferences(); });
-        AddButton("기본 창 480 × 740", () => { Width = 480; Height = 740; });
+        AddText("창 크기", 12, "#B6C7BC", 12, 6, true);
+        AddText($"현재 {ActualWidth:0} × {ActualHeight:0}", 11, "#91AB9C", 0, 4);
+        AddButton("창 크기 설정 모드…", EnterSizeMode);
+        AddButton("작은 창 360 × 440", () => { preferences.Transparent = true; ApplyAppearance(); Width = 360; Height = 440; RememberWindowSize(); ShowSettings(); SavePreferences(); });
+        AddButton("기본 창 480 × 740", () => { Width = 480; Height = 740; RememberWindowSize(); ShowSettings(); SavePreferences(); });
         AddText("계정 · 기록 저장 폴더", 12, "#B6C7BC", 12, 6, true);
         AddText(store.Folder, 11, "#91AB9C", 0, 10);
         AddButton("저장 폴더 선택…", ChooseFolder);
@@ -482,7 +496,7 @@ public partial class MainWindow : Window
     private async void OfferUpdate(bool manual)
     {
         var update = availableUpdate;
-        if (update is null || offeringUpdate || installingUpdate || busy || !IsVisible || !IsActive ||
+        if (update is null || offeringUpdate || installingUpdate || busy || sizeModeRestore is not null || !IsVisible || !IsActive ||
             pendingRecord is not null || playState == PlayState.Playing || (!manual && offeredUpdates.Contains(update.Tag))) return;
         offeringUpdate = true; offeredUpdates.Add(update.Tag);
         try
@@ -564,6 +578,52 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (IsUserError(ex)) { SetMessage(ex.Message); }
     }
+    private void RememberWindowSize()
+    {
+        if (WindowState != WindowState.Normal) return;
+        preferences.WindowWidth = Math.Round(ActualWidth); preferences.WindowHeight = Math.Round(ActualHeight);
+    }
+    private void EnterSizeMode()
+    {
+        if (sizeModeRestore is not null) return;
+        sizeModeRestore = new Rect(Left, Top, ActualWidth, ActualHeight);
+        panel = "size"; Overlay.Visibility = Visibility.Collapsed;
+        SizeModeLayer.Visibility = Visibility.Visible; UpdateSizeModeText(); Focus();
+    }
+    private void ExitSizeMode(bool save)
+    {
+        if (sizeModeRestore is not Rect restore) return;
+        sizeModeRestore = null; SizeModeLayer.Visibility = Visibility.Collapsed;
+        if (!save) { Left = restore.Left; Top = restore.Top; Width = restore.Width; Height = restore.Height; }
+        ShowSettings();
+        if (save) { RememberWindowSize(); if (SavePreferences()) SetMessage($"창 크기를 {ActualWidth:0} × {ActualHeight:0}(으)로 저장했습니다.", true); }
+    }
+    private void UpdateSizeModeText() => SizeModeText.Text = $"{ActualWidth:0} × {ActualHeight:0}";
+    private void SizeModeSave_Click(object sender, RoutedEventArgs e) => ExitSizeMode(true);
+    private void SizeModeCancel_Click(object sender, RoutedEventArgs e) => ExitSizeMode(false);
+    // Wide grip zones make every edge easy to grab while the frame is visible.
+    private int SizeModeHit(Point p)
+    {
+        double w = SizeModeLayer.ActualWidth, h = SizeModeLayer.ActualHeight;
+        bool left = p.X < SizeModeGrip, right = p.X > w - SizeModeGrip, top = p.Y < SizeModeGrip, bottom = p.Y > h - SizeModeGrip;
+        return (top, bottom, left, right) switch
+        {
+            (true, _, true, _) => 13, (true, _, _, true) => 14, (_, true, true, _) => 16, (_, true, _, true) => 17,
+            (true, _, _, _) => 12, (_, true, _, _) => 15, (_, _, true, _) => 10, (_, _, _, true) => 11, _ => 0,
+        };
+    }
+    private void SizeMode_MouseMove(object sender, MouseEventArgs e) => SizeModeLayer.Cursor = SizeModeHit(e.GetPosition(SizeModeLayer)) switch
+    {
+        10 or 11 => Cursors.SizeWE, 12 or 15 => Cursors.SizeNS, 13 or 17 => Cursors.SizeNWSE, 14 or 16 => Cursors.SizeNESW, _ => Cursors.SizeAll,
+    };
+    private void SizeMode_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed) return;
+        var hit = SizeModeHit(e.GetPosition(SizeModeLayer));
+        e.Handled = true;
+        if (hit == 0) DragMove();
+        else { ReleaseCapture(); SendMessage(new WindowInteropHelper(this).Handle, 0xA1, new IntPtr(hit), IntPtr.Zero); }
+    }
     private void Pause_Click(object sender, RoutedEventArgs e)
     {
         if (busy) return;
@@ -575,6 +635,13 @@ public partial class MainWindow : Window
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
         if (busy || e.IsRepeat || Keyboard.Modifiers != ModifierKeys.None) return;
+        if (sizeModeRestore is not null)
+        {
+            if (e.Key is Key.Enter or Key.F2) ExitSizeMode(true);
+            else if (e.Key == Key.Escape) ExitSizeMode(false);
+            e.Handled = e.Key is Key.Enter or Key.F2 or Key.Escape or Key.Space;
+            return;
+        }
         if (e.Key == Key.F2)
         {
             if (panel == "settings" && Overlay.Visibility == Visibility.Visible) CloseSettings();
@@ -648,6 +715,7 @@ public partial class MainWindow : Window
         if (busy) { e.Cancel = true; return; }
         if (pendingRecord is not null && MessageBox.Show(this, "저장하지 못한 기록이 있습니다. 저장하지 않고 종료할까요?", "미저장 기록", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
         { e.Cancel = true; ShowEnd(); return; }
+        ExitSizeMode(false); RememberWindowSize();
         PauseGame(); SavePreferences();
     }
     [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool RegisterHotKey(IntPtr hwnd, int id, uint modifiers, uint key);

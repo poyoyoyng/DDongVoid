@@ -44,6 +44,24 @@
         </Grid>
       </Border>
     </Grid>
+    <Grid x:Name="SizeModeLayer" Visibility="Collapsed" Background="#B3101B17" MouseLeftButtonDown="SizeMode_MouseDown" MouseMove="SizeMode_MouseMove">
+      <Rectangle Stroke="#A7F3CE" StrokeThickness="2" StrokeDashArray="5 3" RadiusX="16" RadiusY="16" IsHitTestVisible="False"/>
+      <Rectangle Width="14" Height="14" Fill="#A7F3CE" HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False"/>
+      <Rectangle Width="14" Height="14" Fill="#A7F3CE" HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False"/>
+      <Rectangle Width="14" Height="14" Fill="#A7F3CE" HorizontalAlignment="Left" VerticalAlignment="Bottom" IsHitTestVisible="False"/>
+      <Rectangle Width="14" Height="14" Fill="#A7F3CE" HorizontalAlignment="Right" VerticalAlignment="Bottom" IsHitTestVisible="False"/>
+      <Rectangle Width="28" Height="6" Fill="#A7F3CE" HorizontalAlignment="Center" VerticalAlignment="Top" IsHitTestVisible="False"/>
+      <Rectangle Width="28" Height="6" Fill="#A7F3CE" HorizontalAlignment="Center" VerticalAlignment="Bottom" IsHitTestVisible="False"/>
+      <Rectangle Width="6" Height="28" Fill="#A7F3CE" HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False"/>
+      <Rectangle Width="6" Height="28" Fill="#A7F3CE" HorizontalAlignment="Right" VerticalAlignment="Center" IsHitTestVisible="False"/>
+      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="28">
+        <TextBlock Text="WINDOW SIZE" FontSize="10" FontWeight="Bold" Foreground="#A7F3CE" HorizontalAlignment="Center" IsHitTestVisible="False"/>
+        <TextBlock x:Name="SizeModeText" Text="480 × 740" FontFamily="Consolas" FontSize="30" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,8,0,8" IsHitTestVisible="False"/>
+        <TextBlock Text="테두리 · 모서리를 드래그해 가로 · 세로를 맞추세요.&#x0a;안쪽을 드래그하면 창을 옮깁니다.&#x0a;Enter 저장  ·  Esc 취소" FontSize="11" Foreground="#A8BCAF" TextAlignment="Center" TextWrapping="Wrap" HorizontalAlignment="Center" Margin="0,0,0,14" IsHitTestVisible="False"/>
+        <Button Content="이 크기로 저장" Click="SizeModeSave_Click" Style="{StaticResource Primary}" Margin="0,0,0,6"/>
+        <Button Content="취소" Click="SizeModeCancel_Click"/>
+      </StackPanel>
+    </Grid>
     <Border Height="6" VerticalAlignment="Top" Margin="12,0" Background="#01000000" Cursor="SizeNS" Tag="12" MouseLeftButtonDown="Resize_Down"/>
     <Border Height="6" VerticalAlignment="Bottom" Margin="12,0" Background="#01000000" Cursor="SizeNS" Tag="15" MouseLeftButtonDown="Resize_Down"/>
     <Border Width="6" HorizontalAlignment="Left" Margin="0,12" Background="#01000000" Cursor="SizeWE" Tag="10" MouseLeftButtonDown="Resize_Down"/>
