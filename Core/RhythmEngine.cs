@@ -15,8 +15,6 @@ public sealed class RhythmEngine
 {
     public const double PerfectWindow = .05, GreatWindow = .1, GoodWindow = .16;
     public static readonly string[] LaneKeys = ["SD", "KL"];
-    // Labels follow the Korean 2-set layout printed on the same physical keys.
-    private const string Latin = "QWERTYUIOPASDFGHJKLZXCVBNM", Hangul = "ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔㅁㄴㅇㄹㅎㅗㅓㅏㅣㅋㅌㅊㅍㅠㅜㅡ";
     private readonly int? seed;
     private Random random;
     private double nextNoteTime;
@@ -46,11 +44,6 @@ public sealed class RhythmEngine
     // Unseeded runs draw a fresh random seed every game, so no two plays share a pattern.
     private Random NewRandom() => seed.HasValue ? new Random(seed.Value) : new Random(Random.Shared.Next());
     public static int LaneOf(char key) => Array.FindIndex(LaneKeys, keys => keys.Contains(char.ToUpperInvariant(key)));
-    public static string LabelOf(char key)
-    {
-        var index = Latin.IndexOf(char.ToUpperInvariant(key));
-        return index < 0 ? key.ToString() : Hangul[index].ToString();
-    }
     public void Reset()
     {
         random = NewRandom(); Notes.Clear(); Seconds = 0; Score = Combo = MaxCombo = Perfect = Great = Good = Miss = 0; Life = 100; nextNoteTime = 2;

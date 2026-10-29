@@ -61,7 +61,7 @@ public sealed class RhythmSurface : FrameworkElement
             var y = -BlockHeight + progress * (HitY + BlockHeight);
             var x = LaneLeft(note.Lane) + (LaneWidth - blockWidth) / 2;
             dc.DrawRoundedRectangle(LaneBrushes[note.Lane], null, new Rect(x, y - BlockHeight / 2, blockWidth, BlockHeight), 9, 9);
-            DrawText(dc, RhythmEngine.LabelOf(note.Key), KeyFace, 24, Ink, x + blockWidth / 2, y, dpi);
+            DrawText(dc, note.Key.ToString(), KeyFace, 24, Ink, x + blockWidth / 2, y, dpi);
         }
         dc.Pop();
         for (int lane = 0; lane < 2; lane++)

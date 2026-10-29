@@ -220,12 +220,6 @@ try
         Assert(early >= 4, $"초반 간격이 너무 단조로움: {early}종류");
         Assert(gaps.Any(g => g.At < 30 && g.Gap < .3) && gaps.Any(g => g.At < 30 && g.Gap > .9), "초반에 따닥 또는 엇박(긴 간격)이 없음");
     });
-    Check("리듬: 블록 글자는 한글 자판 표기", () =>
-    {
-        Assert(RhythmEngine.LabelOf('q') == "ㅂ" && RhythmEngine.LabelOf('R') == "ㄱ" && RhythmEngine.LabelOf('K') == "ㅏ" && RhythmEngine.LabelOf('M') == "ㅡ" && RhythmEngine.LabelOf('/') == "/", "한글 자판 표기 오류");
-        var labels = string.Concat(RhythmEngine.LaneKeys).Select(RhythmEngine.LabelOf).ToList();
-        Assert(labels.SequenceEqual(["ㄴ", "ㅇ", "ㅏ", "ㅣ"]), "S D K L 한글 표기 오류");
-    });
     Check("리듬: 양손 동시 블록과 각 라인 판정", () =>
     {
         var game = new RhythmEngine(7); game.Reset();
