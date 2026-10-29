@@ -20,6 +20,15 @@ void Throws<T>(Action action) where T : Exception
     try { action(); } catch (T) { return; }
     throw new Exception($"예상한 {typeof(T).Name} 예외가 발생하지 않았습니다.");
 }
+// Advances to `offset` seconds before the next note's hit time (negative = late).
+RhythmNote AdvanceTo(RhythmEngine game, double offset)
+{
+    while (game.Notes.Count == 0) game.Update(.05);
+    var note = game.Notes.MinBy(n => n.Time)!;
+    var target = note.Time - offset;
+    while (target - game.Seconds > 1e-9) game.Update(Math.Min(.1, target - game.Seconds));
+    return note;
+}
 
 try
 {
@@ -167,6 +176,54 @@ try
         int restartedCount = 0;
         for (int i = 0; i < 100; i++) { game.Hazards.Clear(); game.Update(.1, 0); restartedCount += game.Hazards.Count; }
         Assert(restartedCount < middleCount, "재시작 뒤에도 생성 빈도가 높게 유지됨");
+    });
+    Check("리듬: 왼손·오른손 키 배치와 노트 생성", () =>
+    {
+        Assert(RhythmEngine.LaneOf('a') == 0 && RhythmEngine.LaneOf('B') == 0 && RhythmEngine.LaneOf('Y') == 1 && RhythmEngine.LaneOf('/') == 1 && RhythmEngine.LaneOf('1') == -1, "키 라인 배치 오류");
+        Assert(string.Concat(RhythmEngine.LaneKeys).Length == 33 && string.Concat(RhythmEngine.LaneKeys).Distinct().Count() == 33, "영문 26자 + [];',./ 7개 구성 오류");
+        var game = new RhythmEngine(3); game.Reset(); for (int i = 0; i < 30; i++) game.Update(.1);
+        Assert(game.Notes.Count > 0 && game.Notes.All(n => RhythmEngine.LaneOf(n.Key) == n.Lane), "노트 생성 또는 라인 불일치");
+    });
+    Check("리듬: 시드 없는 게임은 판마다 다른 무작위 블록", () =>
+    {
+        string Pattern(RhythmEngine game) { game.Reset(); var keys = ""; for (int i = 0; i < 100; i++) { game.Update(.1); keys += string.Concat(game.Notes.Select(n => n.Key)); game.Notes.Clear(); } return keys; }
+        var engine = new RhythmEngine();
+        var first = Pattern(engine); var again = Pattern(engine); var other = Pattern(new RhythmEngine());
+        Assert(first.Length >= 5 && first != again && first != other, "블록 순서가 반복됨");
+        Assert(Pattern(new RhythmEngine(9)) == Pattern(new RhythmEngine(9)), "고정 시드 재현 실패");
+    });
+    Check("리듬: 시간이 지날수록 속도와 빈도가 계속 증가", () =>
+    {
+        var game = new RhythmEngine(6); game.Reset();
+        double lastTravel = game.TravelTime, lastInterval = game.NoteInterval;
+        Assert(game.SpeedMultiplier == 1, "시작 속도 오류");
+        for (int step = 0; step < 12; step++)
+        {
+            for (int i = 0; i < 100; i++) { game.Update(.1); game.Notes.Clear(); }
+            Assert(game.TravelTime < lastTravel && game.NoteInterval <= lastInterval, $"{game.Seconds:F0}초에 속도가 증가하지 않음");
+            lastTravel = game.TravelTime; lastInterval = game.NoteInterval;
+        }
+        Assert(game.SpeedMultiplier > 2.99, "120초 이후 3배 속도 미도달");
+    });
+    Check("리듬: 타이밍 판정과 콤보 점수", () =>
+    {
+        var game = new RhythmEngine(4); game.Reset();
+        var note = AdvanceTo(game, 0);
+        Assert(game.Hit(char.ToLowerInvariant(note.Key)) == RhythmJudgement.Perfect && game.Combo == 1 && game.Score == 300, "정확한 타이밍 PERFECT 실패");
+        Assert(game.Hit(note.Key) is null && game.Combo == 1, "이미 처리한 노트가 다시 판정됨");
+        var next = AdvanceTo(game, -.08);
+        Assert(game.Hit(next.Key) == RhythmJudgement.Great && game.Combo == 2 && game.Score == 300 + 200 + 2, "GREAT 판정 또는 콤보 보너스 오류");
+        var early = game.Notes.MinBy(n => n.Time)!;
+        Assert(early.Time - game.Seconds > RhythmEngine.GoodWindow && game.Hit(early.Key) is null && game.Notes.Contains(early) && game.Combo == 2, "판정 범위 밖 입력이 노트를 소모함");
+    });
+    Check("리듬: 놓친 노트는 MISS, 라이프 소진 시 종료", () =>
+    {
+        var game = new RhythmEngine(5); game.Reset();
+        var guard = 0;
+        while (!game.IsOver && guard++ < 10000) game.Update(.05);
+        Assert(game.IsOver && game.Life == 0 && game.Miss == 10 && game.Combo == 0 && game.Score == 0, $"MISS 처리 또는 종료 오류: {game.Miss}, {game.Life}");
+        game.Reset();
+        Assert(!game.IsOver && game.Life == 100 && game.Notes.Count == 0 && game.Seconds == 0, "재시작 초기화 실패");
     });
     var rankingStore = new LocalStore(Path.Combine(root, "랭킹"));
     Check("빈 랭킹과 새 계정의 최고 점수 초기화", () =>

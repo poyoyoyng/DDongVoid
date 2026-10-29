@@ -19,6 +19,7 @@ public partial class MainWindow : Window
 {
     private const string DefaultDataFolder = @"\\192.168.0.120\SW Team\팀원\최지운\DD";
     private enum PlayState { Home, Playing, Paused, Over }
+    private enum MiniGame { Dodge, Rhythm }
     private sealed class Preferences
     {
         public string? DataFolder { get; set; }
@@ -34,12 +35,15 @@ public partial class MainWindow : Window
         public string? RememberedUser { get; set; }
         public string? RememberedFolder { get; set; }
         public string? RememberedKey { get; set; }
+        // Rhythm scores stay on this PC so older clients never misread them as dodge records.
+        public Dictionary<string, int>? RhythmBest { get; set; } = [];
     }
     private readonly string preferencesPath;
     private Preferences preferences;
     private LocalStore store;
     private string? userId;
     private PlayState playState;
+    private MiniGame activeGame;
     private string panel = "home";
     private TextBlock? message;
     private PlayRecord? pendingRecord;
@@ -115,6 +119,7 @@ public partial class MainWindow : Window
             p.HazardAlpha = double.IsFinite(p.HazardAlpha) ? Math.Clamp(p.HazardAlpha, 0, 1) : .65;
             p.ScoreAlpha = double.IsFinite(p.ScoreAlpha) ? Math.Clamp(p.ScoreAlpha, 0, 1) : .25;
             if (p.WindowWidth is not (> 0 and < 100000) || p.WindowHeight is not (> 0 and < 100000)) p.WindowWidth = p.WindowHeight = null;
+            p.RhythmBest ??= [];
             return p;
         }
         catch (Exception ex) when (IsUserError(ex) || ex is JsonException)
@@ -138,6 +143,10 @@ public partial class MainWindow : Window
         Surface.BackgroundStrength = preferences.BackgroundStrength;
         Surface.PlayerAlpha = preferences.PlayerAlpha;
         Surface.HazardAlpha = preferences.HazardAlpha;
+        RhythmView.TransparentMode = preferences.Transparent;
+        RhythmView.BackgroundStrength = preferences.BackgroundStrength;
+        RhythmView.NoteAlpha = preferences.HazardAlpha;
+        RhythmView.InvalidateVisual();
         ModeLabel.Visibility = preferences.Transparent ? Visibility.Hidden : Visibility.Visible;
         var chrome = preferences.Transparent ? Visibility.Collapsed : Visibility.Visible;
         TitleChrome.Visibility = HudChrome.Visibility = FooterChrome.Visibility = chrome;
@@ -159,6 +168,12 @@ public partial class MainWindow : Window
         var now = frameClock.Elapsed.TotalSeconds;
         var dt = now - lastFrame; lastFrame = now;
         if (playState != PlayState.Playing) return;
+        if (activeGame == MiniGame.Rhythm)
+        {
+            RhythmView.Engine.Update(dt); RhythmView.InvalidateVisual(); UpdateHud();
+            if (RhythmView.Engine.IsOver) FinishGame();
+            return;
+        }
         var direction = (Keyboard.IsKeyDown(Key.Right) || Keyboard.IsKeyDown(Key.D) ? 1 : 0) -
                         (Keyboard.IsKeyDown(Key.Left) || Keyboard.IsKeyDown(Key.A) ? 1 : 0);
         Surface.Engine.Update(dt, direction);
@@ -168,11 +183,18 @@ public partial class MainWindow : Window
     }
     private void UpdateHud()
     {
-        ScoreText.Text = Surface.Engine.Score.ToString("D5");
-        QuietScore.Text = Surface.Engine.Score.ToString("D5");
-        var time = TimeSpan.FromSeconds(Surface.Engine.Seconds);
-        TimeText.Text = $"{(int)time.TotalMinutes:00}:{time.Seconds:00}  ·  LV. {Surface.Engine.Level}";
-        BestText.Text = bestScore == 0 ? "BEST  —" : $"BEST  {bestScore:N0}";
+        var rhythm = activeGame == MiniGame.Rhythm;
+        var score = rhythm ? RhythmView.Engine.Score : Surface.Engine.Score;
+        ScoreText.Text = score.ToString("D5");
+        QuietScore.Text = score.ToString("D5");
+        if (rhythm) TimeText.Text = $"COMBO {RhythmView.Engine.Combo}  ·  LIFE {RhythmView.Engine.Life}%  ·  ×{RhythmView.Engine.SpeedMultiplier:0.0}";
+        else
+        {
+            var time = TimeSpan.FromSeconds(Surface.Engine.Seconds);
+            TimeText.Text = $"{(int)time.TotalMinutes:00}:{time.Seconds:00}  ·  LV. {Surface.Engine.Level}";
+        }
+        var best = rhythm ? RhythmBest : bestScore;
+        BestText.Text = best == 0 ? "BEST  —" : $"BEST  {best:N0}";
         UserText.Text = userId is not null ? $"● {userId}" : resumingSession ? "로그인 확인 중…" : "로그인이 필요합니다";
         AccountButton.Content = userId is null ? "로그인" : "계정";
         PauseButton.IsEnabled = playState is PlayState.Playing or PlayState.Paused;
@@ -233,8 +255,38 @@ public partial class MainWindow : Window
         if (pendingRecord is not null) { ShowEnd(); return; }
         if (!RequireLogin()) return;
         BeginPanel("games", "AKC MINI GAMES", "어떤 게임을 할까요?", "목록에서 플레이할 게임을 고르세요.");
-        AddGameItem("똥 피하기", "←  →  /  A  D   이동     ·     SPACE   일시정지", StartGame);
+        AddGameItem("똥 피하기", "←  →  /  A  D   이동     ·     SPACE   일시정지", () => StartGame(MiniGame.Dodge));
+        AddGameItem("키보드 리듬", "왼손  Q W E R T  A S D F G  Z X C V B\n오른손  Y U I O P [ ]  H J K L ; '  N M , . /\n블록이 판정선에 닿을 때 블록의 키   ·   SPACE   일시정지", () => StartGame(MiniGame.Rhythm));
         AddButton("돌아가기", ShowHome);
+    }
+    private FrameworkElement ActiveSurface => activeGame == MiniGame.Rhythm ? RhythmView : Surface;
+    private int RhythmBest => userId is not null && preferences.RhythmBest!.TryGetValue(userId, out var best) ? best : 0;
+    private void SetActiveGame(MiniGame game)
+    {
+        activeGame = game;
+        Surface.Visibility = game == MiniGame.Dodge ? Visibility.Visible : Visibility.Hidden;
+        RhythmView.Visibility = game == MiniGame.Rhythm ? Visibility.Visible : Visibility.Hidden;
+        ModeLabel.Text = game == MiniGame.Rhythm ? "02 / KEY RHYTHM" : "01 / SURVIVE THE FALL";
+    }
+    private void ResetToHome()
+    {
+        playState = PlayState.Home; SetActiveGame(MiniGame.Dodge);
+        Surface.Engine.Reset(); Surface.Demo = true; Surface.InvalidateVisual(); RhythmView.Engine.Reset();
+    }
+    private void StartGame(MiniGame game)
+    {
+        SetActiveGame(game); StartGame();
+    }
+    private static char? RhythmKey(KeyEventArgs e)
+    {
+        // With a Korean IME active, letter keys arrive as ImeProcessed.
+        var key = e.Key == Key.ImeProcessed ? e.ImeProcessedKey : e.Key;
+        if (key is >= Key.A and <= Key.Z) return (char)('A' + (key - Key.A));
+        return key switch
+        {
+            Key.OemOpenBrackets => '[', Key.OemCloseBrackets => ']', Key.OemSemicolon => ';', Key.OemQuotes => '\'',
+            Key.OemComma => ',', Key.OemPeriod => '.', Key.OemQuestion => '/', _ => null,
+        };
     }
     private void AddGameItem(string title, string keys, Action start)
     {
@@ -250,10 +302,11 @@ public partial class MainWindow : Window
     {
         if (pendingRecord is not null) { ShowEnd(); return; }
         if (!RequireLogin()) return;
-        Surface.Engine.Reset(); Surface.Demo = false; playState = PlayState.Playing;
-        lastRecordSaved = false;
+        if (activeGame == MiniGame.Rhythm) RhythmView.Engine.Reset();
+        else { Surface.Engine.Reset(); Surface.Demo = false; }
+        playState = PlayState.Playing; lastRecordSaved = false;
         Overlay.Visibility = Visibility.Collapsed; lastFrame = frameClock.Elapsed.TotalSeconds;
-        UpdateHud(); Surface.Focus(); Surface.InvalidateVisual();
+        UpdateHud(); ActiveSurface.Focus(); ActiveSurface.InvalidateVisual();
     }
     private void PauseGame()
     {
@@ -263,7 +316,9 @@ public partial class MainWindow : Window
     private void ShowPause()
     {
         BeginPanel("pause", "TAKE A BREATHER", "잠깐, 쉬어가기.", "게임이 멈춰 있습니다. 준비되면 이어서 플레이하세요.");
-        AddText($"생존 {Surface.Engine.Seconds:F1}초    ·    난이도 LV. {Surface.Engine.Level}", 12, "#A7F3CE", 0, 12);
+        var r = RhythmView.Engine;
+        AddText(activeGame == MiniGame.Rhythm ? $"점수 {r.Score:N0}    ·    콤보 {r.Combo}    ·    라이프 {r.Life}%" :
+            $"생존 {Surface.Engine.Seconds:F1}초    ·    난이도 LV. {Surface.Engine.Level}", 12, "#A7F3CE", 0, 12);
         AddButton("계속하기  →", ResumeGame, true);
         AddButton("처음부터 다시", StartGame);
         AddButton("그만하기 · 메인 메뉴로", QuitToMainMenu);
@@ -272,16 +327,15 @@ public partial class MainWindow : Window
     private void QuitToMainMenu()
     {
         if (pendingRecord is not null) { ShowEnd(); return; }
-        playState = PlayState.Home;
-        Surface.Engine.Reset(); Surface.Demo = true; lastRecordSaved = false;
+        ResetToHome(); lastRecordSaved = false;
         lastFrame = frameClock.Elapsed.TotalSeconds;
-        Surface.InvalidateVisual(); ShowHome();
+        ShowHome();
     }
     private void ResumeGame()
     {
         if (playState != PlayState.Paused) return;
         playState = PlayState.Playing; Overlay.Visibility = Visibility.Collapsed;
-        lastFrame = frameClock.Elapsed.TotalSeconds; UpdateHud(); Surface.Focus();
+        lastFrame = frameClock.Elapsed.TotalSeconds; UpdateHud(); ActiveSurface.Focus();
     }
     private void ReturnToGame()
     {
@@ -292,6 +346,17 @@ public partial class MainWindow : Window
     private void FinishGame()
     {
         playState = PlayState.Over;
+        if (activeGame == MiniGame.Rhythm)
+        {
+            var previousBest = RhythmBest;
+            ShowEnd();
+            if (userId is not null && RhythmView.Engine.Score > previousBest)
+            {
+                preferences.RhythmBest![userId] = RhythmView.Engine.Score;
+                if (SavePreferences()) SetMessage("✓ 최고 점수를 갱신했습니다!", true);
+            }
+            UpdateHud(); return;
+        }
         bestScore = Math.Max(bestScore, Surface.Engine.Score);
         if (userId is not null)
             pendingRecord = new PlayRecord(Guid.NewGuid(), userId, Surface.Engine.Score, Surface.Engine.Seconds, Surface.Engine.Dodged, DateTimeOffset.UtcNow);
@@ -310,6 +375,17 @@ public partial class MainWindow : Window
     }
     private void ShowEnd()
     {
+        if (activeGame == MiniGame.Rhythm)
+        {
+            var r = RhythmView.Engine;
+            BeginPanel("end", "NICE TRY. ONE MORE?", "라이프를 다 썼어요!", "");
+            AddText($"{r.Score:N0} 점", 38, "#A7F3CE", 0, 8, true);
+            AddText($"최대 콤보 {r.MaxCombo}    ·    최고 {Math.Max(RhythmBest, r.Score):N0}점", 13, "#B6C7BC", 0, 6);
+            AddText($"PERFECT {r.Perfect}    GREAT {r.Great}    GOOD {r.Good}    MISS {r.Miss}", 12, "#91AB9C", 0, 16);
+            AddButton("한 판 더  →", StartGame, true);
+            AddButton("메인 화면으로", QuitToMainMenu);
+            return;
+        }
         BeginPanel("end", "NICE TRY. ONE MORE?", "앗, 맞아버렸다!", "다음에는 조금 더 오래 버틸 수 있을 거예요.");
         AddText($"{Surface.Engine.Score:N0} 점", 38, "#A7F3CE", 0, 8, true);
         AddText($"생존 {Surface.Engine.Seconds:F1}초    ·    피한 똥 {Surface.Engine.Dodged}개", 13, "#B6C7BC", 0, 16);
@@ -363,7 +439,7 @@ public partial class MainWindow : Window
                 var sessionKey = await Task.Run(() => store.SessionKey(loggedIn));
                 userId = loggedIn; bestScore = personalBest;
                 password.Clear(); confirm?.Clear();
-                playState = PlayState.Home; Surface.Engine.Reset(); Surface.Demo = true; Surface.InvalidateVisual();
+                ResetToHome();
                 startupError = null; ShowHome(); SetMessage(register ? "회원가입이 완료되었습니다." : "로그인했습니다.", true);
                 preferences.RememberedUser = loggedIn; preferences.RememberedFolder = store.Folder; preferences.RememberedKey = sessionKey;
                 SavePreferences();
@@ -391,7 +467,7 @@ public partial class MainWindow : Window
     private void Logout()
     {
         if (pendingRecord is not null) { ShowEnd(); return; }
-        ForgetSession(); userId = null; bestScore = 0; playState = PlayState.Home; Surface.Engine.Reset(); Surface.Demo = true; Surface.InvalidateVisual(); ShowHome();
+        ForgetSession(); userId = null; bestScore = 0; ResetToHome(); ShowHome();
         SetMessage("로그아웃했습니다.", true);
     }
     private async void ShowRankings()
@@ -487,7 +563,7 @@ public partial class MainWindow : Window
         slider.PreviewMouseLeftButtonUp += (_, _) => SavePreferences(); slider.LostKeyboardFocus += (_, _) => SavePreferences();
         DialogContent.Children.Add(slider);
         AddAlphaSlider("캐릭터 알파", preferences.PlayerAlpha, value => preferences.PlayerAlpha = value);
-        AddAlphaSlider("떨어지는 똥 알파", preferences.HazardAlpha, value => preferences.HazardAlpha = value);
+        AddAlphaSlider("떨어지는 똥 · 리듬 블록 알파",preferences.HazardAlpha, value => preferences.HazardAlpha = value);
         var score = new CheckBox { Content = "투명 모드에서 작은 점수만 표시", IsChecked = preferences.ShowQuietScore };
         score.Click += (_, _) => { preferences.ShowQuietScore = score.IsChecked == true; ApplyAppearance(); SavePreferences(); };
         DialogContent.Children.Add(score);
@@ -607,8 +683,8 @@ public partial class MainWindow : Window
             using (new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose)) { }
             var old = preferences.DataFolder; preferences.DataFolder = candidate.Folder;
             if (!SavePreferences()) { preferences.DataFolder = old; return; }
-            store = candidate; userId = null; bestScore = 0; playState = PlayState.Home; pendingRecord = null;
-            Surface.Engine.Reset(); Surface.Demo = true; Surface.InvalidateVisual(); startupError = null;
+            store = candidate; userId = null; bestScore = 0; pendingRecord = null;
+            ResetToHome(); startupError = null;
             UpdateHud(); ShowSettings(); SetMessage("저장 폴더를 변경했습니다. 이 폴더의 계정으로 로그인해 주세요.", true);
         }
         catch (Exception ex) when (IsUserError(ex)) { SetMessage(ex.Message); }
@@ -711,6 +787,11 @@ public partial class MainWindow : Window
             e.Handled = true; return;
         }
         if (Keyboard.FocusedElement is TextBox or PasswordBox) return;
+        if (playState == PlayState.Playing && activeGame == MiniGame.Rhythm && RhythmKey(e) is char rhythmKey)
+        {
+            RhythmView.Engine.Hit(rhythmKey); RhythmView.InvalidateVisual(); UpdateHud();
+            e.Handled = true; return;
+        }
         if (e.Key == Key.Escape)
         {
             if (playState == PlayState.Playing) PauseGame(); else if (panel == "pause") ResumeGame(); else ReturnToGame();

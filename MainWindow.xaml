@@ -22,6 +22,7 @@
       </Border>
       <Grid Grid.Row="2" ClipToBounds="True">
         <local:GameSurface x:Name="Surface" Focusable="True"/>
+        <local:RhythmSurface x:Name="RhythmView" Focusable="True" Visibility="Collapsed" InputMethod.IsInputMethodEnabled="False"/>
         <TextBlock x:Name="ModeLabel" Text="01 / SURVIVE THE FALL" IsHitTestVisible="False" Foreground="#658572" FontFamily="Consolas" FontSize="11" Margin="24,18" VerticalAlignment="Top" HorizontalAlignment="Left"/>
         <TextBlock x:Name="QuietScore" Visibility="Collapsed" IsHitTestVisible="False" Foreground="#FFFFFF" FontFamily="Consolas" FontSize="13" Margin="14" VerticalAlignment="Top" HorizontalAlignment="Left"/>
         <Grid x:Name="Overlay" Background="#30101B17">
