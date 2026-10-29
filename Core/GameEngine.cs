@@ -11,6 +11,8 @@ public sealed class Hazard
 
 public sealed class GameEngine
 {
+    // Scales base fall speed and spawn frequency together.
+    public const double Difficulty = 1.15;
     private readonly Random random;
     private double spawnIn;
     public List<Hazard> Hazards { get; } = [];
@@ -22,7 +24,7 @@ public sealed class GameEngine
     public int Dodged { get; private set; }
     public int Level => 1 + (int)(Seconds / 12);
     public double FallSpeedMultiplier => 1 + Math.Min(Seconds / 60, 3);
-    public double SpawnInterval => Math.Max(.12, .7 / (1 + Seconds / 30));
+    public double SpawnInterval => Math.Max(.12, .7 / (1 + Seconds / 30)) / Difficulty;
     public int Score => (int)(Seconds * 10) + Dodged * 25;
     public bool IsOver { get; private set; }
     public GameEngine(int? seed = null) => random = seed.HasValue ? new Random(seed.Value) : new Random();
@@ -52,7 +54,7 @@ public sealed class GameEngine
             {
                 var r = random.Next(13, 22);
                 Hazards.Add(new Hazard { X = r + random.NextDouble() * (Width - 2 * r), Y = -30, Radius = r,
-                    Speed = 160 + random.NextDouble() * 60, Wobble = random.NextDouble() * 6 });
+                    Speed = (160 + random.NextDouble() * 60) * Difficulty, Wobble = random.NextDouble() * 6 });
                 spawnIn += SpawnInterval * (.8 + random.NextDouble() * .4);
             }
             for (int i = Hazards.Count - 1; i >= 0; i--)
