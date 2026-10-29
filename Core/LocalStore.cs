@@ -104,7 +104,7 @@ public sealed class LocalStore
     {
         id = id.Trim();
         if (!Regex.IsMatch(id, @"\A[a-zA-Z0-9가-힣_-]{3,24}\z")) throw new ArgumentException("아이디는 한글·영문·숫자·_·-로 3~24자 입력해 주세요.");
-        if (password.Length is < 6 or > 128) throw new ArgumentException("비밀번호는 6~128자로 입력해 주세요.");
+        if (password.Length is < 1 or > 128) throw new ArgumentException("비밀번호를 128자 이하로 입력해 주세요.");
         return Access(db =>
         {
             if (db.Accounts.Any(a => a.Id.Equals(id, StringComparison.OrdinalIgnoreCase))) throw new ArgumentException("이미 사용 중인 아이디입니다.");

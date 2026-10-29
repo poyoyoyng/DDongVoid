@@ -214,6 +214,8 @@ public partial class MainWindow : Window
         else AddButton("로그인하고 시작  →", () => ShowAuth(false), true);
         AddButton("랭킹 보기", ShowRankings);
         AddButton("설정  /  F2", ShowSettings);
+        if (userId is not null) AddButton($"로그아웃  ·  {userId}", Logout);
+        else if (!resumingSession) AddButton("로그인 / 회원가입", () => ShowAuth(false));
         AddText("10점 / 생존 1초  +  25점 / 피한 똥", 10, "#728F7D", 12, 0);
         if (startupError is not null) SetMessage(startupError);
         if (!hotkeyRegistered) SetMessage("숨기기 단축키를 등록하지 못했습니다. 숨기기 버튼은 최소화로 작동합니다.");
@@ -325,7 +327,7 @@ public partial class MainWindow : Window
             AddText("비밀번호 확인", 12, "#B6C7BC", 0, 6);
             confirm = new PasswordBox { MaxLength = 128, Margin = new Thickness(0, 0, 0, 12) };
             System.Windows.Automation.AutomationProperties.SetName(confirm, "비밀번호 확인"); DialogContent.Children.Add(confirm);
-            AddText("아이디 3~24자 · 비밀번호 6~128자", 11, "#91AB9C", 0, 8);
+            AddText("아이디 3~24자", 11, "#91AB9C", 0, 8);
         }
         var submit = AddButton(register ? "회원가입하고 시작하기" : "로그인", () => { }, true);
         submit.Click += async (_, _) =>
@@ -364,12 +366,14 @@ public partial class MainWindow : Window
         if (userId is null) { ShowAuth(false); return; }
         BeginPanel("account", "PLAYER ACCOUNT", userId, "");
         AddButton("내 기록 보기", ShowHistory, true);
-        AddButton("로그아웃", () =>
-        {
-            if (pendingRecord is not null) { ShowEnd(); return; }
-            ForgetSession(); userId = null; bestScore = 0; playState = PlayState.Home; Surface.Engine.Reset(); Surface.Demo = true; Surface.InvalidateVisual(); ShowHome();
-        });
+        AddButton("로그아웃", Logout);
         AddButton("돌아가기", ReturnToGame);
+    }
+    private void Logout()
+    {
+        if (pendingRecord is not null) { ShowEnd(); return; }
+        ForgetSession(); userId = null; bestScore = 0; playState = PlayState.Home; Surface.Engine.Reset(); Surface.Demo = true; Surface.InvalidateVisual(); ShowHome();
+        SetMessage("로그아웃했습니다.", true);
     }
     private async void ShowRankings()
     {

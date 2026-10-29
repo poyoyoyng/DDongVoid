@@ -48,7 +48,8 @@ try
         Throws<ArgumentException>(() => store.Register("테스트USER", "password2"));
         Throws<ArgumentException>(() => store.Register("../path", "password2"));
         Throws<ArgumentException>(() => store.Register("ab", "password2"));
-        Throws<ArgumentException>(() => store.Register("newuser", "123"));
+        Throws<ArgumentException>(() => store.Register("newuser", ""));
+        Assert(store.Register("shortpw", "1") == "shortpw" && store.Login("shortpw", "1") == "shortpw", "짧은 비밀번호 가입 실패");
         Throws<ArgumentException>(() => store.Register("newuser", new string('a', 129)));
     });
     Check("같은 비밀번호도 계정마다 다른 해시", () =>
