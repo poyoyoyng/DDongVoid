@@ -1,0 +1,38 @@
+name: Build and release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Test and package
+        shell: pwsh
+        run: |
+          $version = '1.0.${{ github.run_number }}'
+          ./scripts/Publish-Release.ps1 -Version $version
+          "APP_VERSION=$version" >> $env:GITHUB_ENV
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v$env:APP_VERSION"
+          gh release create $tag artifacts/release/DDongVoid-win-x64.zip --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "DDONG VOID $env:APP_VERSION" --notes "Windows x64 배포입니다. ZIP 전체를 압축 해제한 뒤 DDongVoid.exe를 실행하세요. 기존 버전은 실행 시 또는 설정의 업데이트 확인으로 설치할 수 있습니다. .NET 10 Desktop Runtime이 필요합니다." --latest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -1,0 +1,12 @@
+bin/
+obj/
+artifacts/
+.vs/
+tests/bin/
+tests/obj/
+tests/obj-render/
+*.user
+**/settings.json
+**/ddongvoid.json
+**/.ddongvoid.lock
+**/.ddongvoid-*.tmp
