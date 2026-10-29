@@ -98,11 +98,11 @@ public partial class MainWindow : Window
         Loaded += async (_, _) => { ShowHome(); updateTimer.Start(); _ = ResumeSessionAsync(); await CheckUpdatesAsync(false); };
         updateTimer.Tick += async (_, _) => await CheckUpdatesAsync(false);
         Activated += (_, _) => Dispatcher.BeginInvoke((Action)(() => OfferUpdate(false)));
-        CompositionTarget.Rendering += RenderFrame;
+        // The render loop starts with a game (StartGame / ResumeGame), not with the window.
         Closing += OnClosing;
         Closed += (_, _) =>
         {
-            CompositionTarget.Rendering -= RenderFrame;
+            SetRenderLoop(false);
             updateTimer.Stop(); updateLifetime.Cancel();
             if (source is not null) { if (hotkeyRegistered) UnregisterHotKey(source.Handle, 1); source.RemoveHook(WindowProc); }
         };
@@ -163,11 +163,20 @@ public partial class MainWindow : Window
         Topmost = preferences.AlwaysOnTop;
         Surface.InvalidateVisual();
     }
+    // Hooked only while playing: an attached Rendering handler keeps WPF redrawing every frame,
+    // which would burn CPU in the menu, while paused, or while the window is hidden.
+    private bool renderHooked;
+    private void SetRenderLoop(bool on)
+    {
+        if (on == renderHooked) return;
+        renderHooked = on;
+        if (on) CompositionTarget.Rendering += RenderFrame; else CompositionTarget.Rendering -= RenderFrame;
+    }
     private void RenderFrame(object? sender, EventArgs e)
     {
         var now = frameClock.Elapsed.TotalSeconds;
         var dt = now - lastFrame; lastFrame = now;
-        if (playState != PlayState.Playing) return;
+        if (playState != PlayState.Playing) { SetRenderLoop(false); return; }
         if (activeGame == MiniGame.Rhythm)
         {
             RhythmView.Engine.Update(dt); RhythmView.InvalidateVisual(); UpdateHud();
@@ -304,7 +313,7 @@ public partial class MainWindow : Window
         if (!RequireLogin()) return;
         if (activeGame == MiniGame.Rhythm) RhythmView.Engine.Reset();
         else { Surface.Engine.Reset(); Surface.Demo = false; }
-        playState = PlayState.Playing; lastRecordSaved = false;
+        playState = PlayState.Playing; lastRecordSaved = false; SetRenderLoop(true);
         Overlay.Visibility = Visibility.Collapsed; lastFrame = frameClock.Elapsed.TotalSeconds;
         UpdateHud(); ActiveSurface.Focus(); ActiveSurface.InvalidateVisual();
     }
@@ -334,7 +343,7 @@ public partial class MainWindow : Window
     private void ResumeGame()
     {
         if (playState != PlayState.Paused) return;
-        playState = PlayState.Playing; Overlay.Visibility = Visibility.Collapsed;
+        playState = PlayState.Playing; Overlay.Visibility = Visibility.Collapsed; SetRenderLoop(true);
         lastFrame = frameClock.Elapsed.TotalSeconds; UpdateHud(); ActiveSurface.Focus();
     }
     private void ReturnToGame()
