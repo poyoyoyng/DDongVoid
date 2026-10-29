@@ -5,7 +5,7 @@ Windows용 크기 조절 가능한 투명 창 미니게임 모음입니다. 로�
 ## 실행
 
 - 이 폴더의 `실행.cmd`를 더블 클릭합니다. 빌드된 앱이 있으면 즉시 실행합니다.
-- GitHub [최신 배포](https://github.com/poyoyoyng/DDongVoid/releases/latest)의 `DDongVoid-win-x64.zip`을 전체 압축 해제한 뒤 `DDongVoid.exe`를 실행합니다. 업데이트 도우미를 포함한 파일 8개를 모두 유지해야 합니다.
+- GitHub [최신 배포](https://github.com/poyoyoyng/DDongVoid/releases/latest)의 `DDongVoid-win-x64.zip`을 전체 압축 해제한 뒤 `DDongVoid.exe`를 실행합니다. 업데이트 도우미를 포함한 파일 8개를 모두 유지해야 합니다. `D:\` 같은 드라이브 최상위나 `Program Files` 대신 `D:\AKC미니게임`처럼 쓰기 권한이 있는 폴더를 만들어 압축을 풀어야 자동 업데이트가 됩니다.
 - 로컬 배포 빌드는 `artifacts/release/package/DDongVoid.exe`입니다. 개발 명령으로 빌드한 실행 파일은 `bin/Release/net10.0-windows`에 생성됩니다.
 - 개발 및 최초 빌드: Windows와 .NET 10 SDK가 필요합니다. 빌드된 앱 실행에는 .NET 10 Desktop Runtime이 필요합니다.
 
@@ -44,7 +44,7 @@ dotnet run --project DDongVoid.csproj -c Release
 | 라인 | 키 |
 |---|---|
 | 왼손 | ㅂ ㅈ ㄷ ㄱ ㅅ · ㅁ ㄴ ㅇ ㄹ ㅎ · ㅋ ㅌ ㅊ ㅍ ㅠ |
-| 오른손 | ㅛ ㅕ ㅑ ㅐ ㅔ [ ] · ㅗ ㅓ ㅏ ㅣ ; ' · ㅜ ㅡ , . / |
+| 오른손 | ㅛ ㅕ ㅑ ㅐ ㅔ · ㅗ ㅓ ㅏ ㅣ ; ' · ㅜ ㅡ , . / |
 
 - 판정: 판정선과의 차이 0.05초 이내 **PERFECT**(300점), 0.1초 이내 **GREAT**(200점), 0.16초 이내 **GOOD**(100점). 놓치면 **MISS**입니다.
 - 콤보: 연속으로 맞히면 콤보가 쌓이고, 판정마다 콤보 × 2점(최대 200점)을 더 받습니다. MISS가 나면 콤보가 0이 됩니다.

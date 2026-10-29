@@ -284,7 +284,7 @@ public partial class MainWindow : Window
         if (key is >= Key.A and <= Key.Z) return (char)('A' + (key - Key.A));
         return key switch
         {
-            Key.OemOpenBrackets => '[', Key.OemCloseBrackets => ']', Key.OemSemicolon => ';', Key.OemQuotes => '\'',
+            Key.OemSemicolon => ';', Key.OemQuotes => '\'',
             Key.OemComma => ',', Key.OemPeriod => '.', Key.OemQuestion => '/', _ => null,
         };
     }
@@ -631,6 +631,8 @@ public partial class MainWindow : Window
         {
             var probe = Path.Combine(AppContext.BaseDirectory, $".ddongvoid-update-check-{Guid.NewGuid():N}");
             using (new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose)) { }
+            if (UpdateInstaller.RunningGames(AppContext.BaseDirectory, Environment.ProcessId).Count > 0)
+                throw new IOException("다른 게임 창이 실행 중입니다. 숨긴 창을 포함해 다른 게임 창을 모두 닫은 뒤 다시 업데이트해 주세요.");
             var payload = await Task.Run(() => updateService.PrepareAsync(update, cancellation.Token), cancellation.Token);
             var helperDirectory = Path.Combine(Path.GetDirectoryName(payload)!, "helper");
             Directory.CreateDirectory(helperDirectory);
@@ -651,7 +653,8 @@ public partial class MainWindow : Window
         {
             busy = false; installingUpdate = false;
             ReturnToGame();
-            SetMessage(ex is OperationCanceledException ? "업데이트를 취소했습니다. 현재 버전을 계속 사용할 수 있습니다." : "업데이트를 완료하지 못했습니다. 현재 버전은 유지됩니다.\n" + ex.Message);
+            SetMessage(ex is OperationCanceledException ? "업데이트를 취소했습니다. 현재 버전을 계속 사용할 수 있습니다." : "업데이트를 완료하지 못했습니다. 현재 버전은 유지됩니다.\n" + ex.Message +
+                (UpdateInstaller.IsAccessDenied(ex) ? "\n" + UpdateInstaller.AccessDeniedHelp : ""));
         }
         finally { busy = false; installingUpdate = false; }
     }

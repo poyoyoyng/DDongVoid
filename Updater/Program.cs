@@ -21,6 +21,14 @@ internal static class Program
                 if (!parent.WaitForExit(30000)) throw new IOException("게임이 아직 실행 중입니다. 게임을 닫은 뒤 다시 업데이트해 주세요.");
             }
             catch (ArgumentException) { /* The original process has already exited. */ }
+            // A second game window (possibly hidden) keeps DDongVoid.exe locked.
+            var waited = Stopwatch.StartNew();
+            while (UpdateInstaller.RunningGames(target).Count > 0)
+            {
+                if (waited.Elapsed > TimeSpan.FromSeconds(15))
+                    throw new IOException("다른 게임 창이 아직 실행 중입니다. 숨긴 창을 포함해 게임을 모두 닫은 뒤 다시 업데이트해 주세요.");
+                Thread.Sleep(250);
+            }
             var backup = Path.Combine(Path.GetDirectoryName(payload)!, "backup");
             UpdateInstaller.Install(payload, target, backup);
             var start = new ProcessStartInfo(Path.Combine(target, "DDongVoid.exe")) { UseShellExecute = true, WorkingDirectory = target };
@@ -30,7 +38,8 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            MessageBox(IntPtr.Zero, "업데이트를 완료하지 못했습니다.\n\n" + ex.Message + "\n\n게임 폴더: " + (target ?? "확인되지 않음"), "AKC미니게임 업데이트", 0x10);
+            var help = UpdateInstaller.IsAccessDenied(ex) ? "\n\n" + UpdateInstaller.AccessDeniedHelp : "";
+            MessageBox(IntPtr.Zero, "업데이트를 완료하지 못했습니다. 현재 버전은 그대로 유지됩니다.\n\n" + ex.Message + help + "\n\n게임 폴더: " + (target ?? "확인되지 않음"), "AKC미니게임 업데이트", 0x10);
             return 1;
         }
     }

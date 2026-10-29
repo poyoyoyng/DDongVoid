@@ -14,7 +14,7 @@ public sealed class RhythmNote
 public sealed class RhythmEngine
 {
     public const double PerfectWindow = .05, GreatWindow = .1, GoodWindow = .16;
-    public static readonly string[] LaneKeys = ["QWERTASDFGZXCVB", "YUIOPHJKLNM[];',./"];
+    public static readonly string[] LaneKeys = ["QWERTASDFGZXCVB", "YUIOPHJKLNM;',./"];
     // Labels follow the Korean 2-set layout printed on the same physical keys.
     private const string Latin = "QWERTYUIOPASDFGHJKLZXCVBNM", Hangul = "ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔㅁㄴㅇㄹㅎㅗㅓㅏㅣㅋㅌㅊㅍㅠㅜㅡ";
     private readonly int? seed;

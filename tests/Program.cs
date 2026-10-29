@@ -180,7 +180,7 @@ try
     Check("리듬: 왼손·오른손 키 배치와 노트 생성", () =>
     {
         Assert(RhythmEngine.LaneOf('a') == 0 && RhythmEngine.LaneOf('B') == 0 && RhythmEngine.LaneOf('Y') == 1 && RhythmEngine.LaneOf('/') == 1 && RhythmEngine.LaneOf('1') == -1, "키 라인 배치 오류");
-        Assert(string.Concat(RhythmEngine.LaneKeys).Length == 33 && string.Concat(RhythmEngine.LaneKeys).Distinct().Count() == 33, "영문 26자 + [];',./ 7개 구성 오류");
+        Assert(string.Concat(RhythmEngine.LaneKeys).Length == 31 && string.Concat(RhythmEngine.LaneKeys).Distinct().Count() == 31 && !string.Concat(RhythmEngine.LaneKeys).Any(c => c is '[' or ']'), "영문 26자 + ;',./ 5개 구성 오류");
         var game = new RhythmEngine(3); game.Reset(); for (int i = 0; i < 30; i++) game.Update(.1);
         Assert(game.Notes.Count > 0 && game.Notes.All(n => RhythmEngine.LaneOf(n.Key) == n.Lane), "노트 생성 또는 라인 불일치");
     });
@@ -209,7 +209,7 @@ try
     {
         Assert(RhythmEngine.LabelOf('q') == "ㅂ" && RhythmEngine.LabelOf('R') == "ㄱ" && RhythmEngine.LabelOf('K') == "ㅏ" && RhythmEngine.LabelOf('M') == "ㅡ" && RhythmEngine.LabelOf('/') == "/", "한글 자판 표기 오류");
         var labels = string.Concat(RhythmEngine.LaneKeys).Select(RhythmEngine.LabelOf).ToList();
-        Assert(labels.Distinct().Count() == 33 && labels.Count(l => l[0] is >= 'ㄱ' and <= 'ㅣ') == 26, "영문 키 26개가 모두 서로 다른 한글로 표시되지 않음");
+        Assert(labels.Distinct().Count() == 31 && labels.Count(l => l[0] is >= 'ㄱ' and <= 'ㅣ') == 26, "영문 키 26개가 모두 서로 다른 한글로 표시되지 않음");
     });
     Check("리듬: 양손 동시 블록과 각 라인 판정", () =>
     {
@@ -387,13 +387,32 @@ try
         Assert(UpdatePackage.RequiredFiles.All(f => File.ReadAllText(Path.Combine(target, f)) == "new " + f), "새 실행 파일 교체 실패");
         Assert(File.ReadAllText(Path.Combine(target, "settings.json")) == "settings-keep" && File.ReadAllText(Path.Combine(target, "ddongvoid.json")) == "account-records-keep", "업데이트가 사용자 데이터를 변경함");
     });
+    Check("읽기 전용 게임 파일도 업데이트로 교체", () =>
+    {
+        var target = CreateInstallTarget("install-readonly");
+        foreach (var file in UpdatePackage.RequiredFiles) File.SetAttributes(Path.Combine(target, file), FileAttributes.ReadOnly);
+        UpdateInstaller.Install(validPayload, target, Path.Combine(root, "backup-readonly"));
+        Assert(UpdatePackage.RequiredFiles.All(f => File.ReadAllText(Path.Combine(target, f)) == "new " + f), "읽기 전용 파일 교체 실패");
+        foreach (var file in Directory.GetFiles(Path.Combine(root, "backup-readonly"))) File.SetAttributes(file, FileAttributes.Normal);
+    });
+    Check("잠깐 잠긴 게임 파일은 기다렸다가 교체", () =>
+    {
+        var target = CreateInstallTarget("install-transient");
+        var locked = new FileStream(Path.Combine(target, UpdatePackage.RequiredFiles[0]), FileMode.Open, FileAccess.Read, FileShare.Read);
+        var release = Task.Delay(600).ContinueWith(_ => locked.Dispose());
+        UpdateInstaller.Install(validPayload, target, Path.Combine(root, "backup-transient"), TimeSpan.FromSeconds(5));
+        release.Wait();
+        Assert(UpdatePackage.RequiredFiles.All(f => File.ReadAllText(Path.Combine(target, f)) == "new " + f), "잠금 해제 후 교체 실패");
+    });
+    Check("다른 경로의 프로세스는 실행 중인 게임으로 보지 않음", () =>
+        Assert(UpdateInstaller.RunningGames(Path.Combine(root, "no-game-here")).Count == 0, "실행 중이 아닌 폴더에서 게임을 감지함"));
     Check("일부 파일 교체 실패 시 이전 실행 파일 전부 복원", () =>
     {
         var target = CreateInstallTarget("install-rollback");
         using (var locked = new FileStream(Path.Combine(target, UpdatePackage.RequiredFiles[^1]), FileMode.Open, FileAccess.Read, FileShare.Read))
         {
             bool failed = false;
-            try { UpdateInstaller.Install(validPayload, target, Path.Combine(root, "backup-rollback")); }
+            try { UpdateInstaller.Install(validPayload, target, Path.Combine(root, "backup-rollback"), TimeSpan.FromMilliseconds(300)); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { failed = true; }
             Assert(failed, "사용 중인 파일이 있는데 설치가 성공했다고 처리함");
         }

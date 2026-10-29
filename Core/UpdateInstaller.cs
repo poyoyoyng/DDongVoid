@@ -1,10 +1,11 @@
+using System.Diagnostics;
 using System.IO;
 
 namespace DDongVoid.Core;
 
 public static class UpdateInstaller
 {
-    public static void Install(string payloadDirectory, string targetDirectory, string backupDirectory)
+    public static void Install(string payloadDirectory, string targetDirectory, string backupDirectory, TimeSpan? retryFor = null)
     {
         var target = Path.GetFullPath(targetDirectory);
         var payload = Path.GetFullPath(payloadDirectory);
@@ -22,11 +23,14 @@ public static class UpdateInstaller
         {
             foreach (var name in UpdatePackage.RequiredFiles)
             {
+                var destination = Path.Combine(target, name);
                 var temporary = Path.Combine(target, $".{name}.{Guid.NewGuid():N}.update");
                 try
                 {
                     File.Copy(Path.Combine(payload, name), temporary);
-                    File.Move(temporary, Path.Combine(target, name), overwrite: true);
+                    // A read-only flag (e.g. files copied from a share or USB) blocks replacement.
+                    if (File.Exists(destination)) File.SetAttributes(destination, File.GetAttributes(destination) & ~FileAttributes.ReadOnly);
+                    Retry(() => File.Move(temporary, destination, overwrite: true), retryFor ?? TimeSpan.FromSeconds(5));
                     applied.Add(name);
                 }
                 finally { if (File.Exists(temporary)) File.Delete(temporary); }
@@ -49,4 +53,40 @@ public static class UpdateInstaller
             throw;
         }
     }
+    // Antivirus scans and a just-exited game can hold the files for a moment after exit.
+    private static void Retry(Action action, TimeSpan retryFor)
+    {
+        var timer = Stopwatch.StartNew();
+        while (true)
+        {
+            try { action(); return; }
+            catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && timer.Elapsed < retryFor) { Thread.Sleep(200); }
+        }
+    }
+    // Ids of other game processes started from this folder, hidden windows included.
+    public static List<int> RunningGames(string targetDirectory, int? exceptProcessId = null)
+    {
+        var exe = Path.Combine(Path.GetFullPath(targetDirectory), "DDongVoid.exe");
+        var result = new List<int>();
+        foreach (var process in Process.GetProcessesByName("DDongVoid"))
+        {
+            using (process)
+            {
+                try
+                {
+                    if (process.Id != exceptProcessId && string.Equals(process.MainModule?.FileName, exe, StringComparison.OrdinalIgnoreCase))
+                        result.Add(process.Id);
+                }
+                catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
+            }
+        }
+        return result;
+    }
+    public static bool IsAccessDenied(Exception ex) =>
+        ex is UnauthorizedAccessException || ex.HResult == unchecked((int)0x80070005) ||
+        (ex is AggregateException aggregate && aggregate.InnerExceptions.Any(IsAccessDenied)) || (ex.InnerException is { } inner && IsAccessDenied(inner));
+    public const string AccessDeniedHelp = "게임 파일을 바꿀 권한이 없거나 다른 프로그램이 파일을 사용 중입니다.\n" +
+        "· 숨긴 창을 포함해 게임 창을 모두 닫았는지 확인해 주세요.\n" +
+        "· D:\\ 같은 드라이브 최상위 대신 D:\\AKC미니게임 같은 폴더를 만들어 압축을 풀어 주세요.\n" +
+        "· Program Files 같은 보호 폴더에는 설치하지 마세요.";
 }
