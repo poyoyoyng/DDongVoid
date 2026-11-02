@@ -99,7 +99,11 @@ public partial class MainWindow : Window
         };
         Loaded += async (_, _) => { ShowHome(); updateTimer.Start(); _ = ResumeSessionAsync(); await CheckUpdatesAsync(false); };
         updateTimer.Tick += async (_, _) => await CheckUpdatesAsync(false);
-        Activated += (_, _) => Dispatcher.BeginInvoke((Action)(() => OfferUpdate(false)));
+        Activated += (_, _) =>
+        {
+            if (panel is "slap-lobby" or "slap-room") { StartSlapTimer(); _ = PollSlapAsync(); }
+            Dispatcher.BeginInvoke((Action)(() => OfferUpdate(false)));
+        };
         // The render loop starts with a game (StartGame / ResumeGame), not with the window.
         Closing += OnClosing;
         Closed += (_, _) =>

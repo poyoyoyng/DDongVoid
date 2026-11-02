@@ -148,8 +148,11 @@ public sealed class SlapStore
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
     public SlapStore(string folder, Func<DateTimeOffset>? clock = null) { Folder = Path.GetFullPath(folder); now = clock ?? (() => DateTimeOffset.UtcNow); }
 
-    private T Access<T>(Func<SlapDatabase, T> action, bool save) =>
-        SharedFile.Locked(FilePath, ".ddongvoid-slap.lock", save, "다른 PC에서 대전 정보를 저장 중입니다. 잠시 후 다시 시도해 주세요.", () =>
+    private T Access<T>(Func<SlapDatabase, T> action, bool save)
+    {
+        // Writers serialize updates; readers use an immutable, atomically replaced snapshot.
+        if (!save) return action(Read());
+        return SharedFile.Locked(FilePath, ".ddongvoid-slap.lock", true, "다른 PC에서 대전 정보를 저장 중입니다. 잠시 후 다시 시도해 주세요.", () =>
         {
             var db = Read();
             var playing = db.Rooms.Where(r => r.Status == SlapStatus.Playing)
@@ -158,22 +161,51 @@ public sealed class SlapStore
             foreach (var (room, players) in playing)
                 if (room.Status == SlapStatus.Finished && room.Winner is { } winner && players.Length == 2)
                     db.Matches.Add(new SlapMatch(winner, players.Single(p => p != winner)));
-            if (save) SharedFile.WriteAtomic(FilePath, db, JsonOptions);
+            SharedFile.WriteAtomic(FilePath, db, JsonOptions);
             return result;
         });
+    }
+    private static SlapDatabase Validate(SlapDatabase? db)
+    {
+        if (db is null || db.Version != 1 || db.Rooms is null || db.Matches is null ||
+            db.Matches.Any(m => m is null || string.IsNullOrEmpty(m.Winner) || string.IsNullOrEmpty(m.Loser) || m.Winner == m.Loser) ||
+            db.Rooms.Any(r => r is null || r.Players is null || r.Players.Count > 2 || r.Players.Any(p => p is null || string.IsNullOrEmpty(p.Id))))
+            throw new JsonException();
+        return db;
+    }
     private SlapDatabase Read()
     {
-        if (!File.Exists(FilePath)) return new SlapDatabase();
-        try
+        for (int attempt = 0; ; attempt++)
         {
-            var db = JsonSerializer.Deserialize<SlapDatabase>(File.ReadAllText(FilePath), JsonOptions) ?? throw new JsonException();
-            if (db.Version != 1 || db.Rooms is null || db.Matches is null ||
-                db.Matches.Any(m => m is null || string.IsNullOrEmpty(m.Winner) || string.IsNullOrEmpty(m.Loser) || m.Winner == m.Loser) ||
-                db.Rooms.Any(r => r is null || r.Players is null || r.Players.Count > 2 || r.Players.Any(p => p is null || string.IsNullOrEmpty(p.Id))))
-                throw new JsonException();
-            return db;
+            try
+            {
+                using var file = new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                return Validate(JsonSerializer.Deserialize<SlapDatabase>(file, JsonOptions));
+            }
+            catch (IOException ex) when (attempt < 20 && (ex.HResult & 0xffff) is 32 or 33) { Thread.Sleep(25); }
+            catch (FileNotFoundException) { return new SlapDatabase(); }
+            catch (DirectoryNotFoundException) { return new SlapDatabase(); }
+            catch (JsonException ex) { throw new InvalidDataException("대전 JSON 형식이 올바르지 않습니다. 승패 기록을 보호하기 위해 원본 파일을 보존했습니다.", ex); }
         }
-        catch (JsonException ex) { throw new InvalidDataException("대전 JSON 형식이 올바르지 않습니다. 승패 기록을 보호하기 위해 원본 파일을 보존했습니다.", ex); }
+    }
+    public async Task<List<SlapRoom>> RoomsAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                await using var file = new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
+                    4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
+                var db = Validate(await JsonSerializer.DeserializeAsync<SlapDatabase>(file, JsonOptions, cancellationToken).ConfigureAwait(false));
+                return db.Rooms.OrderBy(r => r.CreatedAt).ToList();
+            }
+            catch (IOException ex) when (attempt < 20 && (ex.HResult & 0xffff) is 32 or 33)
+            { await Task.Delay(25, cancellationToken).ConfigureAwait(false); }
+            catch (FileNotFoundException) { return []; }
+            catch (DirectoryNotFoundException) { return []; }
+            catch (JsonException ex) { throw new InvalidDataException("대전 JSON 형식이 올바르지 않습니다. 승패 기록을 보호하기 위해 원본 파일을 보존했습니다.", ex); }
+        }
     }
     private static SlapRoom Room(SlapDatabase db, Guid roomId) =>
         db.Rooms.FirstOrDefault(r => r.Id == roomId) ?? throw new ArgumentException("방이 사라졌습니다. 방 목록에서 다시 골라 주세요.");

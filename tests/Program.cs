@@ -374,6 +374,69 @@ try
                 && defender.Hp == 5 - (blocked ? 0 : damage), "방어 또는 공격 피해 판정 오류");
         }
     });
+    Check("뺨때리기: 쓰기 잠금을 기다리는 중에도 마지막 완성본 조회 가능", () =>
+    {
+        var shared = new SlapStore(Path.Combine(root, "조회 쓰기 동시성"));
+        var room = shared.Create("host");
+        var held = new FileStream(Path.Combine(shared.Folder, ".ddongvoid-slap.lock"), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        var writer = Task.Run(() => shared.Join(room.Id, "guest"));
+        var reader = Task.Run(() => shared.Rooms().Single(r => r.Id == room.Id));
+        try
+        {
+            Assert(reader.Wait(TimeSpan.FromSeconds(1)), "조회가 다른 PC의 쓰기 잠금에 막힘");
+            Assert(reader.Result.Players.Count == 1 && !writer.IsCompleted, "쓰기 완료 전 일관된 이전 상태를 읽지 못함");
+            var asyncReader = shared.RoomsAsync();
+            Assert(asyncReader.Wait(TimeSpan.FromSeconds(1)) && asyncReader.Result.Single(r => r.Id == room.Id).Players.Count == 1,
+                "자동 갱신용 비동기 조회가 쓰기 잠금에 막힘");
+        }
+        finally
+        {
+            held.Dispose(); writer.GetAwaiter().GetResult(); reader.GetAwaiter().GetResult();
+        }
+        Assert(shared.Rooms().Single(r => r.Id == room.Id).Players.Count == 2, "쓰기 완료 후 새 참가자를 읽지 못함");
+    });
+    Check("뺨때리기: 이전 조회 파일을 열어 둬도 새 상태 저장·조회 가능", () =>
+    {
+        var shared = new SlapStore(Path.Combine(root, "열린 조회 파일"));
+        var room = shared.Create("host");
+        using var oldSnapshot = new FileStream(shared.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        shared.Join(room.Id, "guest");
+        using var previous = JsonDocument.Parse(oldSnapshot);
+        Assert(previous.RootElement.GetProperty("Rooms")[0].GetProperty("Players").GetArrayLength() == 1,
+            "열어 둔 완성본이 저장 도중 바뀜");
+        Assert(shared.RoomsAsync().GetAwaiter().GetResult().Single(r => r.Id == room.Id).Players.Count == 2,
+            "새 조회가 원자적으로 교체된 새 상태를 읽지 못함");
+    });
+    Check("뺨때리기: 동시에 여러 방을 저장하는 동안 조회해도 갱신 유실·부분 JSON 없음", () =>
+    {
+        var shared = new SlapStore(Path.Combine(root, "동시 저장과 조회"));
+        var writers = Task.Run(() => Parallel.For(0, 12, i => shared.Create($"host{i}")));
+        do
+        {
+            var snapshot = shared.RoomsAsync().GetAwaiter().GetResult();
+            Assert(snapshot.All(r => r.Players.Count == 1) && snapshot.Select(r => r.Id).Distinct().Count() == snapshot.Count,
+                "동시 조회에서 불완전하거나 중복된 방 상태를 읽음");
+        } while (!writers.IsCompleted);
+        writers.GetAwaiter().GetResult();
+        Assert(shared.Rooms().Count == 12, "동시 쓰기에서 방 생성 결과가 유실됨");
+    });
+    Check("뺨때리기: 응답 없는 조회 시간 제한·취소·다음 조회 재개", () =>
+    {
+        var stalled = new TaskCompletionSource<List<SlapRoom>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken readToken = default;
+        try
+        {
+            Throws<TimeoutException>(() => SlapSnapshotReader.ReadAsync(token => { readToken = token; return stalled.Task; },
+                TimeSpan.FromMilliseconds(500)).GetAwaiter().GetResult());
+            Assert(readToken.IsCancellationRequested, "시간 초과 시 진행 중인 읽기를 취소하지 않음");
+            var snapshot = SlapSnapshotReader.ReadAsync(_ => Task.FromResult(new List<SlapRoom> { new() }), TimeSpan.FromSeconds(2)).GetAwaiter().GetResult();
+            Assert(snapshot.Count == 1, "지연된 이전 읽기 때문에 다음 조회가 막힘");
+            using var canceled = new CancellationTokenSource(); canceled.Cancel();
+            Throws<OperationCanceledException>(() => SlapSnapshotReader.ReadAsync(_ => stalled.Task,
+                TimeSpan.FromSeconds(2), canceled.Token).GetAwaiter().GetResult());
+        }
+        finally { stalled.TrySetResult([]); }
+    });
     Check("뺨때리기: 참가·준비·시작 상태를 JSON에 기록", () =>
     {
         var room = slap.Create("p1");
@@ -437,6 +500,40 @@ try
         room = slap.SetReady(room.Id, "c1", true); room = slap.SetReady(room.Id, "c2", true);
         Assert(room.Started && room.Players.All(p => p.Hp == 5 && p.Gauge == 0) && room.LastResult is null, "다시 하기 초기화 실패");
         slap.Leave(room.Id, "c1");
+    });
+    Check("뺨때리기: 방장 오프라인 선준비·상대 시작과 선입력·번갈아 재접속", () =>
+    {
+        var asyncFolder = Path.Combine(root, "시간 차 대전");
+        var asyncClock = DateTimeOffset.UtcNow;
+        SlapStore Client() => new(asyncFolder, () => asyncClock);
+        var room = Client().Create("host");
+        Client().SetReady(room.Id, "host", true);
+        asyncClock += TimeSpan.FromDays(7);
+        room = Client().Join(room.Id, "guest");
+        Assert(room.Status == SlapStatus.Waiting && room.Find("host")!.Ready && !room.Find("guest")!.Ready,
+            "오프라인 방장의 준비 상태가 상대 참가 후 유실됨");
+        room = Client().SetReady(room.Id, "guest", true);
+        Assert(room.Started && room.Round == 1 && room.AttackerId == "host" && room.Players.All(p => !p.Ready), "방장 재접속 없이 게임이 시작되지 않음");
+        room = Client().Submit(room.Id, "guest", new SlapAction(SlapMove.Charge));
+        var firstRevision = room.Revision;
+        asyncClock += TimeSpan.FromDays(7);
+        room = Client().Join(room.Id, "host");
+        Assert(room.Started && room.Round == 1 && room.Revision == firstRevision && room.Find("guest")!.Submitted
+            && !room.Find("host")!.Submitted && room.Players.All(p => p.Hp == 5 && p.Gauge == 0), "방장 재입장이 게임·상대 첫 입력을 초기화함");
+        room = Client().Submit(room.Id, "host", new SlapAction(SlapMove.Slap, SlapZone.High, 1));
+        Assert(room.Round == 2 && room.AttackerId == "guest" && room.Find("guest")!.Hp == 4 && room.Find("guest")!.Gauge == 1
+            && room.Players.All(p => !p.Submitted), "시간 차 첫 턴 판정 또는 공수 교대 오류");
+        Client().Submit(room.Id, "host", new SlapAction(SlapMove.Charge));
+        asyncClock += TimeSpan.FromDays(7);
+        room = Client().Join(room.Id, "guest");
+        Assert(room.Round == 2 && room.Find("host")!.Choice == new SlapAction(SlapMove.Charge) && !room.Find("guest")!.Submitted,
+            "상대 재입장 시 방장이 먼저 입력한 둘째 턴이 유실됨");
+        room = Client().Submit(room.Id, "guest", new SlapAction(SlapMove.Slap, SlapZone.Middle, 2));
+        asyncClock += TimeSpan.FromDays(7);
+        room = Client().Join(room.Id, "host");
+        Assert(room.Started && room.Round == 3 && room.AttackerId == "host" && room.LastResult!.Round == 2 && room.LastResult.Damage == 2
+            && room.Find("host")!.Hp == 3 && room.Find("host")!.Gauge == 1 && room.Find("guest")!.Hp == 4 && room.Find("guest")!.Gauge == 0
+            && room.Players.All(p => !p.Submitted), "번갈아 재접속 후 턴·결과·체력·기력이 일치하지 않음");
     });
     Check("뺨때리기: 장기 미접속·나가기·재실행 후에도 선택과 대전을 보존", () =>
     {

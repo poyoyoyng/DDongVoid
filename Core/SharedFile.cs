@@ -45,12 +45,25 @@ internal static class SharedFile
         var folder = Path.GetDirectoryName(filePath)!;
         Directory.CreateDirectory(folder);
         var temp = Path.Combine(folder, $".ddongvoid-{Guid.NewGuid():N}.tmp");
+        var backup = Path.Combine(folder, $".ddongvoid-backup-{Guid.NewGuid():N}.tmp");
+        var committed = false;
         try
         {
             using (var file = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             { JsonSerializer.Serialize(file, value, options); file.Flush(true); }
-            File.Move(temp, filePath, true);
+            // ReplaceFile preserves open readers' old snapshot and lets new readers open the
+            // completed update. MoveFileEx(overwrite) can fail even with FileShare.Delete.
+            if (File.Exists(filePath)) File.Replace(temp, filePath, backup, true);
+            else File.Move(temp, filePath);
+            committed = true;
         }
-        finally { if (File.Exists(temp)) File.Delete(temp); }
+        finally
+        {
+            if (File.Exists(temp)) File.Delete(temp);
+            // Preserve the previous data if replacement fails partway through on the share.
+            if (committed)
+                try { File.Delete(backup); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
     }
 }

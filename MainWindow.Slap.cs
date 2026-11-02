@@ -11,12 +11,18 @@ namespace DDongVoid;
 // 뺨때리기: a turn-based 1:1 match synced through ddongvoid-slap.json in the shared data folder.
 public partial class MainWindow
 {
-    private readonly DispatcherTimer slapTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private static readonly TimeSpan SlapReadTimeout = TimeSpan.FromSeconds(8);
+    private readonly DispatcherTimer slapTimer = new(DispatcherPriority.Normal) { Interval = TimeSpan.FromSeconds(1) };
     private Guid? slapRoomId;
     private SlapRoom? slapRoom;
     private List<SlapRoom> slapRooms = [];
     private string? slapDrawn;
     private bool slapSyncing;
+    private CancellationTokenSource? slapSyncCancellation;
+    private Task? slapActivePoll;
+    private DateTime? slapLastSyncUtc;
+    private string slapSyncNote = "동기화 확인 중…";
+    private TextBlock? slapSyncStatus;
     private int slapStateVersion;
     private int slapPower = 1;
     private bool slapTimerHooked;
@@ -40,6 +46,7 @@ public partial class MainWindow
         if (panel == "slap-lobby" && slapDrawn == signature && note is null) return;
         slapDrawn = signature;
         BeginPanel("slap-lobby", "SLAP BATTLE · 1 : 1", "뺨때리기 대전", "여러 방을 만들거나 동시에 참가할 수 있어요.\n각 방에서 시간 날 때 한 턴씩 진행하고, 목록에서 이어서 플레이하세요.");
+        AddSlapSyncControls();
         AddText($"체력 {SlapRules.MaxHp}  ·  기본 공격력 {SlapRules.BaseDamage}  ·  기 최대 {SlapRules.MaxGauge}개\n공격: 상단·중단·하단 중 하나를 때리거나 기 모으기\n수비: 기 소모 없이 상단·중단·하단 중 하나를 막거나 기 모으기\n기본공격: 기 0 · 피해 1  /  강한 뺨: 기 1 · 피해 2\n필살뺨: 기 3 · 피해 5", 11, "#91AB9C", 0, 14);
         AddButton("방 만들기", CreateSlapRoom, true);
         if (slapRooms.Count == 0) AddText("열린 방이 없어요. 방을 만들고 상대를 기다려 보세요.", 12, "#91AB9C", 10, 6);
@@ -81,6 +88,31 @@ public partial class MainWindow
         slapRooms.RemoveAll(r => r.Id == room.Id);
         slapRooms.Add(room);
     }
+    private void SetSlapSyncNote(string note)
+    {
+        slapSyncNote = note;
+        if (slapSyncStatus is not null) slapSyncStatus.Text = note;
+    }
+    private void AddSlapSyncControls()
+    {
+        var row = new DockPanel { Margin = new Thickness(0, 0, 0, 10), ToolTip = store.Folder };
+        var refresh = new Button { Content = "새로고침", Padding = new Thickness(9, 5, 9, 5), FontSize = 11 };
+        refresh.Click += async (_, _) => await RefreshSlapAsync();
+        DockPanel.SetDock(refresh, Dock.Right); row.Children.Add(refresh);
+        slapSyncStatus = new TextBlock { Name = "SlapSyncStatus", Text = slapSyncNote, FontSize = 10,
+            Foreground = new SolidColorBrush(Color.FromRgb(145, 171, 156)), VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
+        row.Children.Add(slapSyncStatus); DialogContent.Children.Add(row);
+    }
+    private async Task RefreshSlapAsync()
+    {
+        if (busy || userId is null) return;
+        var stateVersion = slapStateVersion;
+        StartSlapTimer();
+        var active = slapActivePoll;
+        slapSyncCancellation?.Cancel();
+        if (active is not null) await active;
+        if (slapStateVersion == stateVersion) await PollSlapAsync();
+    }
     private void LeaveSlapLobby() { slapTimer.Stop(); ShowGameList(); }
     private async Task RunSlapAsync(Func<SlapStore, string, SlapRoom?> action)
     {
@@ -88,6 +120,7 @@ public partial class MainWindow
         var slapStore = NewSlapStore(); var me = userId;
         var previousRoomId = slapRoomId;
         var stateVersion = ++slapStateVersion;
+        slapSyncCancellation?.Cancel();
         var refresh = false;
         busy = true;
         try
@@ -135,20 +168,28 @@ public partial class MainWindow
     private void DetachSlapRoom()
     {
         slapTimer.Stop();
+        slapSyncCancellation?.Cancel();
+        slapSyncStatus = null;
         slapStateVersion++;
         slapRoomId = null; slapRoom = null; slapDrawn = null;
     }
-    private async Task PollSlapAsync()
+    private Task PollSlapAsync()
     {
-        if (busy || slapSyncing || userId is null) return;
-        if (slapRoomId is null && panel != "slap-lobby") { slapTimer.Stop(); return; }
-        var slapStore = NewSlapStore(); var me = userId; var roomId = slapRoomId;
+        if (busy || slapSyncing || userId is null) return Task.CompletedTask;
+        if (slapRoomId is null && panel != "slap-lobby") { slapTimer.Stop(); return Task.CompletedTask; }
+        return slapActivePoll = PollSlapCoreAsync();
+    }
+    private async Task PollSlapCoreAsync()
+    {
+        var slapStore = NewSlapStore(); var me = userId!; var roomId = slapRoomId;
         var stateVersion = slapStateVersion;
+        using var cancellation = new CancellationTokenSource();
+        slapSyncCancellation = cancellation;
         slapSyncing = true;
         try
         {
             // Read every room from one snapshot, including rooms not currently on screen.
-            var rooms = await Task.Run(slapStore.Rooms);
+            var rooms = await SlapSnapshotReader.ReadAsync(slapStore.RoomsAsync, SlapReadTimeout, cancellation.Token);
             if (slapStateVersion != stateVersion || slapRoomId != roomId || userId != me || store.Folder != slapStore.Folder) return;
             // The persisted snapshot is authoritative. Request versions above already reject
             // reads started before a local action; room revisions can reset after a file restore.
@@ -159,25 +200,40 @@ public partial class MainWindow
                 {
                     // A temporarily missing shared file must not eject a player from the room.
                     slapDrawn = null;
+                    SetSlapSyncNote("방 정보 재확인 중…");
                     if (panel == "slap-room") SetMessage("방 정보를 확인하지 못했습니다. 현재 방을 유지하고 다시 확인합니다.");
                     return;
                 }
                 slapRoom = room;
                 slapRooms = rooms;
+                slapLastSyncUtc = DateTime.UtcNow;
+                SetSlapSyncNote($"자동 갱신 · {DateTime.Now:HH:mm:ss}");
                 if (panel == "slap-room") DrawSlapRoom();
             }
             else
             {
                 slapRooms = rooms;
+                slapLastSyncUtc = DateTime.UtcNow;
+                SetSlapSyncNote($"자동 갱신 · {DateTime.Now:HH:mm:ss}");
                 if (panel == "slap-lobby") DrawSlapLobby();
             }
         }
-        catch (Exception ex) when (IsUserError(ex))
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (Exception ex) when (IsUserError(ex) || ex is TimeoutException)
         {
             if (slapStateVersion == stateVersion && userId == me && store.Folder == slapStore.Folder && panel.StartsWith("slap"))
+            {
+                SetSlapSyncNote(ex is TimeoutException ? "조회 지연 · 자동 재시도 중" : "조회 실패 · 자동 재시도 중");
                 SetMessage("대전 정보를 불러오지 못했습니다. 공유 폴더 연결을 확인해 주세요.\n" + ex.Message);
+                // The next successful read must also clear the error when the room is unchanged.
+                slapDrawn = null;
+            }
         }
-        finally { slapSyncing = false; }
+        finally
+        {
+            if (ReferenceEquals(slapSyncCancellation, cancellation)) slapSyncCancellation = null;
+            slapSyncing = false;
+        }
     }
     private void ShowSlapRoom()
     {
@@ -198,6 +254,7 @@ public partial class MainWindow
         var title = finished ? (room.Winner is null ? "대전을 종료했어요" : room.Winner == userId ? "이겼어요! 짝!" : "졌어요… 얼얼하다") : opponent is null ? "상대를 기다리는 중" : "준비되면 시작!";
         BeginPanel("slap-room", $"SLAP BATTLE · #{room.Id.ToString("N")[..8]} · {(finished ? "GAME OVER" : "WAITING ROOM")}", title,
             finished ? "" : "두 사람 모두 준비 완료를 누르면 바로 시작합니다.\n방을 만든 사람(P1)이 먼저 공격합니다.");
+        AddSlapSyncControls();
         if (finished)
         {
             if (room.Winner is not null) AddText($"승자  {room.Winner}", 15, "#A7F3CE", 0, 6, true);
@@ -219,6 +276,7 @@ public partial class MainWindow
     {
         var attacking = room.AttackerId == me.Id;
         BeginPanel("slap-room", $"SLAP BATTLE · #{room.Id.ToString("N")[..8]} · ROUND {room.Round}", attacking ? "내 공격 차례!" : "내 수비 차례!", "");
+        AddSlapSyncControls();
         AddSlapStats(me, true, attacking);
         AddSlapStats(opponent, false, !attacking);
         if (room.LastResult is { } last) AddText($"지난 턴 · {DescribeSlap(last, me.Id)}", 11, "#B6C7BC", 2, 8);

@@ -65,10 +65,10 @@ internal static class RankingChecks
         {
             content.Measure(new Size(width, height)); content.Arrange(new Rect(0, 0, width, height)); content.UpdateLayout();
         }
-        void Wait(Func<bool> ready)
+        void Wait(Func<bool> ready, double timeoutSeconds = 10)
         {
             var clock = Stopwatch.StartNew();
-            while (!ready() && clock.Elapsed < TimeSpan.FromSeconds(10))
+            while (!ready() && clock.Elapsed < TimeSpan.FromSeconds(timeoutSeconds))
             {
                 var frame = new DispatcherFrame();
                 Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => frame.Continue = false));
@@ -82,7 +82,11 @@ internal static class RankingChecks
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         }
         string[] Labels() => Find<TextBlock>(content).Select(t => t.Text).ToArray();
-        void ClickAction(string title) => Find<Button>(content).Single(b => Equals(b.Content, title)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        void ClickAction(string title)
+        {
+            Layout();
+            Find<Button>(content).Single(b => Equals(b.Content, title)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        }
         (Task Poll, Action Complete) DeferSlapPoll(bool missingFile)
         {
             Wait(() => !(bool)Get("busy")! && !(bool)Get("slapSyncing")!);
@@ -294,6 +298,124 @@ internal static class RankingChecks
         Wait(() => Labels().Contains("내 공격 차례!") && !Labels().Contains("P2  —"));
         Assert(((SlapRoom)Get("slapRoom")!).Players.Count == 2, "수정 번호가 같아도 참가자·상태가 달라지면 화면 복구");
         Call("DetachSlapRoom"); GuestCall("DetachSlapRoom");
+
+        // Replace both window instances between visits so no room state survives in memory.
+        window = new MainWindow(); content = (FrameworkElement)window.Content;
+        Set("store", new LocalStore(root)); Set("userId", "player30");
+        Call("ShowSlapLobby"); ClickAction("방 만들기");
+        Wait(() => !(bool)Get("busy")! && Get("slapRoomId") is Guid);
+        var offlineRoomId = (Guid)Get("slapRoomId")!;
+        ClickAction("준비 완료");
+        Wait(() => !(bool)Get("busy")! && Find<Button>(content).Any(b => Equals(b.Content, "준비 취소")));
+        Call("DetachSlapRoom");
+
+        guest = new MainWindow(); guestContent = (FrameworkElement)guest.Content;
+        GuestSet("store", new LocalStore(root)); GuestSet("userId", "player31");
+        GuestCall("ShowSlapLobby");
+        Wait(() => { GuestLabels(); return Find<Button>(guestContent).Any(b => b.Tag is Guid id && id == offlineRoomId); });
+        Find<Button>(guestContent).Single(b => b.Tag is Guid id && id == offlineRoomId).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Wait(() => !(bool)GuestGet("busy")! && GuestLabels().Contains("준비 완료 ✓"));
+        GuestClick("준비 완료");
+        Wait(() => !(bool)GuestGet("busy")! && GuestLabels().Contains("내 수비 차례!"));
+        GuestClick("기 모으기  +1  (이번 턴은 못 막아요)");
+        Wait(() => !(bool)GuestGet("busy")! && GuestLabels().Contains("선택 완료 · 기 모으기"));
+        GuestCall("DetachSlapRoom");
+
+        window = new MainWindow(); content = (FrameworkElement)window.Content;
+        Set("store", new LocalStore(root)); Set("userId", "player30");
+        Call("ShowSlapLobby");
+        Wait(() => Find<Button>(content).Any(b => b.Tag is Guid id && id == offlineRoomId));
+        Find<Button>(content).Single(b => b.Tag is Guid id && id == offlineRoomId).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Wait(() => !(bool)Get("busy")! && Labels().Contains("내 공격 차례!"));
+        Assert(((SlapRoom)Get("slapRoom")!).Round == 1 && Labels().Any(t => t.Contains("player31") && t.Contains("입력 완료 ✓"))
+            && !Find<Button>(content).Any(b => Equals(b.Content, "준비 완료")) && !Labels().Contains("선택 완료 · 기 모으기"),
+            "방장이 새 창으로 돌아오면 이미 시작된 첫 턴과 상대 입력 여부를 표시하고 재준비 생략");
+        Find<Button>(content).Single(b => b.Content is TextBlock t && t.Text == "상단\n때리기").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Wait(() => !(bool)Get("busy")! && ((SlapRoom)Get("slapRoom")!).Round == 2 && Labels().Contains("내 수비 차례!"));
+        ClickAction("기 모으기  +1  (이번 턴은 못 막아요)");
+        Wait(() => !(bool)Get("busy")! && Labels().Contains("선택 완료 · 기 모으기"));
+        Call("DetachSlapRoom");
+
+        guest = new MainWindow(); guestContent = (FrameworkElement)guest.Content;
+        GuestSet("store", new LocalStore(root)); GuestSet("userId", "player31");
+        GuestCall("ShowSlapLobby");
+        Wait(() => { GuestLabels(); return Find<Button>(guestContent).Any(b => b.Tag is Guid id && id == offlineRoomId); });
+        Find<Button>(guestContent).Single(b => b.Tag is Guid id && id == offlineRoomId).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Wait(() => !(bool)GuestGet("busy")! && GuestLabels().Contains("내 공격 차례!"));
+        Assert(((SlapRoom)GuestGet("slapRoom")!).Round == 2 && GuestLabels().Any(t => t.Contains("player30") && t.Contains("입력 완료 ✓")),
+            "상대도 새 창으로 돌아오면 공수 교대와 방장의 둘째 턴 입력을 확인");
+        Find<Button>(guestContent).Single(b => b.Content is TextBlock t && t.Text.StartsWith("강한 뺨 ×2\n")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        GuestLabels();
+        Find<Button>(guestContent).Single(b => b.Content is TextBlock t && t.Text == "중단\n때리기").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Wait(() => !(bool)GuestGet("busy")! && ((SlapRoom)GuestGet("slapRoom")!).Round == 3);
+        GuestCall("DetachSlapRoom");
+
+        window = new MainWindow(); content = (FrameworkElement)window.Content;
+        Set("store", new LocalStore(root)); Set("userId", "player30");
+        Call("ShowSlapLobby");
+        Wait(() => Find<Button>(content).Any(b => b.Tag is Guid id && id == offlineRoomId));
+        Find<Button>(content).Single(b => b.Tag is Guid id && id == offlineRoomId).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Wait(() => !(bool)Get("busy")! && Labels().Contains("내 공격 차례!") && ((SlapRoom)Get("slapRoom")!).Round == 3);
+        var resumed = (SlapRoom)Get("slapRoom")!;
+        Assert(resumed.Id == offlineRoomId && resumed.Find("player30")!.Hp == 3 && resumed.Find("player30")!.Gauge == 1
+            && resumed.Find("player31")!.Hp == 4 && resumed.Find("player31")!.Gauge == 0 && resumed.LastResult!.Round == 2
+            && resumed.Players.All(p => !p.Submitted), "양쪽이 번갈아 새 창으로 재접속해도 같은 방·턴·체력·기력·결과 유지");
+        Call("DetachSlapRoom");
+        Console.WriteLine("뺨때리기 선준비·오프라인 시작·선입력·재입장 전체 흐름 검증 완료");
+
+        var liveRoot = Path.Combine(root, "잠금 복구 화면");
+        var liveStore = new SlapStore(liveRoot);
+        var liveRoom = liveStore.Create("player32");
+        window = new MainWindow(); content = (FrameworkElement)window.Content;
+        Set("store", new LocalStore(liveRoot)); Set("userId", "player32");
+        Call("ShowSlapLobby");
+        Wait(() => !(bool)Get("slapSyncing")! && Get("slapLastSyncUtc") is DateTime);
+        var beforeLock = (DateTime)Get("slapLastSyncUtc")!;
+        var heldWriteLock = new FileStream(Path.Combine(liveRoot, ".ddongvoid-slap.lock"), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        var pendingCreate = Task.Run(() => liveStore.Create("player33"));
+        SlapRoom? incoming = null;
+        try
+        {
+            Wait(() => Get("slapLastSyncUtc") is DateTime tick && tick > beforeLock, 3);
+            Assert(!pendingCreate.IsCompleted, "다른 PC가 쓰기 잠금을 기다리는 동안에도 자동 조회 시각 갱신");
+        }
+        finally { heldWriteLock.Dispose(); incoming = pendingCreate.GetAwaiter().GetResult(); }
+        Wait(() => Find<Button>(content).Any(b => b.Tag is Guid id && id == incoming!.Id));
+        Assert(Labels().Any(t => t.Contains("player33 님의 방")), "재시작 없이 상대가 새로 만든 방을 목록에 표시");
+
+        Find<Button>(content).Single(b => b.Tag is Guid id && id == liveRoom.Id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Wait(() => !(bool)Get("busy")! && Equals(Get("slapRoomId"), liveRoom.Id));
+        ClickAction("준비 완료");
+        Wait(() => !(bool)Get("busy")! && Labels().Contains("상대를 기다리는 중"));
+        guest = new MainWindow(); guestContent = (FrameworkElement)guest.Content;
+        GuestSet("store", new LocalStore(liveRoot)); GuestSet("userId", "player33"); GuestCall("ShowSlapLobby");
+        Wait(() => { GuestLabels(); return Find<Button>(guestContent).Any(b => b.Tag is Guid id && id == liveRoom.Id); });
+        Find<Button>(guestContent).Single(b => b.Tag is Guid id && id == liveRoom.Id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Wait(() => !(bool)GuestGet("busy")! && Labels().Any(t => t.Contains("P2  player33")));
+        Assert(!Labels().Contains("P2  —"), "상대가 들어오면 재시작 없이 방장 P2 카드 갱신");
+
+        Wait(() => !(bool)Get("slapSyncing")! && !(bool)GuestGet("slapSyncing")!);
+        var beforeFailure = (DateTime)Get("slapLastSyncUtc")!;
+        using (var heldDataFile = new FileStream(liveStore.FilePath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Wait(() => !(bool)Get("slapSyncing")! && ((string)Get("slapSyncNote")!).StartsWith("조회 실패"), 4);
+            Assert(Equals(Get("slapRoomId"), liveRoom.Id) && ((SlapRoom)Get("slapRoom")!).Players.Count == 2,
+                "파일 조회 실패 시 현재 방과 마지막 참가자 상태 보존");
+        }
+        GuestClick("준비 완료");
+        Wait(() => !(bool)GuestGet("busy")! && GuestLabels().Contains("내 수비 차례!"));
+        GuestClick("기 모으기  +1  (이번 턴은 못 막아요)");
+        Wait(() => Labels().Contains("내 공격 차례!") && ((SlapRoom)Get("slapRoom")!).Opponent("player32")!.Submitted
+            && Get("slapLastSyncUtc") is DateTime tick && tick > beforeFailure);
+        Assert(Get("message") is null && ((string)Get("slapSyncNote")!).StartsWith("자동 갱신"), "잠금 해제 후 재시작 없이 자동 조회·게임 시작·상대 입력 복구");
+        Wait(() => !(bool)Get("slapSyncing")!);
+        ((DispatcherTimer)Get("slapTimer")!).Stop();
+        var manualRoom = liveStore.Create("player34");
+        ClickAction("새로고침");
+        Wait(() => ((List<SlapRoom>)Get("slapRooms")!).Any(r => r.Id == manualRoom.Id));
+        Assert(((DispatcherTimer)Get("slapTimer")!).IsEnabled, "새로고침 버튼으로 최신 목록 조회 및 자동 갱신 재시작");
+        Call("DetachSlapRoom"); GuestCall("DetachSlapRoom");
+        Console.WriteLine("뺨때리기 실행 중 방 목록·P2 갱신·파일 잠금 복구 검증 완료");
         Directory.Delete(root, true);
     }
 
