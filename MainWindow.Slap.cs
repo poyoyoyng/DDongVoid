@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -35,7 +36,7 @@ public partial class MainWindow
     }
     private void DrawSlapLobby(string? note = null)
     {
-        var signature = "lobby|" + userId + "|" + string.Join(",", slapRooms.Select(r => $"{r.Id}:{r.Revision}"));
+        var signature = "lobby|" + userId + "|" + JsonSerializer.Serialize(slapRooms);
         if (panel == "slap-lobby" && slapDrawn == signature && note is null) return;
         slapDrawn = signature;
         BeginPanel("slap-lobby", "SLAP BATTLE · 1 : 1", "뺨때리기 대전", "여러 방을 만들거나 동시에 참가할 수 있어요.\n각 방에서 시간 날 때 한 턴씩 진행하고, 목록에서 이어서 플레이하세요.");
@@ -149,8 +150,8 @@ public partial class MainWindow
             // Read every room from one snapshot, including rooms not currently on screen.
             var rooms = await Task.Run(slapStore.Rooms);
             if (slapStateVersion != stateVersion || slapRoomId != roomId || userId != me || store.Folder != slapStore.Folder) return;
-            var known = slapRooms.ToDictionary(r => r.Id);
-            rooms = rooms.Select(r => known.TryGetValue(r.Id, out var previous) && previous.Revision > r.Revision ? previous : r).ToList();
+            // The persisted snapshot is authoritative. Request versions above already reject
+            // reads started before a local action; room revisions can reset after a file restore.
             if (roomId is Guid id)
             {
                 var room = rooms.FirstOrDefault(r => r.Id == id && r.Find(me) is not null);
@@ -161,8 +162,6 @@ public partial class MainWindow
                     if (panel == "slap-room") SetMessage("방 정보를 확인하지 못했습니다. 현재 방을 유지하고 다시 확인합니다.");
                     return;
                 }
-                // A poll that started before one of our own moves must not paint the older state over it.
-                if (slapRoom?.Id == room.Id && room.Revision < slapRoom.Revision) return;
                 slapRoom = room;
                 slapRooms = rooms;
                 if (panel == "slap-room") DrawSlapRoom();
@@ -189,7 +188,7 @@ public partial class MainWindow
     {
         if (slapRoom is not { } room || userId is null) { ShowSlapLobby(); return; }
         var opponent = room.Opponent(userId);
-        var signature = $"room|{room.Id}|{room.Revision}|{slapPower}";
+        var signature = $"room|{userId}|{slapPower}|{JsonSerializer.Serialize(room)}";
         if (panel == "slap-room" && slapDrawn == signature) return;
         slapDrawn = signature;
         var me = room.Find(userId)!;

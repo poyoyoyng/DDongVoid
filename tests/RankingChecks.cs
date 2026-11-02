@@ -269,6 +269,31 @@ internal static class RankingChecks
         Assert(((DispatcherTimer)GuestGet("slapTimer")!).IsEnabled, "방 화면 재진입 시 자동 동기화 재시작");
         Call("DetachSlapRoom"); GuestCall("DetachSlapRoom");
         Console.WriteLine("뺨때리기 두 창 참가·준비·방별 자동 동기화 검증 완료");
+
+        Call("ShowSlapLobby"); ClickAction("방 만들기");
+        Wait(() => !(bool)Get("busy")! && !(bool)Get("slapSyncing")! && Equals(Get("panel"), "slap-room"));
+        var recoveredRoomId = (Guid)Get("slapRoomId")!;
+        ClickAction("준비 완료");
+        Wait(() => !(bool)Get("busy")! && !(bool)Get("slapSyncing")! && Find<Button>(content).Any(b => Equals(b.Content, "준비 취소")));
+        // A restored shared file can have a lower revision than a cached room.
+        ((SlapRoom)Get("slapRoom")!).Revision += 100;
+        GuestCall("ShowSlapLobby");
+        Wait(() => { GuestLabels(); return Find<Button>(guestContent).Any(b => b.Tag is Guid id && id == recoveredRoomId); });
+        Find<Button>(guestContent).Single(b => b.Tag is Guid id && id == recoveredRoomId).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Wait(() => !(bool)GuestGet("busy")! && GuestLabels().Contains("준비되면 시작!"));
+        GuestClick("준비 완료");
+        Wait(() => !(bool)GuestGet("busy")! && GuestLabels().Contains("내 수비 차례!"));
+        Wait(() => Labels().Contains("내 공격 차례!") && ((SlapRoom)Get("slapRoom")!).Opponent("player20")?.Id == "player21");
+        Assert(((SlapRoom)Get("slapRoom")!).Revision == ((SlapRoom)GuestGet("slapRoom")!).Revision,
+            "캐시 수정 번호가 더 커도 저장된 실제 참가자·게임 시작 상태로 양쪽 일치");
+        Wait(() => !(bool)Get("slapSyncing")!);
+        var staleView = (SlapRoom)Get("slapRoom")!;
+        staleView.Players.RemoveAll(p => p.Id == "player21"); staleView.Status = SlapStatus.Waiting;
+        Set("slapDrawn", null); Call("DrawSlapRoom"); Layout();
+        Assert(Labels().Contains("P2  —"), "같은 수정 번호의 잘못된 대기 화면 재현");
+        Wait(() => Labels().Contains("내 공격 차례!") && !Labels().Contains("P2  —"));
+        Assert(((SlapRoom)Get("slapRoom")!).Players.Count == 2, "수정 번호가 같아도 참가자·상태가 달라지면 화면 복구");
+        Call("DetachSlapRoom"); GuestCall("DetachSlapRoom");
         Directory.Delete(root, true);
     }
 
