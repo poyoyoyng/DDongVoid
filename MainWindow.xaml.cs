@@ -240,7 +240,7 @@ public partial class MainWindow : Window
     }
     private void ShowHome()
     {
-        BeginPanel("home", "A LITTLE DESKTOP ESCAPE", "AKC미니게임", "잠깐 쉬어 갈 작은 게임 모음입니다.\n게임 시작을 누르고 목록에서 하나를 고르세요.");
+        BeginPanel("home", "A LITTLE DESKTOP ESCAPE", "AKC미니게임", "");
         AddText("SPACE     게임 선택 · 일시정지\nF2            설정 열기 · 닫기\nCtrl + Shift + Space     숨기기 · 복귀", 12, "#91AB9C", 2, 18);
         if (userId is not null) AddButton("게임 시작  →", ShowGameList, true);
         else if (resumingSession) AddButton("로그인 확인 중…", () => { }, true).IsEnabled = false;
@@ -265,10 +265,10 @@ public partial class MainWindow : Window
     {
         if (pendingRecord is not null) { ShowEnd(); return; }
         if (!RequireLogin()) return;
-        BeginPanel("games", "AKC MINI GAMES", "어떤 게임을 할까요?", "목록에서 플레이할 게임을 고르세요.");
-        AddGameItem("똥 피하기", "←  →  /  A  D   이동     ·     SPACE   일시정지", () => StartGame(MiniGame.Dodge));
-        AddGameItem("키보드 리듬", "리듬게임", () => StartGame(MiniGame.Rhythm));
-        AddGameItem("뺨때리기 (2인 대전)", "상단 · 중단 · 하단  때리기 / 막기     ·     기 모으기     ·     턴제 1 : 1", ShowSlapLobby);
+        BeginPanel("games", "AKC MINI GAMES", "게임선택", "");
+        AddGameItem("똥 피하기", () => StartGame(MiniGame.Dodge));
+        AddGameItem("키보드 리듬", () => StartGame(MiniGame.Rhythm));
+        AddGameItem("뺨때리기", ShowSlapLobby);
         AddButton("돌아가기", ShowHome);
     }
     private FrameworkElement ActiveSurface => activeGame == MiniGame.Rhythm ? RhythmView : Surface;
@@ -300,11 +300,9 @@ public partial class MainWindow : Window
             Key.OemComma => ',', Key.OemPeriod => '.', Key.OemQuestion => '/', _ => null,
         };
     }
-    private void AddGameItem(string title, string keys, Action start)
+    private void AddGameItem(string title, Action start)
     {
-        var body = new StackPanel();
-        body.Children.Add(new TextBlock { Text = title, FontSize = 16, FontWeight = FontWeights.Bold });
-        body.Children.Add(new TextBlock { Text = keys, FontSize = 11, Foreground = new SolidColorBrush(Color.FromRgb(145, 171, 156)), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) });
+        var body = new TextBlock { Text = title, FontSize = 16, FontWeight = FontWeights.Bold };
         var button = new Button { Content = body, HorizontalContentAlignment = HorizontalAlignment.Left, Padding = new Thickness(16, 14, 16, 14), Margin = new Thickness(0, 0, 0, 8) };
         System.Windows.Automation.AutomationProperties.SetName(button, title);
         button.Click += (_, _) => { if (!busy) start(); };
