@@ -529,6 +529,34 @@ try
         slap.Leave(second.Id, "g1"); slap.Leave(second.Id, "g2");
         Assert(slap.Rooms().All(r => r.Id != second.Id), "대기실을 명시적으로 나간 뒤 빈 방이 남음");
     });
+    Check("뺨때리기: 세 방 동시 참가·독립 진행·한 방 종료 후 다른 방 보존", () =>
+    {
+        var multi = new SlapStore(Path.Combine(root, "동시 대전"));
+        var first = multi.Create("multi"); multi.Join(first.Id, "opponent1");
+        var second = multi.Create("multi"); multi.Join(second.Id, "opponent2");
+        var third = multi.Create("opponent3"); multi.Join(third.Id, "multi");
+        foreach (var room in multi.Rooms())
+        {
+            multi.SetReady(room.Id, room.Players[0].Id, true);
+            multi.SetReady(room.Id, room.Players[1].Id, true);
+        }
+        multi.Submit(first.Id, "multi", new SlapAction(SlapMove.Slap, SlapZone.High, 1));
+        multi.Submit(first.Id, "opponent1", new SlapAction(SlapMove.Block, SlapZone.Low));
+        multi.Submit(second.Id, "multi", new SlapAction(SlapMove.Charge));
+        multi.Submit(third.Id, "opponent3", new SlapAction(SlapMove.Charge));
+        multi.Submit(third.Id, "multi", new SlapAction(SlapMove.Block, SlapZone.Middle));
+        multi.SetGiveUp(first.Id, "multi", true); multi.SetGiveUp(first.Id, "opponent1", true);
+        var restored = new SlapStore(multi.Folder).Rooms();
+        Assert(restored.Count == 3 && restored.All(r => r.Find("multi") is not null), "여러 방 참가 상태가 유실됨");
+        first = restored.Single(r => r.Id == first.Id);
+        second = restored.Single(r => r.Id == second.Id);
+        third = restored.Single(r => r.Id == third.Id);
+        Assert(first.Status == SlapStatus.Finished && first.Find("opponent1")!.Hp == 4, "첫 방의 진행·종료 상태 오류");
+        Assert(second.Started && second.Round == 1 && second.Find("multi")!.Choice == new SlapAction(SlapMove.Charge)
+            && second.Players.All(p => p.Hp == 5 && p.Gauge == 0 && !p.GaveUp), "다른 방의 행동·포기가 두 번째 방에 영향을 줌");
+        Assert(third.Started && third.Round == 2 && third.Find("opponent3")!.Gauge == 1 && third.Find("multi")!.Gauge == 0
+            && third.Players.All(p => p.Hp == 5 && !p.Submitted && !p.GaveUp), "방 사이에 체력·기력·턴·선택이 섞임");
+    });
     Check("뺨때리기: 손상된 파일은 대전·승패 기록을 보호", () =>
     {
         File.WriteAllText(slap.FilePath, "{ broken");

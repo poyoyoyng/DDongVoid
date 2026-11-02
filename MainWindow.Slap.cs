@@ -38,42 +38,77 @@ public partial class MainWindow
         var signature = "lobby|" + userId + "|" + string.Join(",", slapRooms.Select(r => $"{r.Id}:{r.Revision}"));
         if (panel == "slap-lobby" && slapDrawn == signature && note is null) return;
         slapDrawn = signature;
-        BeginPanel("slap-lobby", "SLAP BATTLE · 1 : 1", "뺨때리기 대전", "서로 시간 날 때 한 턴씩 진행하세요. 앱을 꺼도 대전은 유지됩니다.\n참가한 방의 이어하기를 누르면 계속할 수 있어요.");
+        BeginPanel("slap-lobby", "SLAP BATTLE · 1 : 1", "뺨때리기 대전", "여러 방을 만들거나 동시에 참가할 수 있어요.\n각 방에서 시간 날 때 한 턴씩 진행하고, 목록에서 이어서 플레이하세요.");
         AddText($"체력 {SlapRules.MaxHp}  ·  기본 공격력 {SlapRules.BaseDamage}  ·  기 최대 {SlapRules.MaxGauge}개\n공격: 상단·중단·하단 중 하나를 때리거나 기 모으기\n수비: 기 소모 없이 상단·중단·하단 중 하나를 막거나 기 모으기\n기본공격: 기 0 · 피해 1  /  강한 뺨: 기 1 · 피해 2\n필살뺨: 기 3 · 피해 5", 11, "#91AB9C", 0, 14);
         AddButton("방 만들기", CreateSlapRoom, true);
         if (slapRooms.Count == 0) AddText("열린 방이 없어요. 방을 만들고 상대를 기다려 보세요.", 12, "#91AB9C", 10, 6);
-        foreach (var room in slapRooms.OrderByDescending(r => r.Find(userId!) is not null))
-        {
-            var host = room.Players.FirstOrDefault()?.Id ?? "?";
-            var mine = room.Find(userId!) is not null;
-            var state = mine ? room.Status == SlapStatus.Finished ? "결과 보기" : "이어하기"
-                : room.Status == SlapStatus.Playing ? "게임 중" : room.Players.Count >= 2 ? "가득 참" : "참가 가능";
-            var button = AddButton($"{host} 님의 방   ·   {room.Players.Count}/2   ·   {state}", () => JoinSlapRoom(room.Id));
-            button.IsEnabled = mine || state == "참가 가능";
-        }
+        var mine = slapRooms.Where(r => r.Find(userId!) is not null).OrderByDescending(r => r.CreatedAt).ToList();
+        var others = slapRooms.Where(r => r.Find(userId!) is null).OrderByDescending(r => r.CreatedAt).ToList();
+        AddText($"내가 참가한 방 · {mine.Count}개", 13, "#A7F3CE", 12, 6, true);
+        if (mine.Count == 0) AddText("참가 중인 방이 없어요. 새 방을 만들거나 다른 방에 참가하세요.", 11, "#91AB9C", 0, 6);
+        foreach (var room in mine) AddSlapRoomEntry(room);
+        AddText($"다른 방 · {others.Count}개", 13, "#A7F3CE", 12, 6, true);
+        foreach (var room in others) AddSlapRoomEntry(room);
         AddButton("돌아가기", LeaveSlapLobby);
         if (note is not null) SetMessage(note);
+    }
+    private void AddSlapRoomEntry(SlapRoom room)
+    {
+        var host = room.Players.FirstOrDefault()?.Id ?? "?";
+        var me = room.Find(userId!);
+        string state;
+        if (me is not null)
+        {
+            var progress = me.GaveUp ? "포기 응답 대기" : room.Opponent(userId!)?.GaveUp == true ? "상대 포기 요청"
+                : me.Submitted ? "상대 선택 대기" : "내 선택 대기";
+            state = room.Status switch
+            {
+                SlapStatus.Finished => "결과 보기",
+                SlapStatus.Playing => $"R{room.Round} · {progress} · 이어하기",
+                _ => $"{(me.Ready ? "준비 완료 · 상대 대기" : "준비 대기")} · 이어하기",
+            };
+        }
+        else state = room.Status == SlapStatus.Playing ? "게임 중" : room.Players.Count >= 2 ? "가득 참" : "참가 가능";
+        var players = string.Join(" · ", room.Players.Select(p => p.Id));
+        var button = AddButton($"{host} 님의 방 #{room.Id.ToString("N")[..8]}   ·   {room.Players.Count}/2\n{players}\n{state}", () => JoinSlapRoom(room.Id));
+        button.Tag = room.Id;
+        button.IsEnabled = me is not null || state == "참가 가능";
+        button.Content = new TextBlock { Text = (string)button.Content, TextWrapping = TextWrapping.Wrap };
+    }
+    private void RememberSlapRoom(SlapRoom room)
+    {
+        slapRooms.RemoveAll(r => r.Id == room.Id);
+        slapRooms.Add(room);
     }
     private void LeaveSlapLobby() { slapTimer.Stop(); ShowGameList(); }
     private async Task RunSlapAsync(Func<SlapStore, string, SlapRoom?> action)
     {
         if (busy || userId is null) return;
         var slapStore = NewSlapStore(); var me = userId;
+        var previousRoomId = slapRoomId;
         var stateVersion = ++slapStateVersion;
+        var refresh = false;
         busy = true;
         try
         {
             var room = await Task.Run(() => action(slapStore, me));
             if (slapStateVersion != stateVersion || userId != me || store.Folder != slapStore.Folder) return;
             slapRoom = room; slapRoomId = room?.Id;
-            if (room is null) { ShowSlapLobby(); SetMessage("방에서 나왔습니다."); return; }
+            if (room is null)
+            {
+                slapRooms.RemoveAll(r => r.Id == previousRoomId);
+                ShowSlapLobby(); SetMessage("방에서 나왔습니다."); return;
+            }
+            RememberSlapRoom(room);
             slapDrawn = null; DrawSlapRoom(); StartSlapTimer();
+            refresh = true;
         }
         catch (Exception ex) when (IsUserError(ex))
         {
             if (slapStateVersion == stateVersion && userId == me && store.Folder == slapStore.Folder) SetMessage(ex.Message);
         }
         finally { busy = false; }
+        if (refresh && slapStateVersion == stateVersion) await PollSlapAsync();
     }
     private void CreateSlapRoom() => _ = RunSlapAsync((s, me) => s.Create(me));
     private void JoinSlapRoom(Guid id) => _ = RunSlapAsync((s, me) => s.Join(id, me));
@@ -111,10 +146,14 @@ public partial class MainWindow
         slapSyncing = true;
         try
         {
+            // Read every room from one snapshot, including rooms not currently on screen.
+            var rooms = await Task.Run(slapStore.Rooms);
+            if (slapStateVersion != stateVersion || slapRoomId != roomId || userId != me || store.Folder != slapStore.Folder) return;
+            var known = slapRooms.ToDictionary(r => r.Id);
+            rooms = rooms.Select(r => known.TryGetValue(r.Id, out var previous) && previous.Revision > r.Revision ? previous : r).ToList();
             if (roomId is Guid id)
             {
-                var room = await Task.Run(() => slapStore.Sync(id, me));
-                if (slapStateVersion != stateVersion || slapRoomId != id || userId != me || store.Folder != slapStore.Folder) return;
+                var room = rooms.FirstOrDefault(r => r.Id == id && r.Find(me) is not null);
                 if (room is null)
                 {
                     // A temporarily missing shared file must not eject a player from the room.
@@ -125,12 +164,11 @@ public partial class MainWindow
                 // A poll that started before one of our own moves must not paint the older state over it.
                 if (slapRoom?.Id == room.Id && room.Revision < slapRoom.Revision) return;
                 slapRoom = room;
+                slapRooms = rooms;
                 if (panel == "slap-room") DrawSlapRoom();
             }
             else
             {
-                var rooms = await Task.Run(slapStore.Rooms);
-                if (slapStateVersion != stateVersion || slapRoomId is not null || userId != me || store.Folder != slapStore.Folder) return;
                 slapRooms = rooms;
                 if (panel == "slap-lobby") DrawSlapLobby();
             }
@@ -142,7 +180,11 @@ public partial class MainWindow
         }
         finally { slapSyncing = false; }
     }
-    private void ShowSlapRoom() { slapDrawn = null; DrawSlapRoom(); }
+    private void ShowSlapRoom()
+    {
+        slapDrawn = null; DrawSlapRoom();
+        StartSlapTimer(); _ = PollSlapAsync();
+    }
     private void DrawSlapRoom()
     {
         if (slapRoom is not { } room || userId is null) { ShowSlapLobby(); return; }
@@ -155,7 +197,7 @@ public partial class MainWindow
 
         var finished = room.Status == SlapStatus.Finished;
         var title = finished ? (room.Winner is null ? "대전을 종료했어요" : room.Winner == userId ? "이겼어요! 짝!" : "졌어요… 얼얼하다") : opponent is null ? "상대를 기다리는 중" : "준비되면 시작!";
-        BeginPanel("slap-room", finished ? "SLAP BATTLE · GAME OVER" : "SLAP BATTLE · WAITING ROOM", title,
+        BeginPanel("slap-room", $"SLAP BATTLE · #{room.Id.ToString("N")[..8]} · {(finished ? "GAME OVER" : "WAITING ROOM")}", title,
             finished ? "" : "두 사람 모두 준비 완료를 누르면 바로 시작합니다.\n방을 만든 사람(P1)이 먼저 공격합니다.");
         if (finished)
         {
@@ -171,12 +213,13 @@ public partial class MainWindow
         }
         if (opponent is null) AddSlapCard("P2  —", "참가자를 기다리고 있어요", false);
         AddButton(me.Ready ? "준비 취소" : finished ? "다시 하기 · 준비 완료" : "준비 완료", () => SetSlapReady(!me.Ready), !me.Ready);
+        AddButton("방 목록으로 · 참가 유지", ShowSlapLobby);
         AddButton("방 나가기", LeaveSlapRoom);
     }
     private void DrawSlapMatch(SlapRoom room, SlapPlayer me, SlapPlayer opponent)
     {
         var attacking = room.AttackerId == me.Id;
-        BeginPanel("slap-room", $"SLAP BATTLE · ROUND {room.Round}", attacking ? "내 공격 차례!" : "내 수비 차례!", "");
+        BeginPanel("slap-room", $"SLAP BATTLE · #{room.Id.ToString("N")[..8]} · ROUND {room.Round}", attacking ? "내 공격 차례!" : "내 수비 차례!", "");
         AddSlapStats(me, true, attacking);
         AddSlapStats(opponent, false, !attacking);
         if (room.LastResult is { } last) AddText($"지난 턴 · {DescribeSlap(last, me.Id)}", 11, "#B6C7BC", 2, 8);
