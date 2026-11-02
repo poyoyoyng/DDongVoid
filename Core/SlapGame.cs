@@ -28,13 +28,10 @@ public sealed class SlapPlayer
     public bool Ready { get; set; }
     public int Hp { get; set; } = SlapRules.MaxHp;
     public int Gauge { get; set; }
+    public bool GaveUp { get; set; }
     // The opponent's screen shows only whether a choice exists, never what it is.
     public SlapAction? Choice { get; set; }
     public bool Submitted => Choice is not null;
-    // Bumped by the player's own client; the other client watches it change on its own clock,
-    // so PCs with skewed clocks never time each other out.
-    public int Heartbeat { get; set; }
-    public DateTimeOffset LastSeen { get; set; }
 }
 
 public sealed class SlapRoom
@@ -67,12 +64,26 @@ public sealed class SlapRoom
     private void Start()
     {
         Status = SlapStatus.Playing; Round = 1; LastResult = null; Winner = null; EndReason = null;
-        foreach (var p in Players) { p.Ready = false; p.Hp = SlapRules.MaxHp; p.Gauge = 0; p.Choice = null; }
+        foreach (var p in Players) { p.Ready = false; p.Hp = SlapRules.MaxHp; p.Gauge = 0; p.Choice = null; p.GaveUp = false; }
+    }
+    public void SetGiveUp(string id, bool giveUp)
+    {
+        var player = Find(id) ?? throw new ArgumentException("이 방의 참가자가 아닙니다.");
+        if (Status != SlapStatus.Playing) throw new ArgumentException("게임이 진행 중이 아닙니다.");
+        if (player.GaveUp == giveUp) return;
+        player.GaveUp = giveUp; Revision++;
+        if (Players.Count == 2 && Players.All(p => p.GaveUp))
+        {
+            Status = SlapStatus.Finished; Winner = null;
+            EndReason = "두 사람이 모두 포기하여 대전을 종료했습니다.";
+            foreach (var p in Players) { p.Ready = false; p.Choice = null; }
+        }
     }
     public void Submit(string id, SlapAction action)
     {
         var player = Find(id) ?? throw new ArgumentException("이 방의 참가자가 아닙니다.");
         if (Status != SlapStatus.Playing) throw new ArgumentException("게임이 진행 중이 아닙니다.");
+        if (Players.Any(p => p.GaveUp)) throw new ArgumentException("포기 요청 중입니다. 요청을 취소하거나 두 사람 모두 포기하면 됩니다.");
         if (player.Choice is not null) throw new ArgumentException("이번 턴에는 이미 선택했습니다.");
         var attacking = id == AttackerId;
         switch (action.Move)
@@ -109,13 +120,11 @@ public sealed class SlapRoom
         if (defender.Hp == 0) { Status = SlapStatus.Finished; Winner = attacker.Id; }
         else Round++;
     }
-    // Leaving mid-match hands the win to whoever stays.
-    public void Remove(string id, string reason)
+    // Closing a screen or leaving a running match never changes its saved state.
+    public void Remove(string id)
     {
         var player = Find(id);
-        if (player is null) return;
-        if (Status == SlapStatus.Playing && Opponent(id) is { } stayer)
-        { Status = SlapStatus.Finished; Winner = stayer.Id; EndReason = $"{id} 님이 {reason}"; }
+        if (player is null || Status == SlapStatus.Playing) return;
         Players.Remove(player);
         foreach (var p in Players) { p.Ready = false; p.Choice = null; }
         Revision++;
@@ -133,8 +142,6 @@ public sealed record SlapMatch(string Winner, string Loser);
 
 public sealed class SlapStore
 {
-    // Rooms nobody has touched for this long are swept away regardless of clock skew.
-    public static readonly TimeSpan AbandonedAfter = TimeSpan.FromMinutes(10);
     public string Folder { get; }
     public string FilePath => Path.Combine(Folder, "ddongvoid-slap.json");
     private readonly Func<DateTimeOffset> now;
@@ -145,14 +152,13 @@ public sealed class SlapStore
         SharedFile.Locked(FilePath, ".ddongvoid-slap.lock", save, "다른 PC에서 대전 정보를 저장 중입니다. 잠시 후 다시 시도해 주세요.", () =>
         {
             var db = Read();
-            var swept = db.Rooms.RemoveAll(r => r.Players.Count == 0 || r.Players.All(p => now() - p.LastSeen > AbandonedAfter)) > 0;
             var playing = db.Rooms.Where(r => r.Status == SlapStatus.Playing)
                 .Select(r => (Room: r, Players: r.Players.Select(p => p.Id).ToArray())).ToList();
             var result = action(db);
             foreach (var (room, players) in playing)
                 if (room.Status == SlapStatus.Finished && room.Winner is { } winner && players.Length == 2)
                     db.Matches.Add(new SlapMatch(winner, players.Single(p => p != winner)));
-            if (save || (swept && Directory.Exists(Folder))) SharedFile.WriteAtomic(FilePath, db, JsonOptions);
+            if (save) SharedFile.WriteAtomic(FilePath, db, JsonOptions);
             return result;
         });
     private SlapDatabase Read()
@@ -171,14 +177,9 @@ public sealed class SlapStore
     }
     private static SlapRoom Room(SlapDatabase db, Guid roomId) =>
         db.Rooms.FirstOrDefault(r => r.Id == roomId) ?? throw new ArgumentException("방이 사라졌습니다. 방 목록에서 다시 골라 주세요.");
-    private void LeaveAll(SlapDatabase db, string userId, string reason)
-    {
-        foreach (var room in db.Rooms.Where(r => r.Find(userId) is not null).ToList()) room.Remove(userId, reason);
-        db.Rooms.RemoveAll(r => r.Players.Count == 0);
-    }
     private SlapPlayer Join(SlapRoom room, string userId)
     {
-        var player = new SlapPlayer { Id = userId, LastSeen = now() };
+        var player = new SlapPlayer { Id = userId };
         room.Players.Add(player); room.Revision++;
         // A newcomer to a finished room starts a fresh match setup rather than inheriting the old result.
         if (room.Status == SlapStatus.Finished) { room.Status = SlapStatus.Waiting; room.LastResult = null; room.Winner = null; room.EndReason = null; }
@@ -200,7 +201,6 @@ public sealed class SlapStore
     }, false);
     public SlapRoom Create(string userId) => Access(db =>
     {
-        LeaveAll(db, userId, "방을 나갔습니다.");
         var room = new SlapRoom { Id = Guid.NewGuid(), CreatedAt = now() };
         Join(room, userId); db.Rooms.Add(room);
         return room;
@@ -211,32 +211,21 @@ public sealed class SlapStore
         if (room.Find(userId) is not null) return room;
         if (room.Players.Count >= 2) throw new ArgumentException("이미 2명이 참가한 방입니다.");
         if (room.Status == SlapStatus.Playing) throw new ArgumentException("이미 게임이 진행 중인 방입니다.");
-        LeaveAll(db, userId, "방을 나갔습니다.");
         Join(room, userId);
         return room;
     }, true);
-    // Returns null once the player is no longer in the room (left elsewhere, kicked, or swept).
-    public SlapRoom? Sync(Guid roomId, string userId, bool heartbeat) => Access(db =>
-    {
-        var room = db.Rooms.FirstOrDefault(r => r.Id == roomId);
-        if (room?.Find(userId) is not { } player) return null;
-        if (heartbeat) { player.Heartbeat++; player.LastSeen = now(); }
-        return room;
-    }, heartbeat);
-    public SlapRoom SetReady(Guid roomId, string userId, bool ready) => Access(db => { var room = Room(db, roomId); room.SetReady(userId, ready); return room; }, true);
-    public SlapRoom Submit(Guid roomId, string userId, SlapAction action) => Access(db => { var room = Room(db, roomId); room.Submit(userId, action); return room; }, true);
-    public void Leave(Guid roomId, string userId) => Access(db =>
-    {
-        if (db.Rooms.FirstOrDefault(r => r.Id == roomId) is { } room) { room.Remove(userId, "기권하고 나갔습니다."); db.Rooms.RemoveAll(r => r.Players.Count == 0); }
-        return true;
-    }, true);
-    // Removes an unresponsive opponent only if their heartbeat is still the one the caller saw,
-    // so a player who just came back is never kicked by a stale observation.
-    public SlapRoom? Kick(Guid roomId, string userId, string opponentId, int seenHeartbeat) => Access(db =>
+    public SlapRoom? Sync(Guid roomId, string userId) => Access(db =>
     {
         var room = db.Rooms.FirstOrDefault(r => r.Id == roomId);
         if (room?.Find(userId) is null) return null;
-        if (room.Find(opponentId) is { } opponent && opponent.Heartbeat == seenHeartbeat) room.Remove(opponentId, "연결이 끊겨 기권 처리되었습니다.");
         return room;
+    }, false);
+    public SlapRoom SetReady(Guid roomId, string userId, bool ready) => Access(db => { var room = Room(db, roomId); room.SetReady(userId, ready); return room; }, true);
+    public SlapRoom Submit(Guid roomId, string userId, SlapAction action) => Access(db => { var room = Room(db, roomId); room.Submit(userId, action); return room; }, true);
+    public SlapRoom SetGiveUp(Guid roomId, string userId, bool giveUp) => Access(db => { var room = Room(db, roomId); room.SetGiveUp(userId, giveUp); return room; }, true);
+    public void Leave(Guid roomId, string userId) => Access(db =>
+    {
+        if (db.Rooms.FirstOrDefault(r => r.Id == roomId) is { } room) { room.Remove(userId); db.Rooms.RemoveAll(r => r.Players.Count == 0); }
+        return true;
     }, true);
 }

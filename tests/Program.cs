@@ -432,48 +432,105 @@ try
         room = slap.Submit(room.Id, "c2", new SlapAction(SlapMove.Block, SlapZone.High));
         Assert(room.Status == SlapStatus.Finished && !room.Started && room.Winner == "c1" && room.Find("c2")!.Hp == 0, "×5 필살로 승리하지 않음");
         Assert(slap.Rankings().Single(r => r.UserId == "c1").BestScore == 1 && slap.Rankings().Single(r => r.UserId == "c2").Losses == 1, "정상 대전 승패 누락");
-        slap.Sync(room.Id, "c1", true); slap.Sync(room.Id, "c2", true);
+        slap.Sync(room.Id, "c1"); slap.Sync(room.Id, "c2");
         Assert(slap.Rankings().Single(r => r.UserId == "c1").BestScore == 1, "대전 동기화 시 승수 중복 집계");
         room = slap.SetReady(room.Id, "c1", true); room = slap.SetReady(room.Id, "c2", true);
         Assert(room.Started && room.Players.All(p => p.Hp == 5 && p.Gauge == 0) && room.LastResult is null, "다시 하기 초기화 실패");
         slap.Leave(room.Id, "c1");
     });
-    Check("뺨때리기: 대전 중 나가거나 응답 없으면 상대 승리", () =>
+    Check("뺨때리기: 장기 미접속·나가기·재실행 후에도 선택과 대전을 보존", () =>
     {
         var room = Ready2("e1", "e2");
-        slap.Leave(room.Id, "e2");
-        room = slap.Sync(room.Id, "e1", false)!;
-        Assert(room.Status == SlapStatus.Finished && room.Winner == "e1" && room.Players.Count == 1, "기권 처리 실패");
-        Assert(slap.Sync(room.Id, "e2", false) is null, "나간 사람이 방에 남음");
+        slap.Submit(room.Id, "e1", new SlapAction(SlapMove.Charge));
         slap.Leave(room.Id, "e1");
-        Assert(slap.Rooms().All(r => r.Id != room.Id), "빈 방이 남음");
-        room = Ready2("f1", "f2");
-        var seen = slap.Sync(room.Id, "f2", true)!.Find("f2")!.Heartbeat;
-        slap.Sync(room.Id, "f2", true);
-        room = slap.Kick(room.Id, "f1", "f2", seen)!;
-        Assert(room.Started && room.Players.Count == 2, "다시 응답한 상대를 내보냄");
-        room = slap.Kick(room.Id, "f1", "f2", room.Find("f2")!.Heartbeat)!;
-        Assert(room.Winner == "f1" && room.Find("f2") is null, "응답 없는 상대 기권 처리 실패");
-        slap.Leave(room.Id, "f1");
+        slap.Leave(room.Id, "e2");
+        var saved = File.ReadAllText(slap.FilePath);
+        slapClock += TimeSpan.FromDays(90);
+        var restarted = new SlapStore(slap.Folder, () => slapClock);
+        Assert(restarted.Rooms().Any(r => r.Id == room.Id), "오래된 진행 중 대전이 삭제됨");
+        room = restarted.Sync(room.Id, "e1")!;
+        Assert(room.Started && room.Winner is null && room.Players.Count == 2 && room.Round == 1
+            && room.Find("e1")!.Choice == new SlapAction(SlapMove.Charge), "재실행 후 대전 또는 선택 유실");
+        var revision = room.Revision;
+        Assert(restarted.Join(room.Id, "e2").Revision == revision, "이어하기가 대전을 초기화함");
+        Assert(File.ReadAllText(slap.FilePath) == saved, "조회·이어하기가 저장된 상태를 변경함");
+        room = restarted.Submit(room.Id, "e2", new SlapAction(SlapMove.Charge));
+        Assert(room.Round == 2 && room.Players.All(p => p.Gauge == 1 && !p.Submitted), "시간 차이를 두고 낸 행동이 판정되지 않음");
+        restarted.Submit(room.Id, "e2", new SlapAction(SlapMove.Slap, SlapZone.High, 2));
+        slapClock += TimeSpan.FromDays(90);
+        room = new SlapStore(slap.Folder, () => slapClock).Submit(room.Id, "e1", new SlapAction(SlapMove.Block, SlapZone.Low));
+        Assert(room.Round == 3 && room.Find("e1")!.Hp == 3 && room.Find("e2")!.Gauge == 0, "재접속 후 체력·기력·턴 판정 오류");
+    });
+    Check("뺨때리기: 포기 요청 보존·취소·상호 포기 종료·승패 미집계", () =>
+    {
+        var room = Ready2("f1", "f2");
+        var rankings = slap.Rankings();
+        slap.Submit(room.Id, "f1", new SlapAction(SlapMove.Charge));
+        Throws<ArgumentException>(() => slap.SetGiveUp(room.Id, "outsider", true));
+        room = slap.SetGiveUp(room.Id, "f1", true);
+        var revision = room.Revision;
+        Assert(slap.SetGiveUp(room.Id, "f1", true).Revision == revision, "같은 포기 요청이 중복 처리됨");
+        slapClock += TimeSpan.FromDays(30);
+        var restarted = new SlapStore(slap.Folder, () => slapClock);
+        room = restarted.Sync(room.Id, "f2")!;
+        Assert(room.Started && room.Winner is null && room.Find("f1")!.GaveUp && room.Find("f1")!.Submitted, "한 사람의 포기 요청이 대전을 끝내거나 선택을 지움");
+        Throws<ArgumentException>(() => restarted.Submit(room.Id, "f2", new SlapAction(SlapMove.Charge)));
+        restarted.SetGiveUp(room.Id, "f1", false);
+        room = restarted.Submit(room.Id, "f2", new SlapAction(SlapMove.Charge));
+        Assert(room.Round == 2 && room.Players.All(p => p.Gauge == 1), "포기 취소 후 기존 선택으로 진행하지 못함");
+        restarted.SetGiveUp(room.Id, "f1", true);
+        slapClock += TimeSpan.FromDays(30);
+        room = new SlapStore(slap.Folder, () => slapClock).SetGiveUp(room.Id, "f2", true);
+        Assert(room.Status == SlapStatus.Finished && room.Winner is null && room.EndReason is not null
+            && room.Players.All(p => p.GaveUp && !p.Submitted), "양쪽 포기로 종료되지 않음");
+        Assert(slap.Rankings().SequenceEqual(rankings), "상호 포기한 대전이 승패에 집계됨");
+        Throws<ArgumentException>(() => slap.Submit(room.Id, "f1", new SlapAction(SlapMove.Charge)));
+        slap.SetReady(room.Id, "f1", true); room = slap.SetReady(room.Id, "f2", true);
+        Assert(room.Started && room.Players.All(p => !p.GaveUp && !p.Submitted && p.Gauge == 0 && p.Hp == 5), "재대전 후 포기 상태가 남음");
+        slap.SetGiveUp(room.Id, "f1", true); slap.SetGiveUp(room.Id, "f2", true);
+        slap.Leave(room.Id, "f1"); slap.Leave(room.Id, "f2");
+        Assert(slap.Rooms().All(r => r.Id != room.Id), "종료 후 모두 나간 빈 방이 남음");
     });
     Check("뺨때리기: 누적 승패·승수 정렬·공동 순위·방 삭제 후 보존", () =>
     {
-        var room = Ready2("e1", "e2");
-        slap.Leave(room.Id, "e2"); slap.Leave(room.Id, "e1");
-        var rows = new SlapStore(slap.Folder, () => slapClock).Rankings();
+        var rankingSlap = new SlapStore(Path.Combine(root, "대전 랭킹"));
+        foreach (var (winner, loser) in new[] { ("e1", "e2"), ("e1", "e2"), ("c1", "c2"), ("c2", "c1"), ("f1", "f2") })
+        {
+            var room = rankingSlap.Create(winner); rankingSlap.Join(room.Id, loser);
+            rankingSlap.SetReady(room.Id, winner, true); room = rankingSlap.SetReady(room.Id, loser, true);
+            while (room.Started)
+            {
+                var attacker = room.AttackerId!;
+                var defender = room.DefenderId!;
+                rankingSlap.Submit(room.Id, attacker, new SlapAction(SlapMove.Slap, SlapZone.High, 1));
+                room = rankingSlap.Submit(room.Id, defender, new SlapAction(SlapMove.Block, defender == winner ? SlapZone.High : SlapZone.Low));
+            }
+            rankingSlap.Leave(room.Id, winner); rankingSlap.Leave(room.Id, loser);
+        }
+        var rows = new SlapStore(rankingSlap.Folder).Rankings();
         Assert(rows[0] == new RankingEntry(1, "e1", 2, 0), "승수 기준 내림차순 정렬 실패");
-        Assert(rows.Single(r => r.UserId == "e2").BestScore == 0 && rows.Single(r => r.UserId == "e2").Losses == 2, "패배만 있는 플레이어 누락");
-        Assert(rows.Single(r => r.UserId == "c1") == new RankingEntry(2, "c1", 1, 1), "재대전 기권 승패 누락");
+        Assert(rows.Single(r => r.UserId == "e2") == new RankingEntry(5, "e2", 0, 2), "패배 누적 또는 공동 순위 다음 순위 오류");
+        Assert(rows.Single(r => r.UserId == "c1") == new RankingEntry(2, "c1", 1, 1), "재대전 승패 누락");
         Assert(rows.Single(r => r.UserId == "c2").Rank == 2 && rows.Single(r => r.UserId == "f1").Rank == 2, "승수가 같은데 패수에 따라 순위가 달라짐");
-        Assert(rows.Single(r => r.UserId == "e2").Rank == 8, "공동 순위 다음 순위를 건너뛰지 않음");
+        Assert(rankingSlap.Rooms().Count == 0, "종료한 방이 삭제되지 않음");
     });
-    Check("뺨때리기: 한 사람은 한 방에만, 버려진 방은 정리", () =>
+    Check("뺨때리기: 다른 방 생성·참가가 기존 대전을 유지하고 오래된 대기실도 참가 가능", () =>
     {
         var first = slap.Create("g1"); var second = slap.Create("g1");
-        Assert(slap.Rooms().Count(r => r.Find("g1") is not null) == 1 && slap.Rooms().Any(r => r.Id == second.Id), "두 방에 동시에 참가함");
-        slapClock += SlapStore.AbandonedAfter + TimeSpan.FromSeconds(1);
-        Assert(slap.Rooms().Count == 0, "버려진 방이 정리되지 않음");
-        Assert(slap.Rankings().Single(r => r.UserId == "e1").BestScore == 2, "방 정리 중 누적 승패 유실");
+        slap.SetReady(first.Id, "g1", true);
+        slapClock += TimeSpan.FromDays(365);
+        slap.Join(first.Id, "g2"); var running = slap.SetReady(first.Id, "g2", true);
+        Assert(running.Started, "오래된 대기실 또는 준비 상태가 유실됨");
+        slap.Submit(first.Id, "g1", new SlapAction(SlapMove.Charge));
+        slap.Create("g1"); slap.Join(second.Id, "g2");
+        running = new SlapStore(slap.Folder).Join(first.Id, "g1");
+        Assert(running.Started && running.Players.Count == 2 && running.Find("g1")!.Submitted, "새 방이 기존 대전을 변경함");
+        Throws<ArgumentException>(() => slap.Join(first.Id, "g3"));
+        slap.Leave(second.Id, "g1"); slap.Leave(second.Id, "g2");
+        Assert(slap.Rooms().All(r => r.Id != second.Id), "대기실을 명시적으로 나간 뒤 빈 방이 남음");
+    });
+    Check("뺨때리기: 손상된 파일은 대전·승패 기록을 보호", () =>
+    {
         File.WriteAllText(slap.FilePath, "{ broken");
         Throws<InvalidDataException>(() => slap.Rooms());
         Throws<InvalidDataException>(() => slap.Create("g2"));

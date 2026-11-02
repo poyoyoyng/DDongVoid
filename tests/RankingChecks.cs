@@ -42,10 +42,16 @@ internal static class RankingChecks
         foreach (var record in records) rhythm.AddRecord(record with { Score = 5000 - record.Score });
         var slap = new SlapStore(root);
         var room = slap.Create("player00"); slap.Join(room.Id, "player01");
-        slap.SetReady(room.Id, "player00", true); slap.SetReady(room.Id, "player01", true);
-        slap.Leave(room.Id, "player01");
+        slap.SetReady(room.Id, "player00", true); room = slap.SetReady(room.Id, "player01", true);
+        while (room.Started)
+        {
+            var attacker = room.AttackerId!; var defender = room.DefenderId!;
+            slap.Submit(room.Id, attacker, new SlapAction(SlapMove.Slap, SlapZone.High, 1));
+            room = slap.Submit(room.Id, defender, new SlapAction(SlapMove.Block, defender == "player00" ? SlapZone.High : SlapZone.Low));
+        }
 
         void Set(string name, object? value) => typeof(MainWindow).GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(window, value);
+        object? Get(string name) => typeof(MainWindow).GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window);
         void Call(string name) => typeof(MainWindow).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null);
         void Assert(bool condition, string text) { if (!condition) throw new Exception(text); Console.WriteLine("통과: " + text); }
         IEnumerable<T> Find<T>(DependencyObject parent) where T : DependencyObject
@@ -76,6 +82,25 @@ internal static class RankingChecks
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         }
         string[] Labels() => Find<TextBlock>(content).Select(t => t.Text).ToArray();
+        void ClickAction(string title) => Find<Button>(content).Single(b => Equals(b.Content, title)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        (Task Poll, Action Complete) DeferSlapPoll(bool missingFile)
+        {
+            var deferred = new DeferredContext();
+            var originalContext = SynchronizationContext.Current;
+            var backupPath = slap.FilePath + ".poll-test";
+            if (missingFile) File.Move(slap.FilePath, backupPath);
+            try
+            {
+                SynchronizationContext.SetSynchronizationContext(deferred);
+                var poll = (Task)typeof(MainWindow).GetMethod("PollSlapAsync", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null)!;
+                return (poll, deferred.TakeContinuation());
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(originalContext);
+                if (missingFile) File.Move(backupPath, slap.FilePath);
+            }
+        }
         ScrollViewer? List() => Find<ScrollViewer>(content).FirstOrDefault(s => s.Name == "RankingList");
         Set("store", store); Set("userId", "player00");
         Call("ShowRankings"); Layout(); Wait(() => List() is not null);
@@ -102,6 +127,71 @@ internal static class RankingChecks
         Call("SavePendingRecord");
         Assert(rhythm.Rankings()[0].BestScore == 9999 && store.BestScore("player00") == 0, "리듬 결과 저장 경로 분리");
         Console.WriteLine("랭킹 화면 검증 완료");
+
+        Set("userId", "player02"); Set("pendingRecord", null);
+        Layout();
+        room = slap.Create("player03"); room = slap.Join(room.Id, "player02");
+        Set("slapRoomId", room.Id); Set("slapRoom", room);
+        Call("ShowSlapRoom"); Layout();
+        var oldPoll = DeferSlapPoll(missingFile: true);
+        ClickAction("준비 완료");
+        Wait(() => !(bool)Get("busy")! && Labels().Contains("준비 완료 ✓"));
+        oldPoll.Complete(); oldPoll.Poll.GetAwaiter().GetResult();
+        Assert(Equals(Get("slapRoomId"), room.Id) && Equals(Get("panel"), "slap-room") && Get("message") is null,
+            "준비 전의 조회가 늦게 돌아와도 준비 상태와 방 화면 유지");
+        var missingPoll = DeferSlapPoll(missingFile: true);
+        missingPoll.Complete(); missingPoll.Poll.GetAwaiter().GetResult();
+        Assert(Equals(Get("slapRoomId"), room.Id) && Equals(Get("panel"), "slap-room") && ((SlapRoom)Get("slapRoom")!).Find("player02")!.Ready,
+            "일시적으로 방 정보를 못 읽어도 퇴장하지 않고 준비 상태 보존");
+        var recoveredPoll = DeferSlapPoll(missingFile: false);
+        recoveredPoll.Complete(); recoveredPoll.Poll.GetAwaiter().GetResult();
+        Assert(Get("message") is null && Find<Button>(content).Any(b => Equals(b.Content, "준비 취소")), "다음 조회 성공 시 안내를 지우고 준비 상태 복구");
+        ClickAction("준비 취소");
+        Wait(() => !(bool)Get("busy")! && Find<Button>(content).Any(b => Equals(b.Content, "준비 완료")));
+        slap.SetReady(room.Id, "player03", true);
+        ClickAction("준비 완료");
+        Wait(() => !(bool)Get("busy")! && Labels().Contains("내 수비 차례!"));
+        Assert(Equals(Get("slapRoomId"), room.Id) && Equals(Get("panel"), "slap-room"), "상대 준비 후 준비를 누르면 방을 유지하며 대전 시작");
+        Call("DetachSlapRoom");
+        room = slap.Create("player02"); slap.Join(room.Id, "player03");
+        slap.SetReady(room.Id, "player02", true); slap.SetReady(room.Id, "player03", true);
+        room = slap.Submit(room.Id, "player02", new SlapAction(SlapMove.Charge));
+        Set("slapRoomId", room.Id); Set("slapRoom", room);
+        Call("ShowSlapRoom"); Layout();
+        Assert(Labels().Contains("선택 완료 · 기 모으기"), "저장한 행동을 대전 화면에 표시");
+        Call("DetachSlapRoom");
+        Assert(slap.Sync(room.Id, "player02")!.Find("player02")!.Submitted, "화면을 닫아도 선택한 행동을 보존");
+        Call("ShowSlapLobby"); Layout();
+        Wait(() => Find<Button>(content).Any(b => b.Content is string title && title.Contains("이어하기")));
+        var resume = Find<Button>(content).Single(b => b.Content is string title && title.StartsWith("player02 님의 방") && title.Contains("이어하기"));
+        Assert(resume.IsEnabled, "게임 중인 내 방의 이어하기 버튼 활성화");
+        resume.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Wait(() => Labels().Contains("선택 완료 · 기 모으기"));
+        ClickAction("포기하기");
+        Wait(() => Labels().Any(t => t.StartsWith("포기를 요청했어요")));
+        Assert(slap.Sync(room.Id, "player03")!.Started, "한쪽 포기 요청 후에도 대전 유지");
+        ClickAction("포기 요청 취소");
+        Wait(() => Labels().Contains("선택 완료 · 기 모으기"));
+        ClickAction("포기하기");
+        Wait(() => Labels().Any(t => t.StartsWith("포기를 요청했어요")));
+        slap.SetGiveUp(room.Id, "player03", true);
+        var poll = (Task)typeof(MainWindow).GetMethod("PollSlapAsync", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null)!;
+        Wait(() => poll.IsCompleted && Labels().Contains("두 사람이 모두 포기하여 대전을 종료했습니다."));
+        poll.GetAwaiter().GetResult();
+        Assert(!Labels().Any(t => t.StartsWith("승자  ")), "상호 포기 결과에 승자 표시 없음");
+        Call("DetachSlapRoom");
+        Console.WriteLine("뺨때리기 이어하기·상호 포기 화면 검증 완료");
         Directory.Delete(root, true);
+    }
+
+    private sealed class DeferredContext : SynchronizationContext
+    {
+        private readonly System.Collections.Concurrent.BlockingCollection<(SendOrPostCallback Callback, object? State)> continuations = new();
+        public override void Post(SendOrPostCallback callback, object? state) => continuations.Add((callback, state));
+        public Action TakeContinuation()
+        {
+            if (!continuations.TryTake(out var next, TimeSpan.FromSeconds(10))) throw new Exception("지연시킬 조회 결과가 도착하지 않았습니다.");
+            return () => next.Callback(next.State);
+        }
     }
 }
