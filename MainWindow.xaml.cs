@@ -20,6 +20,8 @@ public partial class MainWindow : Window
     private const string DefaultDataFolder = @"\\192.168.0.120\SW Team\팀원\최지운\DD";
     private enum PlayState { Home, Playing, Paused, Over }
     private enum MiniGame { Dodge, Rhythm }
+    private enum RankingGame { Dodge, Rhythm, Slap }
+    private RankingGame rankingGame;
     private sealed class Preferences
     {
         public string? DataFolder { get; set; }
@@ -35,7 +37,7 @@ public partial class MainWindow : Window
         public string? RememberedUser { get; set; }
         public string? RememberedFolder { get; set; }
         public string? RememberedKey { get; set; }
-        // Rhythm scores stay on this PC so older clients never misread them as dodge records.
+        // Retain existing personal bests; new completed rounds also enter the shared rhythm ranking.
         public Dictionary<string, int>? RhythmBest { get; set; } = [];
     }
     private readonly string preferencesPath;
@@ -360,17 +362,20 @@ public partial class MainWindow : Window
         if (activeGame == MiniGame.Rhythm)
         {
             var previousBest = RhythmBest;
-            ShowEnd();
             if (userId is not null && RhythmView.Engine.Score > previousBest)
             {
                 preferences.RhythmBest![userId] = RhythmView.Engine.Score;
-                if (SavePreferences()) SetMessage("✓ 최고 점수를 갱신했습니다!", true);
+                SavePreferences();
             }
-            UpdateHud(); return;
+            if (userId is not null)
+                pendingRecord = new PlayRecord(Guid.NewGuid(), userId, RhythmView.Engine.Score, RhythmView.Engine.Seconds, 0, DateTimeOffset.UtcNow);
         }
-        bestScore = Math.Max(bestScore, Surface.Engine.Score);
-        if (userId is not null)
-            pendingRecord = new PlayRecord(Guid.NewGuid(), userId, Surface.Engine.Score, Surface.Engine.Seconds, Surface.Engine.Dodged, DateTimeOffset.UtcNow);
+        else
+        {
+            bestScore = Math.Max(bestScore, Surface.Engine.Score);
+            if (userId is not null)
+                pendingRecord = new PlayRecord(Guid.NewGuid(), userId, Surface.Engine.Score, Surface.Engine.Seconds, Surface.Engine.Dodged, DateTimeOffset.UtcNow);
+        }
         ShowEnd();
         SavePendingRecord(); UpdateHud();
     }
@@ -379,7 +384,9 @@ public partial class MainWindow : Window
         if (pendingRecord is null) return;
         try
         {
-            store.AddRecord(pendingRecord); pendingRecord = null; lastRecordSaved = true;
+            if (activeGame == MiniGame.Rhythm) new RhythmStore(store.Folder).AddRecord(pendingRecord);
+            else store.AddRecord(pendingRecord);
+            pendingRecord = null; lastRecordSaved = true;
             if (panel == "end") ShowEnd();
         }
         catch (Exception ex) when (IsUserError(ex)) { SetMessage("기록 저장 실패: " + ex.Message + "\n아래 버튼으로 다시 저장할 수 있습니다."); }
@@ -393,17 +400,18 @@ public partial class MainWindow : Window
             AddText($"{r.Score:N0} 점", 38, "#A7F3CE", 0, 8, true);
             AddText($"최대 콤보 {r.MaxCombo}    ·    최고 {Math.Max(RhythmBest, r.Score):N0}점", 13, "#B6C7BC", 0, 6);
             AddText($"PERFECT {r.Perfect}    GREAT {r.Great}    GOOD {r.Good}    MISS {r.Miss}", 12, "#91AB9C", 0, 16);
-            AddButton("한 판 더  →", StartGame, true);
-            AddButton("메인 화면으로", QuitToMainMenu);
-            return;
         }
-        BeginPanel("end", "NICE TRY. ONE MORE?", "앗, 맞아버렸다!", "다음에는 조금 더 오래 버틸 수 있을 거예요.");
-        AddText($"{Surface.Engine.Score:N0} 점", 38, "#A7F3CE", 0, 8, true);
-        AddText($"생존 {Surface.Engine.Seconds:F1}초    ·    피한 똥 {Surface.Engine.Dodged}개", 13, "#B6C7BC", 0, 16);
+        else
+        {
+            BeginPanel("end", "NICE TRY. ONE MORE?", "앗, 맞아버렸다!", "다음에는 조금 더 오래 버틸 수 있을 거예요.");
+            AddText($"{Surface.Engine.Score:N0} 점", 38, "#A7F3CE", 0, 8, true);
+            AddText($"생존 {Surface.Engine.Seconds:F1}초    ·    피한 똥 {Surface.Engine.Dodged}개", 13, "#B6C7BC", 0, 16);
+        }
         if (pendingRecord is null)
         {
             AddButton("한 판 더  →", StartGame, true);
-            AddButton("내 기록 보기", ShowHistory);
+            if (activeGame == MiniGame.Dodge) AddButton("내 기록 보기", ShowHistory);
+            else AddButton("리듬 랭킹 보기", () => { rankingGame = RankingGame.Rhythm; ShowRankings(); });
             AddButton("메인 화면으로", QuitToMainMenu);
             AddText(lastRecordSaved ? "✓ 내 기록에 저장했습니다." : "이번 기록은 저장하지 않았습니다.", 11, "#91AB9C", 12, 0);
         }
@@ -487,24 +495,32 @@ public partial class MainWindow : Window
     {
         var request = ++rankingRequest;
         var rankingStore = store;
-        BeginPanel("ranking", "HALL OF FAME", "최고의 회피왕은?", "아이디별 최고 점수 순위 · 같은 점수는 공동 순위");
+        var game = rankingGame;
+        var slap = game == RankingGame.Slap;
+        string ScoreLabel(RankingEntry entry) => slap ? $"{entry.BestScore:N0}승 {entry.Losses:N0}패" : $"{entry.BestScore:N0}점";
+        BeginRankingPanel();
         AddText("랭킹을 불러오는 중입니다…", 12, "#91AB9C");
         AddButton("메인 메뉴로", ReturnToGame);
         try
         {
-            var rankings = await Task.Run(rankingStore.Rankings);
+            var rankings = await Task.Run(() => game switch
+            {
+                RankingGame.Rhythm => new RhythmStore(rankingStore.Folder).Rankings(),
+                RankingGame.Slap => new SlapStore(rankingStore.Folder).Rankings(),
+                _ => rankingStore.Rankings()
+            });
             if (panel != "ranking" || request != rankingRequest || store != rankingStore) return;
-            BeginPanel("ranking", "HALL OF FAME", "최고의 회피왕은?", "아이디별 최고 점수 순위 · 같은 점수는 공동 순위");
-            if (rankings.Count == 0) AddText("아직 등록된 점수가 없어요.\n로그인 후 첫 기록을 남겨 보세요.", 13, "#91AB9C", 0, 16);
+            BeginRankingPanel();
+            if (rankings.Count == 0) AddText("아직 등록된 기록이 없어요.\n로그인 후 첫 기록을 남겨 보세요.", 13, "#91AB9C", 0, 16);
             else
             {
                 if (userId is not null)
                 {
                     var mine = rankings.FirstOrDefault(r => r.UserId == userId);
-                    AddText(mine is null ? "내 순위  —  아직 플레이 기록이 없어요." : $"내 순위  {mine.Rank}위    ·    최고 {mine.BestScore:N0}점", 12, "#A7F3CE", 0, 12, true);
-                    if (mine is not null) { bestScore = mine.BestScore; UpdateHud(); }
+                    AddText(mine is null ? "내 순위  —  아직 플레이 기록이 없어요." : $"내 순위  {mine.Rank}위    ·    {ScoreLabel(mine)}", 12, "#A7F3CE", 0, 12, true);
+                    if (mine is not null && game == RankingGame.Dodge) { bestScore = mine.BestScore; UpdateHud(); }
                 }
-                AddText($"전체 {rankings.Count:N0}명", 10, "#91AB9C", 0, 8);
+                AddText($"전체 {rankings.Count:N0}명 · 목록 위에서 마우스 휠로 스크롤", 10, "#91AB9C", 0, 8);
                 var rows = new StackPanel();
                 foreach (var entry in rankings)
                 {
@@ -515,12 +531,22 @@ public partial class MainWindow : Window
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                     var rank = new TextBlock { Text = $"{entry.Rank}위", FontSize = 12, Foreground = entry.Rank <= 3 ? Brushes.PaleGoldenrod : Brushes.Gray, VerticalAlignment = VerticalAlignment.Center };
                     var id = new TextBlock { Text = entry.UserId + (mine ? " (나)" : ""), FontSize = 12, Margin = new Thickness(0, 0, 10, 0), TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = entry.UserId, VerticalAlignment = VerticalAlignment.Center };
-                    var score = new TextBlock { Text = $"{entry.BestScore:N0}점", FontSize = 13, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(167, 243, 206)), VerticalAlignment = VerticalAlignment.Center };
+                    var score = new TextBlock { Text = ScoreLabel(entry), FontSize = 13, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(167, 243, 206)), VerticalAlignment = VerticalAlignment.Center };
                     Grid.SetColumn(id, 1); Grid.SetColumn(score, 2);
                     row.Children.Add(rank); row.Children.Add(id); row.Children.Add(score);
                     rows.Children.Add(new Border { Child = row, Padding = new Thickness(10, 12, 10, 12), Margin = new Thickness(0, 0, 0, 5), CornerRadius = new CornerRadius(8), Background = new SolidColorBrush(mine ? Color.FromRgb(37, 61, 46) : Color.FromRgb(16, 27, 23)) });
                 }
-                DialogContent.Children.Add(new ScrollViewer { Content = rows, MaxHeight = 210, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+                var list = new ScrollViewer { Name = "RankingList", Content = rows, MaxHeight = 210, Background = Brushes.Transparent,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
+                list.PreviewMouseWheel += (_, e) =>
+                {
+                    if (list.ScrollableHeight <= 0) return;
+                    var lines = SystemParameters.WheelScrollLines;
+                    var distance = lines < 0 ? list.ViewportHeight : lines * 16;
+                    list.ScrollToVerticalOffset(list.VerticalOffset - e.Delta / 120.0 * distance);
+                    e.Handled = true;
+                };
+                DialogContent.Children.Add(list);
             }
             AddButton("새로고침", ShowRankings);
             AddButton("메인 메뉴로", ReturnToGame, true);
@@ -528,11 +554,28 @@ public partial class MainWindow : Window
         catch (Exception ex) when (IsUserError(ex))
         {
             if (panel != "ranking" || request != rankingRequest || store != rankingStore) return;
-            BeginPanel("ranking", "HALL OF FAME", "랭킹을 불러오지 못했어요.", "계정 저장 폴더의 연결과 접근 권한을 확인해 주세요.");
+            BeginRankingPanel();
+            AddText("랭킹을 불러오지 못했어요. 저장 폴더의 연결과 접근 권한을 확인해 주세요.", 12, "#F4B69D");
             AddButton("다시 불러오기", ShowRankings, true);
             AddButton("메인 메뉴로", ReturnToGame);
             SetMessage(ex.Message);
         }
+    }
+    private void BeginRankingPanel()
+    {
+        BeginPanel("ranking", "HALL OF FAME", "게임별 랭킹", rankingGame == RankingGame.Slap
+            ? "누적 승수 순위 · 승수가 같으면 공동 순위" : "아이디별 최고 점수 순위 · 같은 점수는 공동 순위");
+        var games = new System.Windows.Controls.Primitives.UniformGrid { Rows = 1, Margin = new Thickness(0, 0, 0, 14) };
+        foreach (var (game, title) in new[] { (RankingGame.Dodge, "똥 피하기"), (RankingGame.Rhythm, "키보드 리듬"), (RankingGame.Slap, "뺨때리기") })
+        {
+            var button = new Button { Content = new TextBlock { Text = title, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center },
+                Padding = new Thickness(6, 10, 6, 10), Margin = new Thickness(2, 0, 2, 0) };
+            System.Windows.Automation.AutomationProperties.SetName(button, title);
+            if (rankingGame == game) button.Style = (Style)FindResource("Primary");
+            button.Click += (_, _) => { if (!busy && rankingGame != game) { rankingGame = game; ShowRankings(); } };
+            games.Children.Add(button);
+        }
+        DialogContent.Children.Add(games);
     }
     private void ShowHistory()
     {

@@ -43,7 +43,7 @@ public partial class MainWindow
         if (panel == "slap-lobby" && slapDrawn == signature && note is null) return;
         slapDrawn = signature;
         BeginPanel("slap-lobby", "SLAP BATTLE · 1 : 1", "뺨때리기 대전", "같은 저장 폴더를 쓰는 사람과 턴제로 겨룹니다.\n방을 만들거나 열린 방에 참가하세요.");
-        AddText($"체력 {SlapRules.MaxHp}  ·  기본 공격력 {SlapRules.BaseDamage}  ·  기 최대 {SlapRules.MaxGauge}개\n공격: 상단·중단·하단 중 하나를 때리거나 기 모으기\n수비: 상단·중단·하단 중 하나를 막거나 기 모으기\n기 1개 기본뺨 ×1  ·  기 2개 ×3  ·  기 3개 ×5", 11, "#91AB9C", 0, 14);
+        AddText($"체력 {SlapRules.MaxHp}  ·  기본 공격력 {SlapRules.BaseDamage}  ·  기 최대 {SlapRules.MaxGauge}개\n공격: 상단·중단·하단 중 하나를 때리거나 기 모으기\n수비: 기 소모 없이 상단·중단·하단 중 하나를 막거나 기 모으기\n기본공격: 기 0 · 피해 1  /  강한 뺨: 기 1 · 피해 2\n필살뺨: 기 3 · 피해 5", 11, "#91AB9C", 0, 14);
         AddButton("방 만들기", CreateSlapRoom, true);
         if (slapRooms.Count == 0) AddText("열린 방이 없어요. 방을 만들고 상대를 기다려 보세요.", 12, "#91AB9C", 10, 6);
         foreach (var room in slapRooms)
@@ -167,7 +167,7 @@ public partial class MainWindow
         {
             AddText($"승자  {room.Winner}", 15, "#A7F3CE", 0, 6, true);
             if (room.EndReason is not null) AddText(room.EndReason, 12, "#B6C7BC", 0, 6);
-            if (room.LastResult is { } last) AddText(DescribeSlap(last), 12, "#B6C7BC", 0, 12);
+            if (room.LastResult is { } last) AddText(DescribeSlap(last, room.Players[0].Id), 12, "#B6C7BC", 0, 12);
         }
         for (int i = 0; i < room.Players.Count; i++)
         {
@@ -186,7 +186,7 @@ public partial class MainWindow
         BeginPanel("slap-room", $"SLAP BATTLE · ROUND {room.Round}", attacking ? "내 공격 차례!" : "내 수비 차례!", "");
         AddSlapStats(me, true, attacking);
         AddSlapStats(opponent, false, !attacking, lagging);
-        if (room.LastResult is { } last) AddText($"지난 턴 · {DescribeSlap(last)}", 11, "#B6C7BC", 2, 8);
+        if (room.LastResult is { } last) AddText($"지난 턴 · {DescribeSlap(last, me.Id)}", 11, "#B6C7BC", 2, 8);
 
         var full = me.Gauge >= SlapRules.MaxGauge;
         if (me.Choice is { } choice)
@@ -196,16 +196,12 @@ public partial class MainWindow
         }
         else if (attacking)
         {
-            if (slapPower > me.Gauge) slapPower = Math.Max(1, me.Gauge);
-            if (me.Gauge == 0) AddText("기가 없어요. 이번 턴에는 기를 모아야 때릴 수 있어요.", 12, "#F4C59D", 4, 6);
-            else
-            {
-                AddSlapRow(Enumerable.Range(1, SlapRules.MaxGauge).Select(power =>
-                    ($"{SlapRules.PowerName(power)}\n기 {power} · 피해 {SlapRules.Damage(power)}", (Action)(() => { slapPower = power; DrawSlapRoom(); }), power <= me.Gauge, power == slapPower)));
-                AddSlapRow(Enum.GetValues<SlapZone>().Select(zone =>
-                    ($"{SlapRules.ZoneName(zone)}\n때리기", (Action)(() => SubmitSlap(new SlapAction(SlapMove.Slap, zone, slapPower))), true, true)));
-            }
-            AddButton(full ? "기 가득 참 (3/3) · 때려야 해요" : "기 모으기  +1", () => SubmitSlap(new SlapAction(SlapMove.Charge)), me.Gauge == 0).IsEnabled = !full;
+            if (SlapRules.GaugeCost(slapPower) > me.Gauge) slapPower = 1;
+            AddSlapRow(Enumerable.Range(1, SlapRules.MaxGauge).Select(power =>
+                ($"{SlapRules.PowerName(power)}\n기 {SlapRules.GaugeCost(power)} · 피해 {SlapRules.Damage(power)}", (Action)(() => { slapPower = power; DrawSlapRoom(); }), SlapRules.GaugeCost(power) <= me.Gauge, power == slapPower)));
+            AddSlapRow(Enum.GetValues<SlapZone>().Select(zone =>
+                ($"{SlapRules.ZoneName(zone)}\n때리기", (Action)(() => SubmitSlap(new SlapAction(SlapMove.Slap, zone, slapPower))), true, true)));
+            AddButton(full ? "기 가득 참 (3/3) · 때려야 해요" : "기 모으기  +1", () => SubmitSlap(new SlapAction(SlapMove.Charge))).IsEnabled = !full;
         }
         else
         {
@@ -248,9 +244,13 @@ public partial class MainWindow
         SlapMove.Slap => $"{SlapRules.ZoneName(a.Zone!.Value)} {SlapRules.PowerName(a.Power)}",
         _ => $"{SlapRules.ZoneName(a.Zone!.Value)} 막기",
     };
-    private static string DescribeSlap(SlapResult r)
+    private static string DescribeSlap(SlapResult r, string topPlayerId)
     {
         var outcome = r.Attack.Move != SlapMove.Slap ? "공격 없음" : r.Blocked ? "막았다! 피해 없음" : $"짝! {r.Defender} 체력 -{r.Damage}";
-        return $"R{r.Round}  {r.Attacker}: {DescribeChoice(r.Attack)}  /  {r.Defender}: {DescribeChoice(r.Defense)}  →  {outcome}";
+        var attack = $"{r.Attacker}: {DescribeChoice(r.Attack)}";
+        var defense = $"{r.Defender}: {DescribeChoice(r.Defense)}  →  {outcome}";
+        return r.Attacker == topPlayerId
+            ? $"R{r.Round}  {attack}\n{defense}"
+            : $"R{r.Round}  {defense}\n{attack}";
     }
 }

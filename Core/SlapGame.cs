@@ -8,18 +8,18 @@ public enum SlapZone { High, Middle, Low }
 public enum SlapMove { Charge, Slap, Block }
 public enum SlapStatus { Waiting, Playing, Finished }
 
-// Power is the number of 기 spent on a slap (1-3); unused for charge and block.
+// Power selects the attack tier (1-3); unused for charge and block.
 public sealed record SlapAction(SlapMove Move, SlapZone? Zone = null, int Power = 0);
 public sealed record SlapResult(int Round, string Attacker, string Defender, SlapAction Attack, SlapAction Defense, int Damage, bool Blocked);
 
 public static class SlapRules
 {
     public const int MaxHp = 5, MaxGauge = 3, BaseDamage = 1;
-    // 기 1개 기본뺨 ×1, 2개 ×3, 3개 ×5.
-    public static int Multiplier(int power) => power switch { 1 => 1, 2 => 3, 3 => 5, _ => throw new ArgumentOutOfRangeException(nameof(power)) };
+    public static int GaugeCost(int power) => power switch { 1 => 0, 2 => 1, 3 => 3, _ => throw new ArgumentOutOfRangeException(nameof(power)) };
+    public static int Multiplier(int power) => power switch { 1 => 1, 2 => 2, 3 => 5, _ => throw new ArgumentOutOfRangeException(nameof(power)) };
     public static int Damage(int power) => BaseDamage * Multiplier(power);
     public static string ZoneName(SlapZone zone) => zone switch { SlapZone.High => "상단", SlapZone.Middle => "중단", _ => "하단" };
-    public static string PowerName(int power) => power switch { 1 => "기본뺨", 2 => "강한 뺨 ×3", _ => "필살 뺨 ×5" };
+    public static string PowerName(int power) => power switch { 1 => "기본공격", 2 => "강한 뺨 ×2", _ => "필살뺨 ×5" };
 }
 
 public sealed class SlapPlayer
@@ -83,7 +83,7 @@ public sealed class SlapRoom
             case SlapMove.Slap when !attacking: throw new ArgumentException("수비 차례에는 때릴 수 없습니다.");
             case SlapMove.Slap when action.Zone is null || action.Power is < 1 or > SlapRules.MaxGauge:
                 throw new ArgumentException("때릴 위치와 세기를 골라 주세요.");
-            case SlapMove.Slap when action.Power > player.Gauge: throw new ArgumentException("기가 부족합니다.");
+            case SlapMove.Slap when SlapRules.GaugeCost(action.Power) > player.Gauge: throw new ArgumentException("기가 부족합니다.");
             case SlapMove.Slap: break;
             case SlapMove.Block when attacking: throw new ArgumentException("공격 차례에는 막을 수 없습니다.");
             case SlapMove.Block when action.Zone is null: throw new ArgumentException("막을 위치를 골라 주세요.");
@@ -98,7 +98,7 @@ public sealed class SlapRoom
     {
         var attacker = Find(AttackerId!)!; var defender = Find(DefenderId!)!;
         var attack = attacker.Choice!; var defense = defender.Choice!;
-        if (attack.Move == SlapMove.Charge) attacker.Gauge++; else attacker.Gauge -= attack.Power;
+        if (attack.Move == SlapMove.Charge) attacker.Gauge++; else attacker.Gauge -= SlapRules.GaugeCost(attack.Power);
         if (defense.Move == SlapMove.Charge) defender.Gauge++;
         var slapped = attack.Move == SlapMove.Slap;
         var blocked = slapped && defense.Move == SlapMove.Block && defense.Zone == attack.Zone;
@@ -126,7 +126,10 @@ public sealed class SlapDatabase
 {
     public int Version { get; set; } = 1;
     public List<SlapRoom> Rooms { get; set; } = [];
+    public List<SlapMatch> Matches { get; set; } = [];
 }
+
+public sealed record SlapMatch(string Winner, string Loser);
 
 public sealed class SlapStore
 {
@@ -143,7 +146,12 @@ public sealed class SlapStore
         {
             var db = Read();
             var swept = db.Rooms.RemoveAll(r => r.Players.Count == 0 || r.Players.All(p => now() - p.LastSeen > AbandonedAfter)) > 0;
+            var playing = db.Rooms.Where(r => r.Status == SlapStatus.Playing)
+                .Select(r => (Room: r, Players: r.Players.Select(p => p.Id).ToArray())).ToList();
             var result = action(db);
+            foreach (var (room, players) in playing)
+                if (room.Status == SlapStatus.Finished && room.Winner is { } winner && players.Length == 2)
+                    db.Matches.Add(new SlapMatch(winner, players.Single(p => p != winner)));
             if (save || (swept && Directory.Exists(Folder))) SharedFile.WriteAtomic(FilePath, db, JsonOptions);
             return result;
         });
@@ -153,12 +161,13 @@ public sealed class SlapStore
         try
         {
             var db = JsonSerializer.Deserialize<SlapDatabase>(File.ReadAllText(FilePath), JsonOptions) ?? throw new JsonException();
-            if (db.Version != 1 || db.Rooms is null || db.Rooms.Any(r => r is null || r.Players is null || r.Players.Count > 2 || r.Players.Any(p => p is null || string.IsNullOrEmpty(p.Id))))
+            if (db.Version != 1 || db.Rooms is null || db.Matches is null ||
+                db.Matches.Any(m => m is null || string.IsNullOrEmpty(m.Winner) || string.IsNullOrEmpty(m.Loser) || m.Winner == m.Loser) ||
+                db.Rooms.Any(r => r is null || r.Players is null || r.Players.Count > 2 || r.Players.Any(p => p is null || string.IsNullOrEmpty(p.Id))))
                 throw new JsonException();
             return db;
         }
-        // A broken match file holds no lasting data, so start over instead of locking everyone out.
-        catch (JsonException) { return new SlapDatabase(); }
+        catch (JsonException ex) { throw new InvalidDataException("대전 JSON 형식이 올바르지 않습니다. 승패 기록을 보호하기 위해 원본 파일을 보존했습니다.", ex); }
     }
     private static SlapRoom Room(SlapDatabase db, Guid roomId) =>
         db.Rooms.FirstOrDefault(r => r.Id == roomId) ?? throw new ArgumentException("방이 사라졌습니다. 방 목록에서 다시 골라 주세요.");
@@ -177,6 +186,18 @@ public sealed class SlapStore
     }
 
     public List<SlapRoom> Rooms() => Access(db => db.Rooms.OrderBy(r => r.CreatedAt).ToList(), false);
+    public List<RankingEntry> Rankings() => Access(db =>
+    {
+        var scores = db.Matches.SelectMany(m => new[] { (Id: m.Winner, Win: 1), (Id: m.Loser, Win: 0) }).GroupBy(s => s.Id)
+            .Select(g => new { Id = g.Key, Wins = g.Sum(s => s.Win), Losses = g.Count() - g.Sum(s => s.Win) })
+            .OrderByDescending(s => s.Wins).ThenBy(s => s.Id, StringComparer.OrdinalIgnoreCase).ToList();
+        int rank = 0;
+        return scores.Select((s, i) =>
+        {
+            if (i == 0 || s.Wins != scores[i - 1].Wins) rank = i + 1;
+            return new RankingEntry(rank, s.Id, s.Wins, s.Losses);
+        }).ToList();
+    }, false);
     public SlapRoom Create(string userId) => Access(db =>
     {
         LeaveAll(db, userId, "방을 나갔습니다.");

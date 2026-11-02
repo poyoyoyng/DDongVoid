@@ -13,6 +13,8 @@ if (-not $SkipTests) {
     if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
     dotnet run --project (Join-Path $taskProjectRoot 'tests\RenderingChecks.csproj') -c Release -p:NuGetAudit=false
     if ($LASTEXITCODE -ne 0) { throw 'Rendering checks failed.' }
+    dotnet run --project (Join-Path $taskProjectRoot 'tests\RankingChecks.csproj') -c Release -p:NuGetAudit=false
+    if ($LASTEXITCODE -ne 0) { throw 'Ranking checks failed.' }
 }
 dotnet publish (Join-Path $taskProjectRoot 'DDongVoid.csproj') -c Release -r win-x64 --no-self-contained -o $taskPackageDirectory "-p:Version=$Version" -p:NuGetAudit=false
 if ($LASTEXITCODE -ne 0) { throw 'Game publish failed.' }
@@ -37,7 +39,8 @@ https://dotnet.microsoft.com/download/dotnet/10.0
 
 F2: 설정 / Esc: 일시정지 / Ctrl+Shift+Space: 숨기기·복귀
 일시정지 또는 게임 결과에서 메인 화면으로 돌아갈 수 있습니다.
-메인 메뉴의 랭킹 보기에서 아이디별 최고 점수를 확인합니다.
+메인 메뉴의 랭킹 보기에서 게임을 선택하고 마우스 휠로 목록을 봅니다.
+똥 피하기·리듬은 최고 점수순, 뺨때리기는 승·패를 함께 표시하며 승수순입니다.
 "@
 [IO.File]::WriteAllText((Join-Path $taskPackageDirectory 'README.txt'), $taskReadme, [Text.UTF8Encoding]::new($true))
 $taskArchivePath = Join-Path ([IO.Path]::GetFullPath($OutputDirectory)) 'DDongVoid-win-x64.zip'

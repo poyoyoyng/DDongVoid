@@ -12,3 +12,5 @@ tests/obj-render/
 **/.ddongvoid-*.tmp
 **/ddongvoid-slap.json
 **/.ddongvoid-slap.lock
+**/ddongvoid-rhythm.json
+**/.ddongvoid-rhythm.lock

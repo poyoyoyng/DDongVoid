@@ -8,7 +8,7 @@ namespace DDongVoid.Core;
 
 public sealed record Account(string Id, string Salt, string PasswordHash, int Iterations, DateTimeOffset CreatedAt, int BestScore = 0);
 public sealed record PlayRecord(Guid RecordId, string UserId, int Score, double Seconds, int Dodged, DateTimeOffset PlayedAt);
-public sealed record RankingEntry(int Rank, string UserId, int BestScore);
+public sealed record RankingEntry(int Rank, string UserId, int BestScore, int Losses = 0);
 public sealed class Database
 {
     public int Version { get; set; } = 1;
