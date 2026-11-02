@@ -1,5 +1,4 @@
 using System.IO;
-using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -24,40 +23,15 @@ public sealed class LocalStore
     public string FilePath => Path.Combine(Folder, "ddongvoid.json");
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     public LocalStore(string folder) => Folder = Path.GetFullPath(folder);
-    private T Access<T>(Func<Database, T> action, bool save = false, bool persistHighScores = false)
-    {
-        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(FilePath.ToUpperInvariant())));
-        using var mutex = new Mutex(false, @"Local\DDongVoid_" + key);
-        bool acquired;
-        try { acquired = mutex.WaitOne(TimeSpan.FromSeconds(5)); } catch (AbandonedMutexException) { acquired = true; }
-        if (!acquired) throw new IOException("다른 창에서 저장 중입니다. 잠시 후 다시 시도해 주세요.");
-        try
+    private T Access<T>(Func<Database, T> action, bool save = false, bool persistHighScores = false) =>
+        SharedFile.Locked(FilePath, ".ddongvoid.lock", save, "다른 PC에서 계정이나 기록을 저장 중입니다. 잠시 후 다시 시도해 주세요.", () =>
         {
-            using var fileLock = AcquireFileLock(save);
             var db = Read();
             var migrated = BackfillHighScores(db);
             var result = action(db);
-            if (save || (persistHighScores && migrated)) Write(db);
+            if (save || (persistHighScores && migrated)) SharedFile.WriteAtomic(FilePath, db, JsonOptions);
             return result;
-        }
-        finally { mutex.ReleaseMutex(); }
-    }
-    private FileStream? AcquireFileLock(bool createFolder)
-    {
-        if (createFolder) Directory.CreateDirectory(Folder);
-        else if (!Directory.Exists(Folder)) return null;
-        var timer = Stopwatch.StartNew();
-        while (true)
-        {
-            try { return new FileStream(Path.Combine(Folder, ".ddongvoid.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
-            catch (IOException ex) when ((ex.HResult & 0xffff) is 32 or 33)
-            {
-                if (timer.Elapsed >= TimeSpan.FromSeconds(5))
-                    throw new IOException("다른 PC에서 계정이나 기록을 저장 중입니다. 잠시 후 다시 시도해 주세요.", ex);
-                Thread.Sleep(25);
-            }
-        }
-    }
+        });
     private static bool BackfillHighScores(Database db)
     {
         var scores = db.Records.GroupBy(r => r.UserId).ToDictionary(g => g.Key, g => g.Max(r => r.Score));
@@ -86,18 +60,6 @@ public sealed class LocalStore
         }
         catch (Exception ex) when (ex is JsonException or FormatException or ArgumentNullException)
         { throw new InvalidDataException("JSON 형식이 올바르지 않습니다. 원본 파일은 그대로 보존했습니다. 다른 저장 폴더를 선택하거나 백업을 복원해 주세요.", ex); }
-    }
-    private void Write(Database db)
-    {
-        Directory.CreateDirectory(Folder);
-        var temp = Path.Combine(Folder, $".ddongvoid-{Guid.NewGuid():N}.tmp");
-        try
-        {
-            using (var file = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            { JsonSerializer.Serialize(file, db, JsonOptions); file.Flush(true); }
-            File.Move(temp, FilePath, true);
-        }
-        finally { if (File.Exists(temp)) File.Delete(temp); }
     }
     public void Validate() => Access(db => true);
     public string Register(string id, string password)

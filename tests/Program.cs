@@ -318,6 +318,103 @@ try
         Assert(rankingStore.Rankings()[0] == new RankingEntry(1, "alpha", 1200), "잠금 해제 후 최고 점수 또는 순위 갱신 실패");
         Assert(rankingStore.Records("bravo").Count == 1 && rankingStore.Records("charlie").Count == 1, "다른 계정 기록 유실");
     });
+    var slapClock = DateTimeOffset.UtcNow;
+    var slap = new SlapStore(Path.Combine(root, "뺨때리기"), () => slapClock);
+    SlapRoom Ready2(string a, string b)
+    {
+        var room = slap.Create(a); slap.Join(room.Id, b);
+        slap.SetReady(room.Id, a, true); return slap.SetReady(room.Id, b, true);
+    }
+    Check("뺨때리기: 기 1·2·3개 공격력 ×1·×3·×5", () =>
+        Assert(SlapRules.Damage(1) == 1 && SlapRules.Damage(2) == 3 && SlapRules.Damage(3) == 5 && SlapRules.MaxHp == 5, "공격력 배율 또는 체력 오류"));
+    Check("뺨때리기: 참가·준비·시작 상태를 JSON에 기록", () =>
+    {
+        var room = slap.Create("p1");
+        Assert(room.Players.Count == 1 && !room.Started && room.Status == SlapStatus.Waiting, "방 생성 상태 오류");
+        slap.Join(room.Id, "p2");
+        room = slap.SetReady(room.Id, "p1", true);
+        Assert(!room.Started && room.Find("p1")!.Ready && !room.Find("p2")!.Ready, "한 명만 준비했는데 시작함");
+        var json = JsonNode.Parse(File.ReadAllText(slap.FilePath))!["Rooms"]![0]!;
+        Assert(json["Players"]!.AsArray().Count == 2 && json["Players"]![0]!["Ready"]!.GetValue<bool>() && json["Status"]!.GetValue<string>() == "Waiting", "JSON 참가·준비 정보 누락");
+        room = slap.SetReady(room.Id, "p2", true);
+        Assert(room.Started && room.AttackerId == "p1" && room.DefenderId == "p2" && room.Players.All(p => p.Hp == 5 && p.Gauge == 0), "둘 다 준비했는데 시작하지 않음");
+        json = JsonNode.Parse(File.ReadAllText(slap.FilePath))!["Rooms"]![0]!;
+        Assert(json["Started"]!.GetValue<bool>() && json["AttackerId"]!.GetValue<string>() == "p1", "JSON 시작 정보 누락");
+        Throws<ArgumentException>(() => slap.Join(room.Id, "p3"));
+        slap.Leave(room.Id, "p1");
+    });
+    Check("뺨때리기: 상대 입력 여부만 공개하고 둘 다 고르면 판정", () =>
+    {
+        var room = Ready2("a1", "d1");
+        Throws<ArgumentException>(() => slap.Submit(room.Id, "a1", new SlapAction(SlapMove.Slap, SlapZone.High, 1)));
+        Throws<ArgumentException>(() => slap.Submit(room.Id, "d1", new SlapAction(SlapMove.Slap, SlapZone.High, 1)));
+        room = slap.Submit(room.Id, "a1", new SlapAction(SlapMove.Charge));
+        Assert(room.Find("a1")!.Submitted && !room.Find("d1")!.Submitted && room.Round == 1, "입력 상태 오류");
+        var json = JsonNode.Parse(File.ReadAllText(slap.FilePath))!["Rooms"]!.AsArray().First(r => r!["Id"]!.GetValue<Guid>() == room.Id)!;
+        Assert(json["Players"]![0]!["Submitted"]!.GetValue<bool>() && !json["Players"]![1]!["Submitted"]!.GetValue<bool>(), "JSON 입력 여부 누락");
+        Throws<ArgumentException>(() => slap.Submit(room.Id, "a1", new SlapAction(SlapMove.Charge)));
+        room = slap.Submit(room.Id, "d1", new SlapAction(SlapMove.Charge));
+        Assert(room.Round == 2 && room.AttackerId == "d1" && room.Players.All(p => p.Gauge == 1 && !p.Submitted), "판정 후 공수 교대 실패");
+        slap.Leave(room.Id, "a1");
+    });
+    Check("뺨때리기: 같은 곳을 막으면 피해 없음, 다른 곳이면 맞음", () =>
+    {
+        var room = Ready2("b1", "b2");
+        slap.Submit(room.Id, "b1", new SlapAction(SlapMove.Charge)); slap.Submit(room.Id, "b2", new SlapAction(SlapMove.Charge));
+        slap.Submit(room.Id, "b2", new SlapAction(SlapMove.Charge)); slap.Submit(room.Id, "b1", new SlapAction(SlapMove.Block, SlapZone.Low));
+        // Round 3: b1 attacks with 1 기 into a correct block.
+        slap.Submit(room.Id, "b1", new SlapAction(SlapMove.Slap, SlapZone.High, 1));
+        room = slap.Submit(room.Id, "b2", new SlapAction(SlapMove.Block, SlapZone.High));
+        Assert(room.LastResult!.Blocked && room.Find("b2")!.Hp == 5 && room.Find("b1")!.Gauge == 0, "막기 실패 또는 기 소모 오류");
+        // Round 4: b2 spends 2 기 for ×3 into the wrong guard.
+        slap.Submit(room.Id, "b2", new SlapAction(SlapMove.Slap, SlapZone.Middle, 2));
+        room = slap.Submit(room.Id, "b1", new SlapAction(SlapMove.Block, SlapZone.Low));
+        Assert(!room.LastResult!.Blocked && room.LastResult.Damage == 3 && room.Find("b1")!.Hp == 2 && room.Find("b2")!.Gauge == 0, "×3 피해 계산 오류");
+        slap.Leave(room.Id, "b1");
+    });
+    Check("뺨때리기: 기 3개 ×5로 체력 0이면 승리, 기는 최대 3개", () =>
+    {
+        var room = Ready2("c1", "c2");
+        slap.Submit(room.Id, "c1", new SlapAction(SlapMove.Charge)); slap.Submit(room.Id, "c2", new SlapAction(SlapMove.Charge));
+        slap.Submit(room.Id, "c2", new SlapAction(SlapMove.Charge)); slap.Submit(room.Id, "c1", new SlapAction(SlapMove.Charge));
+        slap.Submit(room.Id, "c1", new SlapAction(SlapMove.Charge)); room = slap.Submit(room.Id, "c2", new SlapAction(SlapMove.Block, SlapZone.High));
+        Assert(room.Find("c1")!.Gauge == 3 && room.AttackerId == "c2", $"기 3개 모으기 실패 (기 {room.Find("c1")!.Gauge})");
+        Throws<ArgumentException>(() => slap.Submit(room.Id, "c1", new SlapAction(SlapMove.Charge)));
+        slap.Submit(room.Id, "c2", new SlapAction(SlapMove.Charge)); slap.Submit(room.Id, "c1", new SlapAction(SlapMove.Block, SlapZone.Middle));
+        slap.Submit(room.Id, "c1", new SlapAction(SlapMove.Slap, SlapZone.Low, 3));
+        room = slap.Submit(room.Id, "c2", new SlapAction(SlapMove.Block, SlapZone.High));
+        Assert(room.Status == SlapStatus.Finished && !room.Started && room.Winner == "c1" && room.Find("c2")!.Hp == 0, "×5 필살로 승리하지 않음");
+        room = slap.SetReady(room.Id, "c1", true); room = slap.SetReady(room.Id, "c2", true);
+        Assert(room.Started && room.Players.All(p => p.Hp == 5 && p.Gauge == 0) && room.LastResult is null, "다시 하기 초기화 실패");
+        slap.Leave(room.Id, "c1");
+    });
+    Check("뺨때리기: 대전 중 나가거나 응답 없으면 상대 승리", () =>
+    {
+        var room = Ready2("e1", "e2");
+        slap.Leave(room.Id, "e2");
+        room = slap.Sync(room.Id, "e1", false)!;
+        Assert(room.Status == SlapStatus.Finished && room.Winner == "e1" && room.Players.Count == 1, "기권 처리 실패");
+        Assert(slap.Sync(room.Id, "e2", false) is null, "나간 사람이 방에 남음");
+        slap.Leave(room.Id, "e1");
+        Assert(slap.Rooms().All(r => r.Id != room.Id), "빈 방이 남음");
+        room = Ready2("f1", "f2");
+        var seen = slap.Sync(room.Id, "f2", true)!.Find("f2")!.Heartbeat;
+        slap.Sync(room.Id, "f2", true);
+        room = slap.Kick(room.Id, "f1", "f2", seen)!;
+        Assert(room.Started && room.Players.Count == 2, "다시 응답한 상대를 내보냄");
+        room = slap.Kick(room.Id, "f1", "f2", room.Find("f2")!.Heartbeat)!;
+        Assert(room.Winner == "f1" && room.Find("f2") is null, "응답 없는 상대 기권 처리 실패");
+        slap.Leave(room.Id, "f1");
+    });
+    Check("뺨때리기: 한 사람은 한 방에만, 버려진 방은 정리", () =>
+    {
+        var first = slap.Create("g1"); var second = slap.Create("g1");
+        Assert(slap.Rooms().Count(r => r.Find("g1") is not null) == 1 && slap.Rooms().Any(r => r.Id == second.Id), "두 방에 동시에 참가함");
+        slapClock += SlapStore.AbandonedAfter + TimeSpan.FromSeconds(1);
+        Assert(slap.Rooms().Count == 0, "버려진 방이 정리되지 않음");
+        File.WriteAllText(slap.FilePath, "{ broken");
+        Assert(slap.Rooms().Count == 0 && slap.Create("g2").Players.Count == 1, "손상된 대전 파일에서 복구 실패");
+    });
     string ReleaseJson(string tag, string url = "https://github.com/poyoyoyng/DDongVoid/releases/download/v1.0.10/DDongVoid-win-x64.zip", string? digest = null, bool preview = false)
         => JsonSerializer.Serialize(new { tag_name = tag, draft = false, prerelease = preview, assets = new[] { new { name = UpdateService.AssetName, browser_download_url = url, size = 100, digest = digest ?? "sha256:" + new string('a', 64) } } });
     Check("업데이트 버전은 문자열이 아닌 숫자로 비교", () =>

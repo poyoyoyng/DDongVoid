@@ -266,6 +266,7 @@ public partial class MainWindow : Window
         BeginPanel("games", "AKC MINI GAMES", "어떤 게임을 할까요?", "목록에서 플레이할 게임을 고르세요.");
         AddGameItem("똥 피하기", "←  →  /  A  D   이동     ·     SPACE   일시정지", () => StartGame(MiniGame.Dodge));
         AddGameItem("키보드 리듬", "리듬게임", () => StartGame(MiniGame.Rhythm));
+        AddGameItem("뺨때리기 (2인 대전)", "상단 · 중단 · 하단  때리기 / 막기     ·     기 모으기     ·     턴제 1 : 1", ShowSlapLobby);
         AddButton("돌아가기", ShowHome);
     }
     private FrameworkElement ActiveSurface => activeGame == MiniGame.Rhythm ? RhythmView : Surface;
@@ -348,7 +349,8 @@ public partial class MainWindow : Window
     }
     private void ReturnToGame()
     {
-        if (playState == PlayState.Paused) ShowPause();
+        if (slapRoomId is not null) ShowSlapRoom();
+        else if (playState == PlayState.Paused) ShowPause();
         else if (playState == PlayState.Over) ShowEnd();
         else ShowHome();
     }
@@ -476,6 +478,8 @@ public partial class MainWindow : Window
     private void Logout()
     {
         if (pendingRecord is not null) { ShowEnd(); return; }
+        if (InSlapMatch && MessageBox.Show(this, "뺨때리기 대전 중입니다. 로그아웃하면 기권패가 됩니다. 계속할까요?", "뺨때리기", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        AbandonSlapRoom();
         ForgetSession(); userId = null; bestScore = 0; ResetToHome(); ShowHome();
         SetMessage("로그아웃했습니다.", true);
     }
@@ -617,7 +621,7 @@ public partial class MainWindow : Window
     {
         var update = availableUpdate;
         if (update is null || offeringUpdate || installingUpdate || busy || sizeModeRestore is not null || !IsVisible || !IsActive ||
-            pendingRecord is not null || playState == PlayState.Playing || (!manual && offeredUpdates.Contains(update.Tag))) return;
+            pendingRecord is not null || playState == PlayState.Playing || InSlapMatch || (!manual && offeredUpdates.Contains(update.Tag))) return;
         offeringUpdate = true; offeredUpdates.Add(update.Tag);
         try
         {
@@ -695,6 +699,7 @@ public partial class MainWindow : Window
             using (new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose)) { }
             var old = preferences.DataFolder; preferences.DataFolder = candidate.Folder;
             if (!SavePreferences()) { preferences.DataFolder = old; return; }
+            AbandonSlapRoom();
             store = candidate; userId = null; bestScore = 0; pendingRecord = null;
             ResetToHome(); startupError = null;
             UpdateHud(); ShowSettings(); SetMessage("저장 폴더를 변경했습니다. 이 폴더의 계정으로 로그인해 주세요.", true);
@@ -871,6 +876,9 @@ public partial class MainWindow : Window
         if (busy) { e.Cancel = true; return; }
         if (pendingRecord is not null && MessageBox.Show(this, "저장하지 못한 기록이 있습니다. 저장하지 않고 종료할까요?", "미저장 기록", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
         { e.Cancel = true; ShowEnd(); return; }
+        if (InSlapMatch && MessageBox.Show(this, "뺨때리기 대전 중입니다. 종료하면 기권패가 됩니다. 종료할까요?", "뺨때리기", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+        { e.Cancel = true; return; }
+        AbandonSlapRoom();
         ExitSizeMode(false); RememberWindowSize();
         PauseGame(); SavePreferences();
     }
