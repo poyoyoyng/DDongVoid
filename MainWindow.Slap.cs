@@ -62,7 +62,6 @@ public partial class MainWindow
     }
     private void AddSlapRoomEntry(SlapRoom room)
     {
-        var host = room.Players.FirstOrDefault()?.Id ?? "?";
         var me = room.Find(userId!);
         string state;
         if (me is not null)
@@ -78,7 +77,7 @@ public partial class MainWindow
         }
         else state = room.Status == SlapStatus.Playing ? "게임 중" : room.Players.Count >= 2 ? "가득 참" : "참가 가능";
         var players = string.Join(" · ", room.Players.Select(p => p.Id));
-        var button = AddButton($"{host} 님의 방 #{room.Id.ToString("N")[..8]}   ·   {room.Players.Count}/2\n{players}\n{state}", () => JoinSlapRoom(room.Id));
+        var button = AddButton($"{room.Title}   ·   {room.Players.Count}/2\n{players}\n{state}", () => JoinSlapRoom(room.Id));
         button.Tag = room.Id;
         button.IsEnabled = me is not null || state == "참가 가능";
         button.Content = new TextBlock { Text = (string)button.Content, TextWrapping = TextWrapping.Wrap };
@@ -144,7 +143,23 @@ public partial class MainWindow
         finally { busy = false; }
         if (refresh && slapStateVersion == stateVersion) await PollSlapAsync();
     }
-    private void CreateSlapRoom() => _ = RunSlapAsync((s, me) => s.Create(me));
+    private void CreateSlapRoom()
+    {
+        if (!RequireLogin()) return;
+        DetachSlapRoom();
+        BeginPanel("slap-create", "맞짱 · 1 : 1", "방 만들기", "방 목록에 표시할 제목을 입력해 주세요.");
+        AddText($"방 제목 · 최대 {SlapRoom.MaxTitleLength}자", 12, "#B6C7BC", 0, 6);
+        var titleInput = new TextBox { Name = "SlapRoomTitle", MaxLength = SlapRoom.MaxTitleLength, Margin = new Thickness(0, 0, 0, 12) };
+        System.Windows.Automation.AutomationProperties.SetName(titleInput, "방 제목");
+        DialogContent.Children.Add(titleInput);
+        AddButton("방 만들기", () =>
+        {
+            var title = titleInput.Text;
+            _ = RunSlapAsync((s, me) => s.Create(me, title));
+        }, true);
+        AddButton("취소", ShowSlapLobby);
+        titleInput.Focus();
+    }
     private void JoinSlapRoom(Guid id) => _ = RunSlapAsync((s, me) => s.Join(id, me));
     private void SetSlapReady(bool ready)
     {
@@ -252,7 +267,7 @@ public partial class MainWindow
 
         var finished = room.Status == SlapStatus.Finished;
         var title = finished ? (room.Winner is null ? "대전을 종료했어요" : room.Winner == userId ? "이겼어요! 짝!" : "졌어요… 얼얼하다") : opponent is null ? "상대를 기다리는 중" : "준비되면 시작!";
-        BeginPanel("slap-room", $"맞짱 · #{room.Id.ToString("N")[..8]} · {(finished ? "GAME OVER" : "WAITING ROOM")}", title,
+        BeginPanel("slap-room", $"맞짱 · {room.Title} · {(finished ? "GAME OVER" : "WAITING ROOM")}", title,
             finished ? "" : "두 사람 모두 준비 완료를 누르면 바로 시작합니다.\n방을 만든 사람(P1)이 먼저 공격합니다.");
         AddSlapSyncControls();
         if (finished)
@@ -268,7 +283,7 @@ public partial class MainWindow
     private void DrawSlapMatch(SlapRoom room, SlapPlayer me, SlapPlayer opponent)
     {
         var attacking = room.AttackerId == me.Id;
-        BeginPanel("slap-room", $"맞짱 · #{room.Id.ToString("N")[..8]} · ROUND {room.Round}", attacking ? "내 공격 차례!" : "내 수비 차례!", "");
+        BeginPanel("slap-room", $"맞짱 · {room.Title} · ROUND {room.Round}", attacking ? "내 공격 차례!" : "내 수비 차례!", "");
         AddSlapSyncControls();
         AddSlapArena(room, me, opponent);
 

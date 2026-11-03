@@ -342,6 +342,24 @@ try
         Assert(File.ReadAllText(rhythmStore.FilePath) == "{ broken", "손상된 리듬 파일을 덮어씀");
     });
     var slap = new SlapStore(Path.Combine(root, "맞짱"), () => slapClock);
+    Check("맞짱: 방 제목 저장·재조회·입력 검사·이전 방 호환", () =>
+    {
+        var titled = new SlapStore(Path.Combine(root, "방 제목"));
+        Throws<ArgumentException>(() => titled.Create("host", "   "));
+        Throws<ArgumentException>(() => titled.Create("host", new string('가', SlapRoom.MaxTitleLength + 1)));
+        Assert(titled.Rooms().Count == 0, "잘못된 제목으로 방이 생성됨");
+        var room = titled.Create("host", "  퇴근 전 한 판!  ");
+        var reopened = new SlapStore(titled.Folder);
+        Assert(reopened.Rooms().Single().Title == "퇴근 전 한 판!", "입력한 제목이 저장·복원되지 않음");
+        Assert(reopened.Join(room.Id, "guest").Title == "퇴근 전 한 판!", "상대 참가 후 제목이 변경됨");
+        Assert(reopened.RoomsAsync().GetAwaiter().GetResult().Single().Title == "퇴근 전 한 판!", "자동 조회에서 제목 누락");
+        Assert(titled.Create("host", new string('가', SlapRoom.MaxTitleLength)).Title.Length == SlapRoom.MaxTitleLength, "최대 길이 제목 생성 실패");
+        var legacy = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(titled.FilePath))!;
+        foreach (var saved in legacy["Rooms"]!.AsArray()) saved!.AsObject().Remove("Title");
+        File.WriteAllText(titled.FilePath, legacy.ToJsonString());
+        Assert(reopened.Rooms().All(r => r.Title == "맞짱 방"), "제목이 없는 기존 방을 불러오지 못함");
+        Assert(reopened.Join(room.Id, "guest").Players.Count == 2, "기존 방 참가자 유실");
+    });
     Check("캐릭터 행동·결과 자세와 상대 선택 비공개", () =>
     {
         var room = new SlapRoom { Status = SlapStatus.Playing, Players = [new() { Id = "a" }, new() { Id = "b" }] };

@@ -36,7 +36,9 @@ public sealed class SlapPlayer
 
 public sealed class SlapRoom
 {
+    public const int MaxTitleLength = 40;
     public Guid Id { get; set; }
+    public string Title { get; set; } = "맞짱 방";
     public DateTimeOffset CreatedAt { get; set; }
     public SlapStatus Status { get; set; }
     public bool Started => Status == SlapStatus.Playing;
@@ -231,12 +233,18 @@ public sealed class SlapStore
             return new RankingEntry(rank, s.Id, s.Wins, s.Losses);
         }).ToList();
     }, false);
-    public SlapRoom Create(string userId) => Access(db =>
+    public SlapRoom Create(string userId, string title = "맞짱 방")
     {
-        var room = new SlapRoom { Id = Guid.NewGuid(), CreatedAt = now() };
-        Join(room, userId); db.Rooms.Add(room);
-        return room;
-    }, true);
+        if (string.IsNullOrWhiteSpace(title)) throw new ArgumentException("방 제목을 입력해 주세요.");
+        title = title.Trim();
+        if (title.Length > SlapRoom.MaxTitleLength) throw new ArgumentException($"방 제목은 {SlapRoom.MaxTitleLength}자까지 입력할 수 있습니다.");
+        return Access(db =>
+        {
+            var room = new SlapRoom { Id = Guid.NewGuid(), Title = title, CreatedAt = now() };
+            Join(room, userId); db.Rooms.Add(room);
+            return room;
+        }, true);
+    }
     public SlapRoom Join(Guid roomId, string userId) => Access(db =>
     {
         var room = Room(db, roomId);

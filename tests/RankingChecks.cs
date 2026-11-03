@@ -281,12 +281,33 @@ internal static class RankingChecks
 
         Set("userId", "player10");
         Call("ShowSlapLobby"); Layout();
+        var beforeCreateCount = slap.Rooms().Count;
+        ClickAction("방 만들기"); Layout();
+        var titleInput = Find<TextBox>(content).Single(t => t.Name == "SlapRoomTitle");
+        Assert(titleInput.MaxLength == SlapRoom.MaxTitleLength, "방 제목 입력 길이 제한");
+        titleInput.Text = "   "; ClickAction("방 만들기");
+        Wait(() => !(bool)Get("busy")! && Labels().Contains("방 제목을 입력해 주세요."));
+        Assert(slap.Rooms().Count == beforeCreateCount && Equals(Get("panel"), "slap-create"), "빈 제목이면 방을 생성하지 않고 입력 화면 유지");
+        titleInput.Text = "입력 중인 방 제목";
+        var inputPoll = (Task)typeof(MainWindow).GetMethod("PollSlapAsync", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null)!;
+        inputPoll.GetAwaiter().GetResult(); Layout();
+        Assert(Find<TextBox>(content).Single(t => t.Name == "SlapRoomTitle").Text == "입력 중인 방 제목", "자동 조회가 제목 입력을 지우지 않음");
+        Find<Button>((FrameworkElement)window.FindName("DialogContent")).Single(b => Equals(b.Content, "취소"))
+            .RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout();
+        Assert(slap.Rooms().Count == beforeCreateCount && Equals(Get("panel"), "slap-lobby"), "방 생성 취소 시 빈 방 없이 목록으로 복귀");
+        void CreateTitledRoom(string title)
+        {
+            ClickAction("방 만들기"); Layout();
+            Find<TextBox>(content).Single(t => t.Name == "SlapRoomTitle").Text = title;
+            ClickAction("방 만들기");
+        }
         var simultaneousRooms = new List<Guid>();
         for (int i = 0; i < 3; i++)
         {
-            ClickAction("방 만들기");
+            CreateTitledRoom($"  맞짱 한 판 {i + 1}  ");
             Wait(() => !(bool)Get("busy")! && Equals(Get("panel"), "slap-room") && Get("slapRoomId") is not null);
             var id = (Guid)Get("slapRoomId")!;
+            Assert(Labels().Contains($"맞짱 · 맞짱 한 판 {i + 1} · WAITING ROOM"), "대기실에 입력한 방 제목 표시");
             simultaneousRooms.Add(id);
             ClickAction("준비 완료");
             Wait(() => !(bool)Get("busy")! && Find<Button>(content).Any(b => Equals(b.Content, "준비 취소")));
@@ -298,6 +319,9 @@ internal static class RankingChecks
         var entries = Find<Button>(content).Where(b => b.Tag is Guid id && simultaneousRooms.Contains(id)).ToArray();
         Assert(entries.Length == 3 && entries.All(b => b.IsEnabled)
             && entries.Select(b => ((TextBlock)b.Content).Text).Distinct().Count() == 3, "같은 사람이 만든 방도 서로 구분하고 모두 입장 가능");
+        Assert(entries.All(b => ((TextBlock)b.Content).Text.StartsWith("맞짱 한 판 ")
+            && !((TextBlock)b.Content).Text.Contains("님의 방") && !((TextBlock)b.Content).Text.Contains('#')
+            && ((TextBlock)b.Content).Text.Contains("\nplayer10\n")), "방 목록에는 입력 제목과 별도 참가자 행을 표시하고 자동 방장·번호 문구 제거");
         for (int i = 0; i < simultaneousRooms.Count; i++)
         {
             var id = simultaneousRooms[i];
@@ -305,6 +329,7 @@ internal static class RankingChecks
             slap.Join(id, opponent); slap.SetReady(id, opponent, true);
             Find<Button>(content).Single(b => b.Tag is Guid tag && tag == id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Wait(() => !(bool)Get("busy")! && Equals(Get("slapRoomId"), id) && Labels().Contains("내 공격 차례!"));
+            Assert(Labels().Contains($"맞짱 · 맞짱 한 판 {i + 1} · ROUND 1"), "대전 중에도 방 제목 유지");
             ClickAction("기 모으기  +1");
             Wait(() => !(bool)Get("busy")! && OwnCharge(content));
             ClickAction("방 목록으로 · 대전 유지"); Layout();
@@ -328,7 +353,7 @@ internal static class RankingChecks
             return Find<TextBlock>(guestContent).Select(t => t.Text).ToArray();
         }
         Set("userId", "player20"); GuestSet("store", new LocalStore(root)); GuestSet("userId", "player21");
-        Call("ShowSlapLobby"); ClickAction("방 만들기");
+        Call("ShowSlapLobby"); CreateTitledRoom("함께 하는 맞짱");
         Wait(() => !(bool)Get("busy")! && Equals(Get("panel"), "slap-room"));
         var sharedRoomId = (Guid)Get("slapRoomId")!;
         ClickAction("준비 완료");
@@ -366,7 +391,7 @@ internal static class RankingChecks
         Call("DetachSlapRoom"); GuestCall("DetachSlapRoom");
         Console.WriteLine("맞짱 두 창 참가·준비·방별 자동 동기화 검증 완료");
 
-        Call("ShowSlapLobby"); ClickAction("방 만들기");
+        Call("ShowSlapLobby"); CreateTitledRoom("복구 확인 맞짱");
         Wait(() => !(bool)Get("busy")! && !(bool)Get("slapSyncing")! && Equals(Get("panel"), "slap-room"));
         var recoveredRoomId = (Guid)Get("slapRoomId")!;
         ClickAction("준비 완료");
@@ -394,7 +419,7 @@ internal static class RankingChecks
         // Replace both window instances between visits so no room state survives in memory.
         window = new MainWindow(); content = (FrameworkElement)window.Content;
         Set("store", new LocalStore(root)); Set("userId", "player30");
-        Call("ShowSlapLobby"); ClickAction("방 만들기");
+        Call("ShowSlapLobby"); CreateTitledRoom("시간 날 때 한 판");
         Wait(() => !(bool)Get("busy")! && Get("slapRoomId") is Guid);
         var offlineRoomId = (Guid)Get("slapRoomId")!;
         ClickAction("준비 완료");
@@ -464,7 +489,7 @@ internal static class RankingChecks
         Wait(() => !(bool)Get("slapSyncing")! && Get("slapLastSyncUtc") is DateTime);
         var beforeLock = (DateTime)Get("slapLastSyncUtc")!;
         var heldWriteLock = new FileStream(Path.Combine(liveRoot, ".ddongvoid-slap.lock"), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-        var pendingCreate = Task.Run(() => liveStore.Create("player33"));
+        var pendingCreate = Task.Run(() => liveStore.Create("player33", "새로 열린 방"));
         SlapRoom? incoming = null;
         try
         {
@@ -473,7 +498,7 @@ internal static class RankingChecks
         }
         finally { heldWriteLock.Dispose(); incoming = pendingCreate.GetAwaiter().GetResult(); }
         Wait(() => Find<Button>(content).Any(b => b.Tag is Guid id && id == incoming!.Id));
-        Assert(Labels().Any(t => t.Contains("player33 님의 방")), "재시작 없이 상대가 새로 만든 방을 목록에 표시");
+        Assert(Labels().Any(t => t.StartsWith("새로 열린 방") && t.Contains("\nplayer33\n")), "재시작 없이 상대가 새로 만든 방의 제목·참가자를 목록에 표시");
 
         Find<Button>(content).Single(b => b.Tag is Guid id && id == liveRoom.Id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Wait(() => !(bool)Get("busy")! && Equals(Get("slapRoomId"), liveRoom.Id));
