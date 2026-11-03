@@ -12,6 +12,7 @@ public static class CiaoRules
 {
     public const int MaxPlayers = 4, MaxTitleLength = 40, Pawns = 7, Finish = 9, PodiumSize = 8;
     public const int MaxDeclaration = 4;
+    public const int ResponseTimeoutSeconds = 5;
     public static int DieFromFace(int face) => face switch
     {
         >= 1 and <= 4 => face,
@@ -49,15 +50,20 @@ public sealed class CiaoRoom
     // Persisted for reconnects; views returned to other players redact this field.
     public int? Die { get; set; }
     public int? Declaration { get; set; }
+    public DateTimeOffset? ResponseDeadline { get; set; }
     public List<string> Passed { get; set; } = [];
     public List<CiaoPlayer> Players { get; set; } = [];
+    public int LastGoalScore { get; set; }
+    // Older saves only recorded surviving pawns; include their highest slot as a baseline.
+    public int UsedPodiumSlots => Math.Max(LastGoalScore, Players.SelectMany(p => p.GoalScores).DefaultIfEmpty(0).Max());
     public List<string> Winners { get; set; } = [];
     public CiaoResult? LastResult { get; set; }
     public string? EndReason { get; set; }
+    public string? HostId => Players.FirstOrDefault()?.Id;
     public string? SpeakerId => Status == CiaoStatus.Playing ? Players[SpeakerIndex].Id : null;
-    public string? ResponderId => Status == CiaoStatus.Playing && Phase == CiaoPhase.Respond
-        ? Enumerable.Range(1, Players.Count - 1).Select(i => Players[(SpeakerIndex + i) % Players.Count])
-            .FirstOrDefault(p => p.CanChallenge && !Passed.Contains(p.Id))?.Id : null;
+    public List<string> PendingResponderIds => Players.Where(p => CanRespond(p.Id)).Select(p => p.Id).ToList();
+    public bool CanRespond(string id) => Status == CiaoStatus.Playing && Phase == CiaoPhase.Respond
+        && id != SpeakerId && Find(id) is { CanChallenge: true } && !Passed.Contains(id);
     public CiaoPlayer? Find(string id) => Players.FirstOrDefault(p => p.Id == id);
 
     public void SetReady(string id, bool ready)
@@ -68,7 +74,7 @@ public sealed class CiaoRoom
         if (Players.Count >= 2 && Players.All(p => p.Ready))
         {
             Status = CiaoStatus.Playing; Turn = 1; SpeakerIndex = 0; Phase = CiaoPhase.Roll;
-            Die = Declaration = null; Passed.Clear(); Winners.Clear(); LastResult = null; EndReason = null;
+            Die = Declaration = null; ResponseDeadline = null; LastGoalScore = 0; Passed.Clear(); Winners.Clear(); LastResult = null; EndReason = null;
             foreach (var p in Players)
             {
                 p.Ready = false; p.Position = 0; p.Reserve = CiaoRules.Pawns - 1; p.Fallen = 0; p.GoalScores.Clear();
@@ -88,21 +94,41 @@ public sealed class CiaoRoom
         if (die is < 0 or > CiaoRules.MaxDeclaration) throw new ArgumentException("주사위 눈이 올바르지 않습니다.");
         Die = die; Phase = CiaoPhase.Declare; Revision++;
     }
-    public void Declare(string id, int revision, int number)
+    public void Declare(string id, int revision, int number, DateTimeOffset? now = null)
     {
         CheckAction(id, revision);
         if (SpeakerId != id || Phase != CiaoPhase.Declare || Die is null) throw new ArgumentException("주사위를 먼저 굴려 주세요.");
         if (number is < 1 or > CiaoRules.MaxDeclaration) throw new ArgumentException($"1~{CiaoRules.MaxDeclaration} 중 하나를 선언해 주세요.");
         Declaration = number; Passed.Clear(); Phase = CiaoPhase.Respond; Revision++;
-        if (ResponderId is null) Resolve(null);
+        ResponseDeadline = (now ?? DateTimeOffset.UtcNow).AddSeconds(CiaoRules.ResponseTimeoutSeconds);
+        if (PendingResponderIds.Count == 0) Resolve(null);
     }
-    public void Respond(string id, int revision, bool doubt)
+    public bool NeedsResponseTimeoutUpdate(DateTimeOffset now) => Status == CiaoStatus.Playing && Phase == CiaoPhase.Respond
+        && (ResponseDeadline is null || now >= ResponseDeadline.Value);
+    public bool UpdateResponseTimeout(DateTimeOffset now)
     {
-        CheckAction(id, revision);
-        if (Phase != CiaoPhase.Respond || ResponderId != id) throw new ArgumentException("지금은 응답할 차례가 아닙니다.");
+        if (!NeedsResponseTimeoutUpdate(now)) return false;
+        // Existing saved declarations get a full response window after the update.
+        if (ResponseDeadline is null) { ResponseDeadline = now.AddSeconds(CiaoRules.ResponseTimeoutSeconds); return true; }
+        var automaticPasses = string.Join(" · ", PendingResponderIds);
+        Revision++;
+        Resolve(null);
+        LastResult = LastResult! with { Message = LastResult!.Message + $" · 5초 미응답 자동 PASS: {automaticPasses}" };
+        return true;
+    }
+    public void Respond(string id, int revision, bool doubt, DateTimeOffset? now = null)
+    {
+        CheckAction(id, Revision);
+        // Only PASS advances the revision while a declaration remains open. Accept any
+        // snapshot of that declaration so another player's PASS cannot invalidate a click.
+        if (revision < Revision - Passed.Count || revision > Revision)
+            throw new ArgumentException("방 상태가 바뀌었습니다. 최신 화면에서 다시 선택해 주세요.");
+        if (!CanRespond(id)) throw new ArgumentException("지금은 응답할 수 없습니다. 이미 PASS했거나 응답이 끝났습니다.");
+        UpdateResponseTimeout(now ?? DateTimeOffset.UtcNow);
+        if (Phase != CiaoPhase.Respond || Status != CiaoStatus.Playing) return;
         Revision++;
         if (doubt) Resolve(id);
-        else { Passed.Add(id); if (ResponderId is null) Resolve(null); }
+        else { Passed.Add(id); if (PendingResponderIds.Count == 0) Resolve(null); }
     }
     private void ReplacePawn(CiaoPlayer player)
     {
@@ -111,6 +137,7 @@ public sealed class CiaoRoom
     }
     private void Drop(CiaoPlayer player)
     {
+        LastGoalScore = UsedPodiumSlots;
         if (player.Position is not null) { player.Fallen++; ReplacePawn(player); }
         else if (player.GoalScores.Count > 0)
         {
@@ -122,8 +149,8 @@ public sealed class CiaoRoom
     {
         if (player.Position is not int position) return;
         if (position + steps < CiaoRules.Finish) { player.Position = position + steps; return; }
-        var occupied = Players.SelectMany(p => p.GoalScores).ToHashSet();
-        player.GoalScores.Add(Enumerable.Range(1, CiaoRules.PodiumSize).First(i => !occupied.Contains(i)));
+        LastGoalScore = UsedPodiumSlots + 1;
+        player.GoalScores.Add(LastGoalScore);
         ReplacePawn(player);
     }
     private void Resolve(string? challengerId)
@@ -145,14 +172,14 @@ public sealed class CiaoRoom
         }
         Move(mover, number);
         LastResult = new(Turn, speaker.Id, number, challengerId, challengerId is null ? null : Die, fallen, mover.Id, result);
-        Die = Declaration = null; Passed.Clear(); Phase = CiaoPhase.Roll;
+        Die = Declaration = null; ResponseDeadline = null; Passed.Clear(); Phase = CiaoPhase.Roll;
         if (FinishIfUnopposed()) return;
         var winner = Players.FirstOrDefault(p => p.GoalScores.Count >= 3);
         if (winner is not null)
         {
             Winners = [winner.Id]; EndReason = "말 3개 도착!"; Status = CiaoStatus.Finished; return;
         }
-        if (Players.All(p => p.Position is null) || Players.Sum(p => p.GoalScores.Count) == CiaoRules.PodiumSize)
+        if (Players.All(p => p.Position is null) || UsedPodiumSlots >= CiaoRules.PodiumSize)
         {
             FinishByScore("경주 종료 · 도착 점수 합계로 승부"); return;
         }
@@ -165,7 +192,7 @@ public sealed class CiaoRoom
         if (contenders.Length != 1 || contenders[0].Position is null) return false;
         var survivor = contenders[0];
         var arrived = survivor.GoalScores.Count;
-        while (survivor.Position is not null && Players.Sum(p => p.GoalScores.Count) < CiaoRules.PodiumSize)
+        while (survivor.Position is not null && UsedPodiumSlots < CiaoRules.PodiumSize)
             Move(survivor, CiaoRules.Finish);
         var message = $"{survivor.Id}만 남아 남은 말 {survivor.GoalScores.Count - arrived}개 자동 도착 · 점수 정산";
         if (LastResult is not null) LastResult = LastResult with { Message = LastResult.Message + " · " + message };
@@ -197,11 +224,13 @@ public sealed class CiaoStore
     public string Folder { get; }
     public string FilePath => Path.Combine(Folder, "ddongvoid-ciao.json");
     private readonly Func<int> roll;
+    private readonly Func<DateTimeOffset> utcNow;
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
-    public CiaoStore(string folder, Func<int>? roller = null)
+    public CiaoStore(string folder, Func<int>? roller = null, Func<DateTimeOffset>? clock = null)
     {
         Folder = Path.GetFullPath(folder);
         roll = roller ?? (() => CiaoRules.DieFromFace(RandomNumberGenerator.GetInt32(6)));
+        utcNow = clock ?? (() => DateTimeOffset.UtcNow);
     }
     private static CiaoDatabase Validate(CiaoDatabase? db)
     {
@@ -213,11 +242,11 @@ public sealed class CiaoStore
                 p.Reserve + p.Fallen + p.GoalScores.Count + (p.Position is null ? 0 : 1) != CiaoRules.Pawns) ||
             r.Players.Select(p => p.Id).Distinct().Count() != r.Players.Count ||
             r.Players.SelectMany(p => p.GoalScores).Distinct().Count() != r.Players.Sum(p => p.GoalScores.Count) ||
-            !Enum.IsDefined(r.Status) || !Enum.IsDefined(r.Phase) || r.Revision < 0 || r.Turn < 1 ||
+            !Enum.IsDefined(r.Status) || !Enum.IsDefined(r.Phase) || r.Revision < 0 || r.Turn < 1 || r.LastGoalScore is < 0 or > CiaoRules.PodiumSize ||
             r.Passed is null || r.Winners is null || r.SpeakerIndex < 0 || r.SpeakerIndex >= r.Players.Count ||
             (r.Status == CiaoStatus.Playing && (r.Players.Count < 2 || r.Players[r.SpeakerIndex].Position is null ||
                 (r.Phase == CiaoPhase.Roll ? r.Die is not null || r.Declaration is not null : r.Die is null || r.Die is < 0 or > CiaoRules.MaxDeclaration) ||
-                (r.Phase == CiaoPhase.Respond && (r.Declaration is null or < 1 or > CiaoRules.MaxDeclaration || r.ResponderId is null))))))
+                (r.Phase == CiaoPhase.Respond && (r.Declaration is null or < 1 or > CiaoRules.MaxDeclaration || r.PendingResponderIds.Count == 0))))))
             throw new JsonException();
         return db;
     }
@@ -247,8 +276,21 @@ public sealed class CiaoStore
         });
     private static CiaoRoom Room(CiaoDatabase db, Guid id) => db.Rooms.FirstOrDefault(r => r.Id == id)
         ?? throw new ArgumentException("방이 사라졌습니다. 방 목록에서 다시 골라 주세요.");
-    public async Task<List<CiaoRoom>> RoomsAsync(string viewer, CancellationToken cancellation = default) =>
-        (await ReadAsync(cancellation).ConfigureAwait(false)).Rooms.OrderBy(r => r.CreatedAt).Select(r => r.ViewFor(viewer)).ToList();
+    public async Task<List<CiaoRoom>> RoomsAsync(string viewer, CancellationToken cancellation = default)
+    {
+        var db = await ReadAsync(cancellation).ConfigureAwait(false);
+        if (db.Rooms.Any(r => r.NeedsResponseTimeoutUpdate(utcNow())))
+        {
+            // Re-read under the shared lock: a concurrent doubt may have resolved the turn.
+            db = await Task.Run(() => Write(latest =>
+            {
+                var now = utcNow();
+                foreach (var room in latest.Rooms) room.UpdateResponseTimeout(now);
+                return latest;
+            }), cancellation).ConfigureAwait(false);
+        }
+        return db.Rooms.OrderBy(r => r.CreatedAt).Select(r => r.ViewFor(viewer)).ToList();
+    }
     public List<CiaoRoom> Rooms(string viewer) => RoomsAsync(viewer).GetAwaiter().GetResult();
     public CiaoRoom Create(string userId, string title)
     {
@@ -283,8 +325,15 @@ public sealed class CiaoStore
         if (room.SpeakerId != userId || room.Phase != CiaoPhase.Roll) throw new ArgumentException("지금은 주사위를 굴릴 차례가 아닙니다.");
         room.Roll(userId, revision, roll());
     });
-    public CiaoRoom Declare(Guid id, string userId, int revision, int number) => Act(id, userId, room => room.Declare(userId, revision, number));
-    public CiaoRoom Respond(Guid id, string userId, int revision, bool doubt) => Act(id, userId, room => room.Respond(userId, revision, doubt));
+    public CiaoRoom Declare(Guid id, string userId, int revision, int number) => Act(id, userId, room => room.Declare(userId, revision, number, utcNow()));
+    public CiaoRoom Respond(Guid id, string userId, int revision, bool doubt) => Act(id, userId, room => room.Respond(userId, revision, doubt, utcNow()));
+    public void DeleteRoom(Guid id, string userId) => Write(db =>
+    {
+        var room = Room(db, id);
+        if (room.HostId != userId) throw new ArgumentException("방장만 방을 없앨 수 있습니다.");
+        db.Rooms.Remove(room);
+        return true;
+    });
     public void Leave(Guid id, string userId) => Write(db =>
     {
         var room = Room(db, id);

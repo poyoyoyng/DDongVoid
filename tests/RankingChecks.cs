@@ -578,6 +578,8 @@ internal static class RankingChecks
         Wait(() => { GuestLabels(); return Find<Button>(guestContent).Any(b => b.Tag is Guid id && id == ciaoId); });
         Find<Button>(guestContent).Single(b => b.Tag is Guid id && id == ciaoId).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Wait(() => !(bool)GuestGet("busy")! && GuestLabels().Contains("참가자 2/4"));
+        Assert(Find<Button>(content).Any(b => Equals(b.Content, "방 없애기 (방장 전용)"))
+            && !Find<Button>(guestContent).Any(b => Equals(b.Content, "방 없애기 (방장 전용)")), "방 없애기는 방장 화면에만 표시");
         ciao.Join(ciaoId, "player02"); ciao.Join(ciaoId, "player03");
         Wait(() => Labels().Contains("참가자 4/4") && GuestLabels().Contains("참가자 4/4"));
         ClickAction("준비 완료"); GuestClick("준비 완료");
@@ -625,8 +627,10 @@ internal static class RankingChecks
         Wait(() => !(bool)Get("busy")! && GuestLabels().Contains($"player00님의 선언  {CiaoRules.MaxDeclaration}"));
         Assert(Find<Button>(guestContent).Single(b => Equals(b.Content, "PASS")).IsEnabled
             && Find<Button>(guestContent).Single(b => Equals(b.Content, "의심")).IsEnabled, "다른 참가자에게 PASS·의심 버튼 표시");
+        Assert(GuestLabels().Contains("동시 응답 · 먼저 접수된 의심으로 판정")
+            && GuestLabels().Contains("응답 대기 · player01 · player02 · player03"), "동시 응답 규칙·응답 대기자 표시");
         GuestClick("PASS");
-        Wait(() => !(bool)GuestGet("busy")! && GuestLabels().Contains("응답 차례 · player02"));
+        Wait(() => !(bool)GuestGet("busy")! && GuestLabels().Contains("응답 대기 · player02 · player03"));
         Assert(!Find<Button>(guestContent).Single(b => Equals(b.Content, "의심")).IsEnabled, "PASS 후 중복 의심 금지");
         ciaoState = ciao.Rooms("player02").Single(); ciao.Respond(ciaoId, "player02", ciaoState.Revision, false);
         ciaoState = ciao.Rooms("player03").Single(); ciao.Respond(ciaoId, "player03", ciaoState.Revision, true);
@@ -640,14 +644,23 @@ internal static class RankingChecks
         Wait(() => !(bool)GuestGet("busy")! && GuestLabels().Any(t => t.StartsWith("내 주사위")));
         GuestClick("1");
         Wait(() => !(bool)GuestGet("busy")! && Labels().Contains("player01님의 선언  1"));
+        Assert(Labels().Contains("응답 차례") && Find<Button>(content).Single(b => Equals(b.Content, "PASS")).IsEnabled
+            && Find<Button>(content).Single(b => Equals(b.Content, "의심")).IsEnabled, "참가 순서와 관계없이 즉시 PASS·의심 활성화");
+        var pendingPass = Find<Button>(content).Single(b => Equals(b.Content, "PASS"));
         ciaoState = ciao.Rooms("player02").Single(); ciao.Respond(ciaoId, "player02", ciaoState.Revision, false);
         ciaoState = ciao.Rooms("player03").Single(); ciao.Respond(ciaoId, "player03", ciaoState.Revision, false);
-        Wait(() => Labels().Contains("응답 차례 · player00")); ClickAction("PASS");
+        pendingPass.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Wait(() => !(bool)Get("busy")! && Labels().Any(t => t.Contains("모두 PASS")) && GuestLabels().Contains("상대 차례"));
         Assert(((CiaoRoom)Get("ciaoRoom")!).LastResult!.RevealedDie is null && !Labels().Any(t => t.StartsWith("내 주사위")), "전원 PASS 결과는 실제 눈을 공개하지 않음");
         ClickAction("방 목록으로 · 게임 유지");
         Wait(() => Find<Button>(content).Any(b => b.Tag is Guid id && id == ciaoId));
         Assert(ciao.Rooms("player00").Single().Status == CiaoStatus.Playing, "목록으로 나가도 게임 유지");
+        Find<Button>(content).Single(b => b.Tag is Guid id && id == ciaoId).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Wait(() => !(bool)Get("busy")! && Equals(Get("panel"), "ciao-room"));
+        ClickAction("방 없애기 (방장 전용)");
+        Wait(() => !(bool)Get("busy")! && Equals(Get("panel"), "ciao-lobby") && Equals(GuestGet("panel"), "ciao-lobby"));
+        Assert(ciao.Rooms("player00").Count == 0 && !Find<Button>(guestContent).Any(b => b.Tag is Guid id && id == ciaoId),
+            "방장이 진행 중인 방을 삭제하면 양쪽 모두 목록으로 복귀하고 방 항목 제거");
         Call("DetachCiaoRoom"); GuestCall("DetachCiaoRoom");
         Console.WriteLine("차오차오 4인 방·준비·비공개 주사위·PASS·의심·재접속 화면 검증 완료");
         var autoFolder = Path.Combine(root, "차오 자동 종료 화면");
@@ -665,14 +678,44 @@ internal static class RankingChecks
             "도착한 말만 있는 상대도 계속 의심 가능·자동 종료 보류");
         GuestClick("의심");
         Wait(() => !(bool)GuestGet("busy")! && Labels().Contains("이겼어요!") && GuestLabels().Contains("게임이 끝났어요"));
-        Assert(Labels().Any(t => t.Contains("7개 자동 도착")) && ((CiaoRoom)Get("ciaoRoom")!).Find("player00")!.Score == 28
+        Assert(Labels().Any(t => t.Contains("7개 자동 도착")) && ((CiaoRoom)Get("ciaoRoom")!).Find("player00")!.Score == 35
             && GuestLabels().Any(t => t.Contains("7개 자동 도착")), "상대 마지막 도착 말 추락 후 양쪽에 자동 정산 결과 동기화");
+        Assert(Labels().Contains("1×") && GuestLabels().Contains("1×")
+            && Equals(Find<System.Windows.Shapes.Ellipse>(content).Single(p => Equals(p.Tag, "ciao-goal:1")).ToolTip,
+                "1점 · 탈락한 자리 · 재사용 안 함")
+            && Equals(Find<System.Windows.Shapes.Ellipse>(content).Single(p => Equals(p.Tag, "ciao-goal:2")).ToolTip, "2점 · player00"),
+            "탈락한 1번은 재사용 불가 표시·다음 도착 말은 2번부터 배치");
         Assert(Find<System.Windows.Shapes.Ellipse>(content).Count(p => p.Tag is string tag && tag.StartsWith("ciao-reserve:")) == 0
             && Find<System.Windows.Shapes.Ellipse>(content).Count(p => p.Tag is string tag && tag.StartsWith("ciao-active:")) == 0,
             "자동 도착 후 공용 이동판·대기 말 그림에서 남은 말 제거");
         Assert(autoStore.Rooms("player00").Single().Status == CiaoStatus.Finished, "자동 종료를 공유 파일에 저장");
+        ClickAction("방 없애기 (방장 전용)");
+        Wait(() => !(bool)Get("busy")! && Equals(Get("panel"), "ciao-lobby") && Equals(GuestGet("panel"), "ciao-lobby"));
+        Assert(autoStore.Rooms("player00").Count == 0, "종료된 방도 방장 버튼으로 삭제");
         Call("DetachCiaoRoom"); GuestCall("DetachCiaoRoom");
         Console.WriteLine("차오차오 마지막 참가자 자동 도착·점수·양쪽 종료 화면 검증 완료");
+
+        var timeoutFolder = Path.Combine(root, "차오 자동 PASS 화면");
+        var timeoutStore = new CiaoStore(timeoutFolder, () => 1);
+        var timeoutRoom = timeoutStore.Create("player00", "5초 미응답");
+        for (int i = 1; i <= 3; i++) timeoutStore.Join(timeoutRoom.Id, $"player{i:00}");
+        for (int i = 0; i <= 3; i++) timeoutRoom = timeoutStore.SetReady(timeoutRoom.Id, $"player{i:00}", true);
+        timeoutRoom = timeoutStore.Roll(timeoutRoom.Id, "player00", timeoutRoom.Revision);
+        timeoutRoom = timeoutStore.Declare(timeoutRoom.Id, "player00", timeoutRoom.Revision, 4);
+        timeoutStore.Respond(timeoutRoom.Id, "player02", timeoutRoom.Revision, false);
+        timeoutRoom = timeoutStore.Rooms("player00").Single();
+        Set("store", new LocalStore(timeoutFolder)); Set("ciaoRoomId", timeoutRoom.Id); Set("ciaoRoom", timeoutRoom.ViewFor("player00"));
+        GuestSet("store", new LocalStore(timeoutFolder)); GuestSet("ciaoRoomId", timeoutRoom.Id); GuestSet("ciaoRoom", timeoutRoom.ViewFor("player01"));
+        Call("ShowCiaoRoom"); GuestCall("ShowCiaoRoom"); Layout(); GuestLabels();
+        Assert(GuestLabels().Any(t => t.StartsWith("남은 ") && t.Contains("미응답 시 자동 PASS"))
+            && ((CiaoRoom)Get("ciaoRoom")!).LastResult is null, "5초 응답 제한 안내·전원 PASS 전 이동 대기");
+        Wait(() => Labels().Any(t => t.Contains("5초 미응답 자동 PASS: player01 · player03"))
+            && GuestLabels().Any(t => t.Contains("5초 미응답 자동 PASS: player01 · player03")));
+        Assert(((CiaoRoom)Get("ciaoRoom")!).Turn == 2 && ((CiaoRoom)Get("ciaoRoom")!).Find("player00")!.Position == 4
+            && ((CiaoRoom)GuestGet("ciaoRoom")!).LastResult!.RevealedDie is null && GuestLabels().Contains("내 차례"),
+            "입력 없이 5초 경과 시 남은 참가자 자동 PASS·비공개 이동·다음 턴을 양쪽에 반영");
+        Call("DetachCiaoRoom"); GuestCall("DetachCiaoRoom");
+        Console.WriteLine("차오차오 5초 자동 PASS·방장 전용 삭제·상대 목록 복귀 화면 검증 완료");
         Directory.Delete(root, true);
     }
 

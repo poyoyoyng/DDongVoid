@@ -22,6 +22,7 @@ public partial class MainWindow
     private Task? ciaoActivePoll;
     private string ciaoSyncNote = "동기화 확인 중…";
     private TextBlock? ciaoSyncStatus;
+    private TextBlock? ciaoResponseCountdown;
     private bool InCiaoMatch => ciaoRoom?.Status == CiaoStatus.Playing;
     private CiaoStore NewCiaoStore() => new(store.Folder);
 
@@ -33,7 +34,7 @@ public partial class MainWindow
     private void DetachCiaoRoom()
     {
         ciaoTimer.Stop(); ciaoSyncCancellation?.Cancel(); ciaoStateVersion++;
-        ciaoRoomId = null; ciaoRoom = null; ciaoDrawn = null; ciaoSyncStatus = null;
+        ciaoRoomId = null; ciaoRoom = null; ciaoDrawn = null; ciaoSyncStatus = null; ciaoResponseCountdown = null;
     }
     private void ShowCiaoLobby()
     {
@@ -167,7 +168,10 @@ public partial class MainWindow
                 var room = rooms.FirstOrDefault(r => r.Id == id && r.Find(me) is not null);
                 if (room is null)
                 {
-                    ciaoDrawn = null; SetCiaoSyncNote("방 정보 재확인 중…"); return;
+                    ciaoRooms = rooms;
+                    ShowCiaoLobby();
+                    SetMessage("방장이 방을 삭제했습니다. 방 목록으로 돌아왔습니다.");
+                    return;
                 }
                 ciaoRoom = room;
             }
@@ -197,16 +201,19 @@ public partial class MainWindow
     private void DrawCiaoRoom()
     {
         if (ciaoRoom is not { } room || userId is null || room.Find(userId) is not { } me) { ShowCiaoLobby(); return; }
+        if (ciaoResponseCountdown is not null) ciaoResponseCountdown.Text = CiaoResponseTimeText(room);
         var signature = "room|" + userId + "|" + JsonSerializer.Serialize(room);
         if (panel == "ciao-room" && ciaoDrawn == signature) return;
         ciaoDrawn = signature;
+        ciaoResponseCountdown = null;
         var playing = room.Status == CiaoStatus.Playing;
         var finished = room.Status == CiaoStatus.Finished;
         var title = finished ? room.Winners.Contains(userId) ? "이겼어요!" : "게임이 끝났어요"
-            : playing ? room.SpeakerId == userId ? "내 차례" : room.ResponderId == userId ? "응답 차례" : "상대 차례" : "준비되면 시작!";
+            : playing ? room.SpeakerId == userId ? "내 차례" : room.CanRespond(userId!) ? "응답 차례" : "상대 차례" : "준비되면 시작!";
         BeginPanel("ciao-room", $"차오차오 · {room.Title} · {(playing ? $"TURN {room.Turn}" : finished ? "GAME OVER" : "WAITING ROOM")}", title,
             !playing && !finished ? "2~4명이 참가하고 모두 준비하면 시작합니다." : "");
         AddCiaoSyncControls();
+        AddText($"방장 · {room.HostId}", 11, "#91AB9C", 0, 6);
         if (!playing && !finished)
         {
             foreach (var player in room.Players)
@@ -228,7 +235,16 @@ public partial class MainWindow
             AddButton(me.Ready ? "준비 취소" : finished ? "다시 하기 · 준비 완료" : "준비 완료",
                 () => _ = RunCiaoAsync((s, id) => s.SetReady(room.Id, id, !me.Ready)), !me.Ready);
         AddButton(playing ? "방 목록으로 · 게임 유지" : "방 목록으로 · 참가 유지", ShowCiaoLobby);
+        if (room.HostId == userId)
+            AddButton("방 없애기 (방장 전용)", () => _ = RunCiaoAsync((s, id) => { s.DeleteRoom(room.Id, id); return null; }));
         if (!playing) AddButton("방 나가기", () => _ = RunCiaoAsync((s, id) => { s.Leave(room.Id, id); return null; }));
+    }
+    private static string CiaoResponseTimeText(CiaoRoom room)
+    {
+        var seconds = room.ResponseDeadline is { } deadline
+            ? Math.Clamp((int)Math.Ceiling((deadline - DateTimeOffset.UtcNow).TotalSeconds), 0, CiaoRules.ResponseTimeoutSeconds)
+            : CiaoRules.ResponseTimeoutSeconds;
+        return $"남은 {seconds}초 · 미응답 시 자동 PASS";
     }
     private void AddCiaoActions(CiaoRoom room, CiaoPlayer me)
     {
@@ -265,10 +281,12 @@ public partial class MainWindow
         else
         {
             AddText($"{room.SpeakerId}님의 선언  {room.Declaration}", 18, "#A7F3CE", 0, 8, true);
-            AddText($"응답 차례 · {room.ResponderId}", 12, "#91AB9C", 0, 6);
+            AddText("동시 응답 · 먼저 접수된 의심으로 판정", 12, "#91AB9C", 0, 4);
+            ciaoResponseCountdown = AddText(CiaoResponseTimeText(room), 11, "#F4C59D", 0, 4);
+            AddText($"응답 대기 · {string.Join(" · ", room.PendingResponderIds)}", 11, "#91AB9C", 0, 6);
             if (!mine)
             {
-                var allowed = room.ResponderId == me.Id;
+                var allowed = room.CanRespond(me.Id);
                 AddButton("PASS", () => _ = RunCiaoAsync((s, id) => s.Respond(room.Id, id, room.Revision, false))).IsEnabled = allowed;
                 AddButton("의심", () => _ = RunCiaoAsync((s, id) => s.Respond(room.Id, id, room.Revision, true)), true).IsEnabled = allowed;
                 if (allowed && me.Position is null && me.GoalScores.Count > 0)
@@ -327,15 +345,18 @@ public partial class MainWindow
             System.Windows.Automation.AutomationProperties.SetName(remaining, $"{player.Id} · 남은 말 {count}개 · 대기 {player.Reserve}개");
             DialogContent.Children.Add(remaining);
         }
-        AddText("도착대", 11, "#91AB9C", 0, 4);
+        AddText("도착대 · 탈락한 자리는 다시 사용하지 않음", 11, "#91AB9C", 0, 4);
         var podium = new UniformGrid { Rows = 1, Columns = CiaoRules.PodiumSize, Margin = new Thickness(0, 0, 0, 6) };
         for (int score = 1; score <= CiaoRules.PodiumSize; score++)
         {
             var owner = room.Players.FindIndex(p => p.GoalScores.Contains(score));
+            var vacated = owner < 0 && score <= room.UsedPodiumSlots;
             var slot = new StackPanel { Margin = new Thickness(1) };
-            slot.Children.Add(new TextBlock { Text = score.ToString(), FontSize = 10, TextAlignment = TextAlignment.Center,
+            slot.Children.Add(new TextBlock { Text = vacated ? $"{score}×" : score.ToString(), FontSize = 10, TextAlignment = TextAlignment.Center,
                 Foreground = new SolidColorBrush(Color.FromRgb(145, 171, 156)), Margin = new Thickness(0, 0, 0, 3) });
-            slot.Children.Add(CiaoPawn(owner < 0 ? "#40574A" : colors[owner], owner < 0 ? $"{score}점 · 빈자리" : $"{score}점 · {room.Players[owner].Id}", "ciao-goal:" + score));
+            slot.Children.Add(CiaoPawn(owner < 0 ? vacated ? "#26362D" : "#40574A" : colors[owner],
+                owner < 0 ? vacated ? $"{score}점 · 탈락한 자리 · 재사용 안 함" : $"{score}점 · 빈자리"
+                    : $"{score}점 · {room.Players[owner].Id}", "ciao-goal:" + score));
             podium.Children.Add(slot);
         }
         DialogContent.Children.Add(podium);
