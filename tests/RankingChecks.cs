@@ -148,6 +148,8 @@ internal static class RankingChecks
             Call("DrawCiaoRoom"); Snapshot("speaker"); Snapshot("narrow", 300);
             preview.Declare("플레이어1", preview.Revision, CiaoRules.MaxDeclaration);
             Set("userId", "플레이어2"); Set("ciaoRoom", preview.ViewFor("플레이어2")); Call("DrawCiaoRoom"); Snapshot("responder");
+            Find<ScrollViewer>(content).Single(s => ReferenceEquals(s.Content, window.FindName("DialogContent"))).ScrollToEnd();
+            Snapshot("reserves");
             Call("CreateCiaoRoom"); Snapshot("create");
             Call("DetachCiaoRoom"); Directory.Delete(root, true); return;
         }
@@ -584,6 +586,20 @@ internal static class RankingChecks
         Assert(ciao.Rooms("player00").Single().Status == CiaoStatus.Waiting, "4인 방에서 전원 준비 전 대기 유지");
         ciao.SetReady(ciaoId, "player03", true);
         Wait(() => Labels().Contains("내 차례") && GuestLabels().Contains("상대 차례"));
+        Layout(300, 740);
+        var sharedTrack = Find<System.Windows.Controls.Primitives.UniformGrid>(content).Single(g => g.Name == "CiaoSharedTrack");
+        var startCell = sharedTrack.Children.OfType<Border>().Single(b => b.Tag is int step && step == 0);
+        var startingPawns = Find<System.Windows.Shapes.Ellipse>(startCell).ToArray();
+        Assert(sharedTrack.Children.Count == CiaoRules.Finish + 1 && startingPawns.Length == 4
+            && startingPawns.Select(p => ((SolidColorBrush)p.Fill).Color).Distinct().Count() == 4,
+            "하나의 이동판에 참가자별 색상 동그라미 네 개 표시");
+        var pawnBounds = startingPawns.Select(p => p.TransformToAncestor(sharedTrack).TransformBounds(new Rect(p.RenderSize))).ToArray();
+        Assert(pawnBounds.SelectMany((bounds, i) => pawnBounds.Skip(i + 1).Select(other => !bounds.IntersectsWith(other))).All(separate => separate),
+            "300px 창의 같은 칸에서도 네 말이 겹치지 않음");
+        Assert(Find<System.Windows.Shapes.Ellipse>(content).Count(p => p.Tag is string tag && tag.StartsWith("ciao-reserve:")) == 24
+            && Find<System.Windows.Shapes.Ellipse>(content).Count(p => p.Tag is string tag && tag.StartsWith("ciao-remaining-active:")) == 4,
+            "대기 말 24개와 이동 중인 말 4개를 남은 말 그림으로 표시");
+        Layout();
         Assert(Find<Button>(content).Any(b => Equals(b.Content, "주사위 굴리기"))
             && !Find<Button>(guestContent).Any(b => Equals(b.Content, "주사위 굴리기")), "주사위 굴리기는 발언자에게만 표시");
         var ciaoState = ciao.Rooms("player00").Single();
@@ -617,6 +633,9 @@ internal static class RankingChecks
         Wait(() => Labels().Any(t => t.Contains("의심 성공! 실제 주사위 X")) && GuestLabels().Contains("내 차례"));
         Assert(((CiaoRoom)Get("ciaoRoom")!).Find("player00")!.Fallen == 1 && ((CiaoRoom)Get("ciaoRoom")!).Find("player03")!.Position == CiaoRules.MaxDeclaration,
             "의심 결과와 보드 이동을 양쪽 화면에 반영");
+        Assert(Find<System.Windows.Shapes.Ellipse>(content).Count(p => p.Tag is string tag && tag == "ciao-reserve:player00") == 5
+            && Find<System.Windows.Shapes.Ellipse>(content).Count(p => p.Tag is string tag && tag == "ciao-active:player03") == 1,
+            "추락 후 남은 말 그림 감소·공용 이동판의 현재 말 유지");
         GuestClick("주사위 굴리기");
         Wait(() => !(bool)GuestGet("busy")! && GuestLabels().Any(t => t.StartsWith("내 주사위")));
         GuestClick("1");
@@ -631,6 +650,29 @@ internal static class RankingChecks
         Assert(ciao.Rooms("player00").Single().Status == CiaoStatus.Playing, "목록으로 나가도 게임 유지");
         Call("DetachCiaoRoom"); GuestCall("DetachCiaoRoom");
         Console.WriteLine("차오차오 4인 방·준비·비공개 주사위·PASS·의심·재접속 화면 검증 완료");
+        var autoFolder = Path.Combine(root, "차오 자동 종료 화면");
+        var autoStore = new CiaoStore(autoFolder, () => 2);
+        var autoRoom = autoStore.Create("player00", "자동 도착 정산"); autoStore.Join(autoRoom.Id, "player01");
+        autoStore.SetReady(autoRoom.Id, "player00", true); autoRoom = autoStore.SetReady(autoRoom.Id, "player01", true);
+        autoRoom.Players[1].Position = null; autoRoom.Players[1].Reserve = 0; autoRoom.Players[1].Fallen = 6; autoRoom.Players[1].GoalScores = [1];
+        File.WriteAllText(autoStore.FilePath, System.Text.Json.JsonSerializer.Serialize(new CiaoDatabase { Rooms = [autoRoom] }));
+        autoRoom = autoStore.Roll(autoRoom.Id, "player00", autoRoom.Revision);
+        autoRoom = autoStore.Declare(autoRoom.Id, "player00", autoRoom.Revision, 2);
+        Set("store", new LocalStore(autoFolder)); Set("ciaoRoomId", autoRoom.Id); Set("ciaoRoom", autoRoom.ViewFor("player00"));
+        GuestSet("store", new LocalStore(autoFolder)); GuestSet("ciaoRoomId", autoRoom.Id); GuestSet("ciaoRoom", autoRoom.ViewFor("player01"));
+        Call("ShowCiaoRoom"); GuestCall("ShowCiaoRoom"); Layout(); GuestLabels();
+        Assert(Find<Button>(guestContent).Single(b => Equals(b.Content, "의심")).IsEnabled && !Labels().Contains("이겼어요!"),
+            "도착한 말만 있는 상대도 계속 의심 가능·자동 종료 보류");
+        GuestClick("의심");
+        Wait(() => !(bool)GuestGet("busy")! && Labels().Contains("이겼어요!") && GuestLabels().Contains("게임이 끝났어요"));
+        Assert(Labels().Any(t => t.Contains("7개 자동 도착")) && Labels().Any(t => t.Contains("도착 7개 · 28점"))
+            && GuestLabels().Any(t => t.Contains("7개 자동 도착")), "상대 마지막 도착 말 추락 후 양쪽에 자동 정산·최종 점수 표시");
+        Assert(Find<System.Windows.Shapes.Ellipse>(content).Count(p => p.Tag is string tag && tag.StartsWith("ciao-reserve:")) == 0
+            && Find<System.Windows.Shapes.Ellipse>(content).Count(p => p.Tag is string tag && tag.StartsWith("ciao-active:")) == 0,
+            "자동 도착 후 공용 이동판·대기 말 그림에서 남은 말 제거");
+        Assert(autoStore.Rooms("player00").Single().Status == CiaoStatus.Finished, "자동 종료를 공유 파일에 저장");
+        Call("DetachCiaoRoom"); GuestCall("DetachCiaoRoom");
+        Console.WriteLine("차오차오 마지막 참가자 자동 도착·점수·양쪽 종료 화면 검증 완료");
         Directory.Delete(root, true);
     }
 

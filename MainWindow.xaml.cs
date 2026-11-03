@@ -243,7 +243,7 @@ public partial class MainWindow : Window
     }
     private void BeginPanel(string name, string eyebrow, string title, string description)
     {
-        Dialog.HorizontalAlignment = name == "slap-room" ? HorizontalAlignment.Stretch : HorizontalAlignment.Center;
+        Dialog.HorizontalAlignment = name is "slap-room" or "ciao-room" ? HorizontalAlignment.Stretch : HorizontalAlignment.Center;
         panel = name; Overlay.Visibility = Visibility.Visible; DialogContent.Children.Clear(); message = null;
         AddText(eyebrow, 10, "#A7F3CE", 0, 0, true);
         AddText(title, 27, "#EDF4F0", 9, 10, true);

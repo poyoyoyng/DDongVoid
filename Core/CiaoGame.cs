@@ -146,6 +146,7 @@ public sealed class CiaoRoom
         Move(mover, number);
         LastResult = new(Turn, speaker.Id, number, challengerId, challengerId is null ? null : Die, fallen, mover.Id, result);
         Die = Declaration = null; Passed.Clear(); Phase = CiaoPhase.Roll;
+        if (FinishIfUnopposed()) return;
         var winner = Players.FirstOrDefault(p => p.GoalScores.Count >= 3);
         if (winner is not null)
         {
@@ -153,12 +154,29 @@ public sealed class CiaoRoom
         }
         if (Players.All(p => p.Position is null) || Players.Sum(p => p.GoalScores.Count) == CiaoRules.PodiumSize)
         {
-            var best = Players.Max(p => p.Score);
-            Winners = Players.Where(p => p.Score == best).Select(p => p.Id).ToList();
-            EndReason = "경주 종료 · 도착 점수 합계로 승부"; Status = CiaoStatus.Finished; return;
+            FinishByScore("경주 종료 · 도착 점수 합계로 승부"); return;
         }
         do { SpeakerIndex = (SpeakerIndex + 1) % Players.Count; } while (Players[SpeakerIndex].Position is null);
         Turn++;
+    }
+    private bool FinishIfUnopposed()
+    {
+        var contenders = Players.Where(p => p.Position is not null || p.Reserve > 0 || p.GoalScores.Count > 0).Take(2).ToArray();
+        if (contenders.Length != 1 || contenders[0].Position is null) return false;
+        var survivor = contenders[0];
+        var arrived = survivor.GoalScores.Count;
+        while (survivor.Position is not null && Players.Sum(p => p.GoalScores.Count) < CiaoRules.PodiumSize)
+            Move(survivor, CiaoRules.Finish);
+        var message = $"{survivor.Id}만 남아 남은 말 {survivor.GoalScores.Count - arrived}개 자동 도착 · 점수 정산";
+        if (LastResult is not null) LastResult = LastResult with { Message = LastResult.Message + " · " + message };
+        FinishByScore(message);
+        return true;
+    }
+    private void FinishByScore(string reason)
+    {
+        var best = Players.Max(p => p.Score);
+        Winners = Players.Where(p => p.Score == best).Select(p => p.Id).ToList();
+        EndReason = reason; Status = CiaoStatus.Finished;
     }
     public CiaoRoom ViewFor(string viewer)
     {

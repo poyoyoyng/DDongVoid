@@ -141,6 +141,62 @@ internal static class CiaoChecks
             Claim(room, 1, 1);
             assert(room.Status == CiaoStatus.Finished && room.Winners.SequenceEqual(new[] { "p0" }), "응답자·경주 말 소진 시 종료 실패");
         });
+        check("차오차오: 상대 말이 모두 소진되면 마지막 참가자의 남은 말 전부 자동 도착·정산", () =>
+        {
+            for (int count = 2; count <= 4; count++)
+            for (int survivorIndex = 0; survivorIndex < count; survivorIndex++)
+            {
+                var room = Ready(count);
+                room.SpeakerIndex = survivorIndex;
+                var survivor = room.Players[survivorIndex];
+                survivor.GoalScores = [1, 2]; survivor.Position = 8; survivor.Reserve = 3; survivor.Fallen = 1;
+                foreach (var p in room.Players.Where(p => p != survivor))
+                { p.Position = null; p.Reserve = 0; p.Fallen = 7; }
+                var lastOpponent = room.Players.First(p => p != survivor);
+                lastOpponent.Position = 0; lastOpponent.Fallen = 6;
+                Claim(room, 1, 1); room.Respond(lastOpponent.Id, room.Revision, true);
+                assert(room.Status == CiaoStatus.Finished && room.Winners.SequenceEqual(new[] { survivor.Id }), "마지막 참가자 자동 종료 실패");
+                assert(survivor.GoalScores.Order().SequenceEqual(Enumerable.Range(1, 6)) && survivor.Score == 21,
+                    "세 번째 말 도착 시 정산을 멈추거나 남은 말의 도착 점수 누락");
+                assert(survivor.Position is null && survivor.Reserve == 0 && survivor.Fallen == 1, "자동 도착 중 말 생성·유실");
+                assert(room.Die is null && room.Declaration is null && room.Passed.Count == 0 && room.EndReason!.Contains("자동 도착"), "종료 상태·안내 초기화 실패");
+            }
+        });
+        check("차오차오: 상대 도착 말이 남으면 계속 의심 가능·마지막 도착 말 소진 시 자동 정산", () =>
+        {
+            var room = Ready(); var opponent = room.Players[1];
+            opponent.Position = null; opponent.Reserve = 0; opponent.Fallen = 6; opponent.GoalScores = [1];
+            Claim(room, 2, 2);
+            assert(room.ResponderId == opponent.Id, "도착 말이 있는 상대의 응답 생략");
+            room.Respond(opponent.Id, room.Revision, false);
+            assert(room.Status == CiaoStatus.Playing && room.Players[0].GoalScores.Count == 0 && room.Players[0].Position == 2,
+                "도착 말이 남은 상대가 있는데 자동 정산");
+            Claim(room, 1, 1); room.Respond(opponent.Id, room.Revision, true);
+            assert(room.Status == CiaoStatus.Finished && room.Players[0].GoalScores.Count == 7 && room.Players[0].Score == 28,
+                "상대의 마지막 도착 말 소진 후 남은 말 전체 정산 실패");
+            assert(opponent.GoalScores.Count == 0 && opponent.Fallen == 7, "상대 도착 말 손실 미반영");
+            room = Ready(); opponent = room.Players[1];
+            opponent.Position = 0; opponent.Reserve = 1; opponent.Fallen = 5;
+            Claim(room, 1, 1); room.Respond(opponent.Id, room.Revision, true);
+            assert(room.Status == CiaoStatus.Playing && opponent.Position == 0 && opponent.Reserve == 0,
+                "상대 대기 말이 새로 출발했는데 자동 정산");
+        });
+        check("차오차오: 자동 도착 결과 저장·재접속·재대전", () =>
+        {
+            var store = new CiaoStore(Path.Combine(root, "차오 자동 정산"), () => 2);
+            var room = store.Create("p0", "마지막 한 사람"); store.Join(room.Id, "p1");
+            store.SetReady(room.Id, "p0", true); room = store.SetReady(room.Id, "p1", true);
+            room.Players[1].Position = 0; room.Players[1].Reserve = 0; room.Players[1].Fallen = 6;
+            File.WriteAllText(store.FilePath, JsonSerializer.Serialize(new CiaoDatabase { Rooms = [room] }));
+            room = store.Roll(room.Id, "p0", room.Revision); room = store.Declare(room.Id, "p0", room.Revision, 2);
+            room = store.Respond(room.Id, "p1", room.Revision, true);
+            var restored = new CiaoStore(store.Folder).Rooms("p1").Single();
+            assert(restored.Status == CiaoStatus.Finished && restored.Players[0].GoalScores.Count == 7 && restored.Players[0].Score == 28,
+                "자동 정산 결과 저장·복원 실패");
+            assert(restored.Players.All(p => p.Reserve + p.Fallen + p.GoalScores.Count + (p.Position is null ? 0 : 1) == 7), "저장된 말 수 불일치");
+            store.SetReady(room.Id, "p0", true); room = store.SetReady(room.Id, "p1", true);
+            assert(room.Status == CiaoStatus.Playing && room.Players.All(p => p.GoalScores.Count == 0 && p.Reserve == 6 && p.Position == 0), "자동 정산 후 재대전 실패");
+        });
         check("차오차오: 여러 방 동시 저장·게임 중 나가기 보존·완료 방 삭제", () =>
         {
             var folder = Path.Combine(root, "차오 동시 저장"); var store = new CiaoStore(folder, () => 3);
