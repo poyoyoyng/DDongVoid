@@ -127,24 +127,39 @@ public partial class MainWindow
     }
     private void SetCiaoSyncNote(string note)
     {
-        ciaoSyncNote = note; if (ciaoSyncStatus is not null) ciaoSyncStatus.Text = note;
+        ciaoSyncNote = note;
+        if (ciaoSyncStatus is not null)
+        {
+            ciaoSyncStatus.Text = note;
+            ciaoSyncStatus.ToolTip = CiaoSyncDetails();
+        }
     }
+    private string CiaoSyncDetails() => $"앱 버전: {UpdateService.CurrentVersion}\n저장 파일: {System.IO.Path.Combine(store.Folder, "ddongvoid-ciao.json")}"
+        + (ciaoRoom is { } room ? $"\n방 ID: {room.Id}\n방 수정 번호: {room.Revision}\n현재 턴: {room.Turn}" : "");
     private void AddCiaoSyncControls()
     {
         var row = new DockPanel { Margin = new Thickness(0, 0, 0, 10), ToolTip = store.Folder };
         var refresh = new Button { Content = "새로고침", Padding = new Thickness(9, 5, 9, 5), FontSize = 11 };
-        refresh.Click += async (_, _) =>
-        {
-            if (busy) return;
-            var version = ciaoStateVersion;
-            var active = ciaoActivePoll; ciaoSyncCancellation?.Cancel();
-            if (active is not null) await active;
-            if (version == ciaoStateVersion) { StartCiaoTimer(); await PollCiaoAsync(); }
-        };
+        refresh.Click += async (_, _) => await RefreshCiaoAsync();
         DockPanel.SetDock(refresh, Dock.Right); row.Children.Add(refresh);
         ciaoSyncStatus = new TextBlock { Name = "CiaoSyncStatus", Text = ciaoSyncNote, FontSize = 10,
-            Foreground = new SolidColorBrush(Color.FromRgb(145, 171, 156)), VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
+            Foreground = new SolidColorBrush(Color.FromRgb(145, 171, 156)), VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap, ToolTip = CiaoSyncDetails() };
         row.Children.Add(ciaoSyncStatus); DialogContent.Children.Add(row);
+    }
+    private async Task RefreshCiaoAsync()
+    {
+        if (busy || userId is null) return;
+        var version = ciaoStateVersion;
+        var active = ciaoActivePoll;
+        ciaoSyncCancellation?.Cancel();
+        if (active is not null) await active;
+        if (version != ciaoStateVersion) return;
+        // A manual refresh also rebuilds the controls when the file contents are unchanged.
+        ciaoDrawn = null;
+        SetCiaoSyncNote("다시 확인 중…");
+        StartCiaoTimer();
+        await PollCiaoAsync();
     }
     private Task PollCiaoAsync()
     {

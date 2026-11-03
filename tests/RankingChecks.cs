@@ -604,6 +604,20 @@ internal static class RankingChecks
         Layout();
         Assert(Find<Button>(content).Any(b => Equals(b.Content, "주사위 굴리기"))
             && !Find<Button>(guestContent).Any(b => Equals(b.Content, "주사위 굴리기")), "주사위 굴리기는 발언자에게만 표시");
+        Wait(() => !(bool)Get("ciaoSyncing")!);
+        ((DispatcherTimer)Get("ciaoTimer")!).Stop();
+        Find<TextBlock>(content).Single(t => t.Text == "내 차례").Text = "멈춘 화면 재현";
+        ClickAction("새로고침");
+        Wait(() => !(bool)Get("ciaoSyncing")! && Labels().Contains("내 차례") && !Labels().Contains("멈춘 화면 재현"));
+        Assert(((DispatcherTimer)Get("ciaoTimer")!).IsEnabled, "같은 파일 내용이어도 수동 새로고침으로 화면 재구성·자동 갱신 재시작");
+        var syncDetails = (string)((TextBlock)Get("ciaoSyncStatus")!).ToolTip;
+        Assert(syncDetails.Contains("앱 버전:") && syncDetails.Contains(ciao.FilePath) && syncDetails.Contains("방 수정 번호:"),
+            "동기화 표시에서 앱 버전·정확한 저장 파일·방 수정 번호 확인 가능");
+        Wait(() => !(bool)Get("ciaoSyncing")!);
+        ((CiaoRoom)Get("ciaoRoom")!).Revision += 100;
+        ClickAction("새로고침");
+        Wait(() => !(bool)Get("ciaoSyncing")! && ((CiaoRoom)Get("ciaoRoom")!).Revision == ciao.Rooms("player00").Single().Revision);
+        Assert(((CiaoRoom)Get("ciaoRoom")!).Players.Count == 4, "캐시 수정 번호가 더 커도 실제 공유 파일 상태로 복구");
         var ciaoState = ciao.Rooms("player00").Single();
         ciao.Roll(ciaoId, "player00", ciaoState.Revision);
         Wait(() => Labels().Contains("내 주사위  X") && GuestLabels().Any(t => t.Contains("숫자를 선언")));
@@ -697,7 +711,7 @@ internal static class RankingChecks
 
         var timeoutFolder = Path.Combine(root, "차오 자동 PASS 화면");
         var timeoutStore = new CiaoStore(timeoutFolder, () => 1);
-        var timeoutRoom = timeoutStore.Create("player00", "5초 미응답");
+        var timeoutRoom = timeoutStore.Create("player00", "20초 미응답");
         for (int i = 1; i <= 3; i++) timeoutStore.Join(timeoutRoom.Id, $"player{i:00}");
         for (int i = 0; i <= 3; i++) timeoutRoom = timeoutStore.SetReady(timeoutRoom.Id, $"player{i:00}", true);
         timeoutRoom = timeoutStore.Roll(timeoutRoom.Id, "player00", timeoutRoom.Revision);
@@ -708,14 +722,14 @@ internal static class RankingChecks
         GuestSet("store", new LocalStore(timeoutFolder)); GuestSet("ciaoRoomId", timeoutRoom.Id); GuestSet("ciaoRoom", timeoutRoom.ViewFor("player01"));
         Call("ShowCiaoRoom"); GuestCall("ShowCiaoRoom"); Layout(); GuestLabels();
         Assert(GuestLabels().Any(t => t.StartsWith("남은 ") && t.Contains("미응답 시 자동 PASS"))
-            && ((CiaoRoom)Get("ciaoRoom")!).LastResult is null, "5초 응답 제한 안내·전원 PASS 전 이동 대기");
-        Wait(() => Labels().Any(t => t.Contains("5초 미응답 자동 PASS: player01 · player03"))
-            && GuestLabels().Any(t => t.Contains("5초 미응답 자동 PASS: player01 · player03")));
+            && ((CiaoRoom)Get("ciaoRoom")!).LastResult is null, "20초 응답 제한 안내·전원 PASS 전 이동 대기");
+        Wait(() => Labels().Any(t => t.Contains("20초 미응답 자동 PASS: player01 · player03"))
+            && GuestLabels().Any(t => t.Contains("20초 미응답 자동 PASS: player01 · player03")), 25);
         Assert(((CiaoRoom)Get("ciaoRoom")!).Turn == 2 && ((CiaoRoom)Get("ciaoRoom")!).Find("player00")!.Position == 4
             && ((CiaoRoom)GuestGet("ciaoRoom")!).LastResult!.RevealedDie is null && GuestLabels().Contains("내 차례"),
-            "입력 없이 5초 경과 시 남은 참가자 자동 PASS·비공개 이동·다음 턴을 양쪽에 반영");
+            "입력 없이 20초 경과 시 남은 참가자 자동 PASS·비공개 이동·다음 턴을 양쪽에 반영");
         Call("DetachCiaoRoom"); GuestCall("DetachCiaoRoom");
-        Console.WriteLine("차오차오 5초 자동 PASS·방장 전용 삭제·상대 목록 복귀 화면 검증 완료");
+        Console.WriteLine("차오차오 20초 자동 PASS·방장 전용 삭제·상대 목록 복귀 화면 검증 완료");
         Directory.Delete(root, true);
     }
 

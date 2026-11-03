@@ -153,40 +153,43 @@ internal static class CiaoChecks
                 assert(new CiaoStore(folder).Rooms("p2").Single().CanRespond("p2"), "이전 선언의 입력이 다음 선언을 판정");
             }
         });
-        check("차오차오: 선언 후 5초 경계·미응답 자동 PASS·PASS로 제한 시간 연장 금지", () =>
+        check("차오차오: 숫자 선언부터 20초·미응답 자동 PASS·PASS로 제한 시간 연장 금지", () =>
         {
             var now = new DateTimeOffset(2026, 11, 3, 0, 0, 0, TimeSpan.Zero);
             var room = Ready(4);
-            room.Roll("p0", room.Revision, 1); room.Declare("p0", room.Revision, 4, now);
+            room.Roll("p0", room.Revision, 1);
+            assert(room.ResponseDeadline is null && !room.UpdateResponseTimeout(now.AddMinutes(1)), "숫자 선언 전에 응답 타이머 시작");
+            now = now.AddMinutes(1);
+            room.Declare("p0", room.Revision, 4, now);
             var revision = room.Revision;
-            room.Respond("p3", revision, false, now.AddSeconds(4));
-            assert(room.ResponseDeadline == now.AddSeconds(5) && !room.UpdateResponseTimeout(now.AddMilliseconds(4999))
-                && room.Phase == CiaoPhase.Respond && room.Find("p0")!.Position == 0, "5초 전에 자동 PASS하거나 PASS로 시간 연장");
-            assert(room.UpdateResponseTimeout(now.AddSeconds(5)) && room.Turn == 2 && room.Find("p0")!.Position == 4
+            room.Respond("p3", revision, false, now.AddSeconds(19));
+            assert(room.ResponseDeadline == now.AddSeconds(20) && !room.UpdateResponseTimeout(now.AddMilliseconds(19999))
+                && room.Phase == CiaoPhase.Respond && room.Find("p0")!.Position == 0, "20초 전에 자동 PASS하거나 PASS로 시간 연장");
+            assert(room.UpdateResponseTimeout(now.AddSeconds(20)) && room.Turn == 2 && room.Find("p0")!.Position == 4
                 && room.LastResult!.Challenger is null && room.LastResult.RevealedDie is null && room.ResponseDeadline is null,
-                "5초가 되어도 미응답 자동 PASS·이동·비공개 처리 실패");
-            assert(room.LastResult!.Message.Contains("5초 미응답 자동 PASS: p1 · p2")
-                && !room.UpdateResponseTimeout(now.AddSeconds(10)), "자동 PASS 대상 안내 또는 중복 시간 초과 처리");
-            Reject(() => room.Respond("p1", revision, true, now.AddSeconds(5)));
+                "20초가 되어도 미응답 자동 PASS·이동·비공개 처리 실패");
+            assert(room.LastResult!.Message.Contains("20초 미응답 자동 PASS: p1 · p2")
+                && !room.UpdateResponseTimeout(now.AddSeconds(40)), "자동 PASS 대상 안내 또는 중복 시간 초과 처리");
+            Reject(() => room.Respond("p1", revision, true, now.AddSeconds(20)));
 
             room = Ready(4); room.Roll("p0", room.Revision, 1); room.Declare("p0", room.Revision, 4, now);
             revision = room.Revision;
-            room.Respond("p3", revision, false, now.AddSeconds(4));
-            room.Respond("p2", revision, true, now.AddMilliseconds(4999));
-            assert(room.LastResult!.Challenger == "p2" && !room.UpdateResponseTimeout(now.AddSeconds(5))
-                && room.Find("p0")!.Fallen == 1, "5초 전 의심을 자동 PASS로 덮어씀");
+            room.Respond("p3", revision, false, now.AddSeconds(19));
+            room.Respond("p2", revision, true, now.AddMilliseconds(19999));
+            assert(room.LastResult!.Challenger == "p2" && !room.UpdateResponseTimeout(now.AddSeconds(20))
+                && room.Find("p0")!.Fallen == 1, "20초 전 의심을 자동 PASS로 덮어씀");
 
             room = Ready(3); room.Roll("p0", room.Revision, 1); room.Declare("p0", room.Revision, 4, now);
-            room.Respond("p2", room.Revision, true, now.AddSeconds(5));
+            room.Respond("p2", room.Revision, true, now.AddSeconds(20));
             assert(room.LastResult!.Challenger is null && room.Find("p0")!.Position == 4 && room.Find("p0")!.Fallen == 0,
-                "5초 이후 도착한 의심을 수락");
+                "20초 이후 도착한 의심을 수락");
         });
         check("차오차오: 자동 PASS 저장·재접속·여러 화면의 시간 초과 중복 처리 방지", () =>
         {
             var now = new DateTimeOffset(2026, 11, 3, 0, 0, 0, TimeSpan.Zero);
             var folder = Path.Combine(root, "차오 응답 시간");
             CiaoStore Open() => new(folder, () => 1, () => now);
-            var store = Open(); var room = store.Create("p0", "5초 응답");
+            var store = Open(); var room = store.Create("p0", "20초 응답");
             store.Join(room.Id, "p1"); store.Join(room.Id, "p2");
             store.SetReady(room.Id, "p0", true); store.SetReady(room.Id, "p1", true); room = store.SetReady(room.Id, "p2", true);
             room = store.Roll(room.Id, "p0", room.Revision); room = store.Declare(room.Id, "p0", room.Revision, 4);
@@ -194,7 +197,7 @@ internal static class CiaoChecks
             now = now.AddSeconds(3); store.Respond(room.Id, "p1", revision, false);
             room = Open().Rooms("p2").Single();
             assert(room.ResponseDeadline == deadline && room.Passed.SequenceEqual(new[] { "p1" }), "재접속 시 응답 시간·PASS 초기화");
-            now = now.AddSeconds(2);
+            now = now.AddSeconds(17);
             Parallel.For(0, 4, _ => Open().Rooms("p2"));
             room = Open().Rooms("p0").Single();
             assert(room.Turn == 2 && room.Revision == revision + 2 && room.LastResult!.Challenger is null
@@ -206,8 +209,8 @@ internal static class CiaoChecks
             room.ResponseDeadline = null;
             File.WriteAllText(store.FilePath, JsonSerializer.Serialize(new CiaoDatabase { Rooms = [room] }));
             room = Open().Rooms("p2").Single();
-            assert(room.ResponseDeadline == now.AddSeconds(5) && room.Phase == CiaoPhase.Respond, "이전 버전의 진행 중 선언에 응답 시간 부여 실패");
-            now = now.AddSeconds(5);
+            assert(room.ResponseDeadline == now.AddSeconds(20) && room.Phase == CiaoPhase.Respond, "이전 버전의 진행 중 선언에 응답 시간 부여 실패");
+            now = now.AddSeconds(20);
             room = Open().Respond(room.Id, "p2", room.Revision, true);
             assert(room.Turn == 3 && room.LastResult!.Challenger is null && Open().Rooms("p0").Single().Turn == 3,
                 "조회 없이 도착한 늦은 의심의 자동 PASS 결과 저장 실패");

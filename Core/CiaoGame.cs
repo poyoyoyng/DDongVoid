@@ -12,7 +12,7 @@ public static class CiaoRules
 {
     public const int MaxPlayers = 4, MaxTitleLength = 40, Pawns = 7, Finish = 9, PodiumSize = 8;
     public const int MaxDeclaration = 4;
-    public const int ResponseTimeoutSeconds = 5;
+    public const int ResponseTimeoutSeconds = 20;
     public static int DieFromFace(int face) => face switch
     {
         >= 1 and <= 4 => face,
@@ -113,7 +113,7 @@ public sealed class CiaoRoom
         var automaticPasses = string.Join(" · ", PendingResponderIds);
         Revision++;
         Resolve(null);
-        LastResult = LastResult! with { Message = LastResult!.Message + $" · 5초 미응답 자동 PASS: {automaticPasses}" };
+        LastResult = LastResult! with { Message = LastResult!.Message + $" · {CiaoRules.ResponseTimeoutSeconds}초 미응답 자동 PASS: {automaticPasses}" };
         return true;
     }
     public void Respond(string id, int revision, bool doubt, DateTimeOffset? now = null)
