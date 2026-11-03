@@ -1,10 +1,18 @@
 ﻿param(
-    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '1.0.0',
+    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version,
     [string]$OutputDirectory,
     [switch]$SkipTests
 )
 $ErrorActionPreference = 'Stop'
 $taskProjectRoot = Split-Path -Parent $PSScriptRoot
+if (-not $Version) {
+    $taskGameProject = [xml](Get-Content -LiteralPath (Join-Path $taskProjectRoot 'DDongVoid.csproj') -Raw)
+    $taskUpdaterProject = [xml](Get-Content -LiteralPath (Join-Path $taskProjectRoot 'Updater\DDongVoid.Updater.csproj') -Raw)
+    $Version = [string]$taskGameProject.Project.PropertyGroup.Version
+    if ($Version -notmatch '^\d+\.\d+\.\d+$' -or $Version -ne [string]$taskUpdaterProject.Project.PropertyGroup.Version) {
+        throw '게임과 업데이터의 프로젝트 버전을 동일한 세 자리 버전으로 지정해 주세요.'
+    }
+}
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $taskProjectRoot 'artifacts\release' }
 $taskPackageDirectory = Join-Path ([IO.Path]::GetFullPath($OutputDirectory)) 'package'
 New-Item -ItemType Directory -Path $taskPackageDirectory -Force | Out-Null
@@ -43,6 +51,7 @@ F2: 설정 / Esc: 일시정지 / Ctrl+Shift+Space: 숨기기·복귀
 똥 피하기·리듬은 최고 점수순, 맞짱은 승·패를 함께 표시하며 승수순입니다.
 "@
 [IO.File]::WriteAllText((Join-Path $taskPackageDirectory 'README.txt'), $taskReadme, [Text.UTF8Encoding]::new($true))
+& (Join-Path $PSScriptRoot 'Test-ReleasePackage.ps1') -PackageDirectory $taskPackageDirectory -Version $Version
 $taskArchivePath = Join-Path ([IO.Path]::GetFullPath($OutputDirectory)) 'DDongVoid-win-x64.zip'
 $taskFiles = ($taskRequiredNames + @('run.cmd','README.txt')) | ForEach-Object { Join-Path $taskPackageDirectory $_ }
 Compress-Archive -LiteralPath $taskFiles -DestinationPath $taskArchivePath -Force

@@ -12,9 +12,11 @@ Windows용 크기 조절 가능한 투명 창 미니게임 모음입니다. 로�
 ```powershell
 dotnet build DDongVoid.csproj -c Release
 dotnet run --project DDongVoid.csproj -c Release
-# 업데이트 도우미를 포함한 배포 ZIP 생성
-./scripts/Publish-Release.ps1 -Version 1.0.0
+# 프로젝트에 지정된 버전으로 업데이트 도우미를 포함한 배포 ZIP 생성
+./scripts/Publish-Release.ps1
 ```
+
+배포 빌드는 게임·업데이터의 EXE/DLL, 의존성 정보와 안내문에 지정한 버전이 모두 일치하는지 검증합니다. GitHub 자동 배포는 `1.0.<워크플로 실행 번호>`를 사용하며, 게시한 ZIP을 다시 내려받아 SHA-256과 빌드 커밋까지 확인합니다.
 
 ## 플레이
 
