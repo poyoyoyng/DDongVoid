@@ -379,7 +379,7 @@ try
         slap.SetReady(room.Id, a, true); return slap.SetReady(room.Id, b, true);
     }
     Check("맞짱: 기본공격·강한 뺨·필살뺨 피해 1·2·5", () =>
-        Assert(SlapRules.Damage(1) == 1 && SlapRules.Damage(2) == 2 && SlapRules.Damage(3) == 5 && SlapRules.MaxHp == 5, "공격력 배율 또는 체력 오류"));
+        Assert(SlapRules.Damage(1) == 1 && SlapRules.Damage(2) == 2 && SlapRules.Damage(3) == 5 && SlapRules.MaxHp == 6, "공격력 배율 또는 체력 오류"));
     Check("맞짱: 기본공격 무료·스킬 기력 소모·모든 기력에서 무료 방어", () =>
     {
         foreach (var (power, cost, damage) in new[] { (1, 0, 1), (2, 1, 2), (3, 3, 5) })
@@ -402,7 +402,7 @@ try
             Assert(attacker.Gauge == attackGauge - cost, "공격 기력 소모 오류");
             Assert(defender.Gauge == defenseGauge, "방어가 기력을 소모함");
             Assert(room.LastResult!.Blocked == blocked && room.LastResult.Damage == (blocked ? 0 : damage)
-                && defender.Hp == 5 - (blocked ? 0 : damage), "방어 또는 공격 피해 판정 오류");
+                && defender.Hp == SlapRules.MaxHp - (blocked ? 0 : damage), "방어 또는 공격 피해 판정 오류");
         }
     });
     Check("맞짱: 쓰기 잠금을 기다리는 중에도 마지막 완성본 조회 가능", () =>
@@ -478,7 +478,7 @@ try
         var json = JsonNode.Parse(File.ReadAllText(slap.FilePath))!["Rooms"]![0]!;
         Assert(json["Players"]!.AsArray().Count == 2 && json["Players"]![0]!["Ready"]!.GetValue<bool>() && json["Status"]!.GetValue<string>() == "Waiting", "JSON 참가·준비 정보 누락");
         room = slap.SetReady(room.Id, "p2", true);
-        Assert(room.Started && room.AttackerId == "p1" && room.DefenderId == "p2" && room.Players.All(p => p.Hp == 5 && p.Gauge == 0), "둘 다 준비했는데 시작하지 않음");
+        Assert(room.Started && room.AttackerId == "p1" && room.DefenderId == "p2" && room.Players.All(p => p.Hp == SlapRules.MaxHp && p.Gauge == 0), "둘 다 준비했는데 시작하지 않음");
         json = JsonNode.Parse(File.ReadAllText(slap.FilePath))!["Rooms"]![0]!;
         Assert(json["Started"]!.GetValue<bool>() && json["AttackerId"]!.GetValue<string>() == "p1", "JSON 시작 정보 누락");
         Throws<ArgumentException>(() => slap.Join(room.Id, "p3"));
@@ -506,14 +506,14 @@ try
         // Round 3: the basic attack is free even when blocked.
         slap.Submit(room.Id, "b1", new SlapAction(SlapMove.Slap, SlapZone.High, 1));
         room = slap.Submit(room.Id, "b2", new SlapAction(SlapMove.Block, SlapZone.High));
-        Assert(room.LastResult!.Blocked && room.Find("b2")!.Hp == 5 && room.Find("b1")!.Gauge == 1, "막기 실패 또는 기본공격 기 소모 오류");
+        Assert(room.LastResult!.Blocked && room.Find("b2")!.Hp == SlapRules.MaxHp && room.Find("b1")!.Gauge == 1, "막기 실패 또는 기본공격 기 소모 오류");
         // Round 4: b2 spends 1 기 for damage 2 into the wrong guard.
         slap.Submit(room.Id, "b2", new SlapAction(SlapMove.Slap, SlapZone.Middle, 2));
         room = slap.Submit(room.Id, "b1", new SlapAction(SlapMove.Block, SlapZone.Low));
-        Assert(!room.LastResult!.Blocked && room.LastResult.Damage == 2 && room.Find("b1")!.Hp == 3 && room.Find("b2")!.Gauge == 1, "강한 뺨 피해 또는 기 소모 오류");
+        Assert(!room.LastResult!.Blocked && room.LastResult.Damage == 2 && room.Find("b1")!.Hp == SlapRules.MaxHp - 2 && room.Find("b2")!.Gauge == 1, "강한 뺨 피해 또는 기 소모 오류");
         slap.Leave(room.Id, "b1");
     });
-    Check("맞짱: 기 3개 ×5로 체력 0이면 승리, 기는 최대 3개", () =>
+    Check("맞짱: 체력 6에서 필살 피해 5 후 생존·추가 공격으로 승리·재대전 체력 복원", () =>
     {
         var room = Ready2("c1", "c2");
         slap.Submit(room.Id, "c1", new SlapAction(SlapMove.Charge)); slap.Submit(room.Id, "c2", new SlapAction(SlapMove.Charge));
@@ -524,12 +524,22 @@ try
         slap.Submit(room.Id, "c2", new SlapAction(SlapMove.Charge)); slap.Submit(room.Id, "c1", new SlapAction(SlapMove.Block, SlapZone.Middle));
         slap.Submit(room.Id, "c1", new SlapAction(SlapMove.Slap, SlapZone.Low, 3));
         room = slap.Submit(room.Id, "c2", new SlapAction(SlapMove.Block, SlapZone.High));
-        Assert(room.Status == SlapStatus.Finished && !room.Started && room.Winner == "c1" && room.Find("c2")!.Hp == 0, "×5 필살로 승리하지 않음");
+        Assert(room.Started && room.Winner is null && room.Find("c2")!.Hp == 1 && room.LastResult!.Damage == 5,
+            "체력 6에서 필살뺨을 맞은 뒤 체력 1로 계속 진행하지 않음");
+        Assert(slap.Rankings().All(r => r.UserId != "c1" && r.UserId != "c2"), "체력이 남았는데 승패를 집계함");
+        room = new SlapStore(slap.Folder, () => slapClock).Sync(room.Id, "c2")!;
+        Assert(room.Started && room.Find("c2")!.Hp == 1, "재접속 후 남은 체력 1을 보존하지 않음");
+        slap.Submit(room.Id, "c2", new SlapAction(SlapMove.Slap, SlapZone.High, 1));
+        slap.Submit(room.Id, "c1", new SlapAction(SlapMove.Block, SlapZone.High));
+        slap.Submit(room.Id, "c1", new SlapAction(SlapMove.Slap, SlapZone.Low, 1));
+        room = slap.Submit(room.Id, "c2", new SlapAction(SlapMove.Block, SlapZone.High));
+        Assert(room.Status == SlapStatus.Finished && !room.Started && room.Winner == "c1" && room.Find("c2")!.Hp == 0,
+            "추가 기본공격으로 체력 0이 된 뒤 승리하지 않음");
         Assert(slap.Rankings().Single(r => r.UserId == "c1").BestScore == 1 && slap.Rankings().Single(r => r.UserId == "c2").Losses == 1, "정상 대전 승패 누락");
         slap.Sync(room.Id, "c1"); slap.Sync(room.Id, "c2");
         Assert(slap.Rankings().Single(r => r.UserId == "c1").BestScore == 1, "대전 동기화 시 승수 중복 집계");
         room = slap.SetReady(room.Id, "c1", true); room = slap.SetReady(room.Id, "c2", true);
-        Assert(room.Started && room.Players.All(p => p.Hp == 5 && p.Gauge == 0) && room.LastResult is null, "다시 하기 초기화 실패");
+        Assert(room.Started && room.Players.All(p => p.Hp == SlapRules.MaxHp && p.Gauge == 0) && room.LastResult is null, "다시 하기 초기화 실패");
         slap.Leave(room.Id, "c1");
     });
     Check("맞짱: 방장 오프라인 선준비·상대 시작과 선입력·번갈아 재접속", () =>
@@ -550,9 +560,9 @@ try
         asyncClock += TimeSpan.FromDays(7);
         room = Client().Join(room.Id, "host");
         Assert(room.Started && room.Round == 1 && room.Revision == firstRevision && room.Find("guest")!.Submitted
-            && !room.Find("host")!.Submitted && room.Players.All(p => p.Hp == 5 && p.Gauge == 0), "방장 재입장이 게임·상대 첫 입력을 초기화함");
+            && !room.Find("host")!.Submitted && room.Players.All(p => p.Hp == SlapRules.MaxHp && p.Gauge == 0), "방장 재입장이 게임·상대 첫 입력을 초기화함");
         room = Client().Submit(room.Id, "host", new SlapAction(SlapMove.Slap, SlapZone.High, 1));
-        Assert(room.Round == 2 && room.AttackerId == "guest" && room.Find("guest")!.Hp == 4 && room.Find("guest")!.Gauge == 1
+        Assert(room.Round == 2 && room.AttackerId == "guest" && room.Find("guest")!.Hp == SlapRules.MaxHp - 1 && room.Find("guest")!.Gauge == 1
             && room.Players.All(p => !p.Submitted), "시간 차 첫 턴 판정 또는 공수 교대 오류");
         Client().Submit(room.Id, "host", new SlapAction(SlapMove.Charge));
         asyncClock += TimeSpan.FromDays(7);
@@ -563,7 +573,7 @@ try
         asyncClock += TimeSpan.FromDays(7);
         room = Client().Join(room.Id, "host");
         Assert(room.Started && room.Round == 3 && room.AttackerId == "host" && room.LastResult!.Round == 2 && room.LastResult.Damage == 2
-            && room.Find("host")!.Hp == 3 && room.Find("host")!.Gauge == 1 && room.Find("guest")!.Hp == 4 && room.Find("guest")!.Gauge == 0
+            && room.Find("host")!.Hp == SlapRules.MaxHp - 2 && room.Find("host")!.Gauge == 1 && room.Find("guest")!.Hp == SlapRules.MaxHp - 1 && room.Find("guest")!.Gauge == 0
             && room.Players.All(p => !p.Submitted), "번갈아 재접속 후 턴·결과·체력·기력이 일치하지 않음");
     });
     Check("맞짱: 장기 미접속·나가기·재실행 후에도 선택과 대전을 보존", () =>
@@ -587,7 +597,7 @@ try
         restarted.Submit(room.Id, "e2", new SlapAction(SlapMove.Slap, SlapZone.High, 2));
         slapClock += TimeSpan.FromDays(90);
         room = new SlapStore(slap.Folder, () => slapClock).Submit(room.Id, "e1", new SlapAction(SlapMove.Block, SlapZone.Low));
-        Assert(room.Round == 3 && room.Find("e1")!.Hp == 3 && room.Find("e2")!.Gauge == 0, "재접속 후 체력·기력·턴 판정 오류");
+        Assert(room.Round == 3 && room.Find("e1")!.Hp == SlapRules.MaxHp - 2 && room.Find("e2")!.Gauge == 0, "재접속 후 체력·기력·턴 판정 오류");
     });
     Check("맞짱: 포기 요청 보존·취소·상호 포기 종료·승패 미집계", () =>
     {
@@ -614,7 +624,7 @@ try
         Assert(slap.Rankings().SequenceEqual(rankings), "상호 포기한 대전이 승패에 집계됨");
         Throws<ArgumentException>(() => slap.Submit(room.Id, "f1", new SlapAction(SlapMove.Charge)));
         slap.SetReady(room.Id, "f1", true); room = slap.SetReady(room.Id, "f2", true);
-        Assert(room.Started && room.Players.All(p => !p.GaveUp && !p.Submitted && p.Gauge == 0 && p.Hp == 5), "재대전 후 포기 상태가 남음");
+        Assert(room.Started && room.Players.All(p => !p.GaveUp && !p.Submitted && p.Gauge == 0 && p.Hp == SlapRules.MaxHp), "재대전 후 포기 상태가 남음");
         slap.SetGiveUp(room.Id, "f1", true); slap.SetGiveUp(room.Id, "f2", true);
         slap.Leave(room.Id, "f1"); slap.Leave(room.Id, "f2");
         Assert(slap.Rooms().All(r => r.Id != room.Id), "종료 후 모두 나간 빈 방이 남음");
@@ -679,11 +689,11 @@ try
         first = restored.Single(r => r.Id == first.Id);
         second = restored.Single(r => r.Id == second.Id);
         third = restored.Single(r => r.Id == third.Id);
-        Assert(first.Status == SlapStatus.Finished && first.Find("opponent1")!.Hp == 4, "첫 방의 진행·종료 상태 오류");
+        Assert(first.Status == SlapStatus.Finished && first.Find("opponent1")!.Hp == SlapRules.MaxHp - 1, "첫 방의 진행·종료 상태 오류");
         Assert(second.Started && second.Round == 1 && second.Find("multi")!.Choice == new SlapAction(SlapMove.Charge)
-            && second.Players.All(p => p.Hp == 5 && p.Gauge == 0 && !p.GaveUp), "다른 방의 행동·포기가 두 번째 방에 영향을 줌");
+            && second.Players.All(p => p.Hp == SlapRules.MaxHp && p.Gauge == 0 && !p.GaveUp), "다른 방의 행동·포기가 두 번째 방에 영향을 줌");
         Assert(third.Started && third.Round == 2 && third.Find("opponent3")!.Gauge == 1 && third.Find("multi")!.Gauge == 0
-            && third.Players.All(p => p.Hp == 5 && !p.Submitted && !p.GaveUp), "방 사이에 체력·기력·턴·선택이 섞임");
+            && third.Players.All(p => p.Hp == SlapRules.MaxHp && !p.Submitted && !p.GaveUp), "방 사이에 체력·기력·턴·선택이 섞임");
     });
     Check("맞짱: 손상된 파일은 대전·승패 기록을 보호", () =>
     {

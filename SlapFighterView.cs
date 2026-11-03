@@ -64,7 +64,7 @@ public sealed class SlapFighterView : FrameworkElement
             new Rect(0, 0, width, 89), 12, 12);
         Text(dc, "체력", 8, 5, Ink);
         Text(dc, $"{Hp}/{SlapRules.MaxHp}", Math.Max(47, width - 29), 5, Mint);
-        double barWidth = Math.Max(5, (width - 72) / SlapRules.MaxHp);
+        double barWidth = Math.Max(5, (width - 35 - 34 - 2 * (SlapRules.MaxHp - 1)) / SlapRules.MaxHp);
         for (int i = 0; i < SlapRules.MaxHp; i++)
             dc.DrawRoundedRectangle(i < Hp ? Mint : new SolidColorBrush(Color.FromRgb(54, 72, 61)), null,
                 new Rect(35 + i * (barWidth + 2), 10, barWidth, 6), 2, 2);

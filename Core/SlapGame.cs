@@ -14,7 +14,7 @@ public sealed record SlapResult(int Round, string Attacker, string Defender, Sla
 
 public static class SlapRules
 {
-    public const int MaxHp = 5, MaxGauge = 3, BaseDamage = 1;
+    public const int MaxHp = 6, MaxGauge = 3, BaseDamage = 1;
     public static int GaugeCost(int power) => power switch { 1 => 0, 2 => 1, 3 => 3, _ => throw new ArgumentOutOfRangeException(nameof(power)) };
     public static int Multiplier(int power) => power switch { 1 => 1, 2 => 2, 3 => 5, _ => throw new ArgumentOutOfRangeException(nameof(power)) };
     public static int Damage(int power) => BaseDamage * Multiplier(power);

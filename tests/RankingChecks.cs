@@ -359,7 +359,7 @@ internal static class RankingChecks
         Wait(() => ((SlapRoom)Get("slapRoom")!).Round == 2 && ((SlapRoom)GuestGet("slapRoom")!).Round == 2);
         var hostState = (SlapRoom)Get("slapRoom")!; var guestState = (SlapRoom)GuestGet("slapRoom")!;
         Assert(hostState.Id == background.Id && guestState.Id == background.Id && hostState.Revision == guestState.Revision
-            && hostState.Players.All(p => p.Gauge == 1 && p.Hp == 5) && guestState.Players.All(p => p.Gauge == 1 && p.Hp == 5),
+            && hostState.Players.All(p => p.Gauge == 1 && p.Hp == SlapRules.MaxHp) && guestState.Players.All(p => p.Gauge == 1 && p.Hp == SlapRules.MaxHp),
             "방 전환 후 턴·체력·기력을 양쪽 화면에 동일하게 반영");
         ((DispatcherTimer)GuestGet("slapTimer")!).Stop(); GuestCall("ShowSlapRoom");
         Assert(((DispatcherTimer)GuestGet("slapTimer")!).IsEnabled, "방 화면 재진입 시 자동 동기화 재시작");
@@ -449,8 +449,8 @@ internal static class RankingChecks
         Find<Button>(content).Single(b => b.Tag is Guid id && id == offlineRoomId).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Wait(() => !(bool)Get("busy")! && Labels().Contains("내 공격 차례!") && ((SlapRoom)Get("slapRoom")!).Round == 3);
         var resumed = (SlapRoom)Get("slapRoom")!;
-        Assert(resumed.Id == offlineRoomId && resumed.Find("player30")!.Hp == 3 && resumed.Find("player30")!.Gauge == 1
-            && resumed.Find("player31")!.Hp == 4 && resumed.Find("player31")!.Gauge == 0 && resumed.LastResult!.Round == 2
+        Assert(resumed.Id == offlineRoomId && resumed.Find("player30")!.Hp == SlapRules.MaxHp - 2 && resumed.Find("player30")!.Gauge == 1
+            && resumed.Find("player31")!.Hp == SlapRules.MaxHp - 1 && resumed.Find("player31")!.Gauge == 0 && resumed.LastResult!.Round == 2
             && resumed.Players.All(p => !p.Submitted), "양쪽이 번갈아 새 창으로 재접속해도 같은 방·턴·체력·기력·결과 유지");
         Call("DetachSlapRoom");
         Console.WriteLine("맞짱 선준비·오프라인 시작·선입력·재입장 전체 흐름 검증 완료");
