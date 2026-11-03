@@ -103,6 +103,7 @@ public partial class MainWindow : Window
         Activated += (_, _) =>
         {
             if (panel is "slap-lobby" or "slap-room") { StartSlapTimer(); _ = PollSlapAsync(); }
+            if (panel is "ciao-lobby" or "ciao-room") { StartCiaoTimer(); _ = PollCiaoAsync(); }
             Dispatcher.BeginInvoke((Action)(() => OfferUpdate(false)));
         };
         // The render loop starts with a game (StartGame / ResumeGame), not with the window.
@@ -299,6 +300,7 @@ public partial class MainWindow : Window
         AddGameItem("똥 피하기", () => StartGame(MiniGame.Dodge));
         AddGameItem("키보드 리듬", () => StartGame(MiniGame.Rhythm));
         AddGameItem("맞짱", ShowSlapLobby);
+        AddGameItem("차오차오", ShowCiaoLobby);
         AddButton("돌아가기", ShowHome);
     }
     private FrameworkElement ActiveSurface => activeGame == MiniGame.Rhythm ? RhythmView : Surface;
@@ -380,6 +382,7 @@ public partial class MainWindow : Window
     private void ReturnToGame()
     {
         if (slapRoomId is not null) ShowSlapRoom();
+        else if (ciaoRoomId is not null) ShowCiaoRoom();
         else if (playState == PlayState.Paused) ShowPause();
         else if (playState == PlayState.Over) ShowEnd();
         else ShowHome();
@@ -514,7 +517,7 @@ public partial class MainWindow : Window
     private void Logout()
     {
         if (pendingRecord is not null) { ShowEnd(); return; }
-        DetachSlapRoom();
+        DetachSlapRoom(); DetachCiaoRoom();
         ForgetSession(); userId = null; bestScore = 0; ResetToHome(); ShowHome();
         SetMessage("로그아웃했습니다.", true);
     }
@@ -691,7 +694,7 @@ public partial class MainWindow : Window
     {
         var update = availableUpdate;
         if (update is null || offeringUpdate || installingUpdate || busy || sizeModeRestore is not null || !IsVisible || !IsActive ||
-            pendingRecord is not null || playState == PlayState.Playing || InSlapMatch || (!manual && offeredUpdates.Contains(update.Tag))) return;
+            pendingRecord is not null || playState == PlayState.Playing || InSlapMatch || InCiaoMatch || (!manual && offeredUpdates.Contains(update.Tag))) return;
         offeringUpdate = true; offeredUpdates.Add(update.Tag);
         try
         {
@@ -769,7 +772,7 @@ public partial class MainWindow : Window
             using (new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose)) { }
             var old = preferences.DataFolder; preferences.DataFolder = candidate.Folder;
             if (!SavePreferences()) { preferences.DataFolder = old; return; }
-            DetachSlapRoom();
+            DetachSlapRoom(); DetachCiaoRoom();
             store = candidate; userId = null; bestScore = 0; pendingRecord = null;
             ResetToHome(); startupError = null;
             UpdateHud(); ShowSettings(); SetMessage("저장 폴더를 변경했습니다. 이 폴더의 계정으로 로그인해 주세요.", true);
@@ -948,7 +951,7 @@ public partial class MainWindow : Window
         if (busy) { e.Cancel = true; return; }
         if (pendingRecord is not null && MessageBox.Show(this, "저장하지 못한 기록이 있습니다. 저장하지 않고 종료할까요?", "미저장 기록", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
         { e.Cancel = true; ShowEnd(); return; }
-        DetachSlapRoom();
+        DetachSlapRoom(); DetachCiaoRoom();
         ExitSizeMode(false); RememberWindowSize();
         PauseGame(); SavePreferences();
     }

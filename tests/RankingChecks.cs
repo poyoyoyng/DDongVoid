@@ -126,6 +126,31 @@ internal static class RankingChecks
         restoredPreferences = typeof(MainWindow).GetMethod("LoadPreferences", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null)!;
         Assert((double)preferenceType.GetProperty("OpacityScale")!.GetValue(restoredPreferences)! == 1, "저장된 투명도 범위를 0~100%로 제한");
         Set("preferencesPath", originalPreferencesPath); Set("preferences", initialPreferences); Call("ApplyAppearance");
+        if (args.Length == 2 && args[0] == "--ciao-preview")
+        {
+            var preview = new CiaoRoom { Id = Guid.NewGuid(), Title = "퇴근 전 차오차오", Players =
+                [new() { Id = "플레이어1" }, new() { Id = "플레이어2" }, new() { Id = "플레이어3" }, new() { Id = "플레이어4" }] };
+            foreach (var p in preview.Players) preview.SetReady(p.Id, true);
+            preview.Players[0].Position = 6; preview.Players[1].Position = 3; preview.Players[2].Position = 7;
+            preview.Players[3].GoalScores.Add(1); preview.Players[3].Reserve--;
+            preview.Roll("플레이어1", preview.Revision, 0);
+            Set("userId", "플레이어1"); Set("ciaoRoomId", preview.Id); Set("ciaoRoom", preview.ViewFor("플레이어1"));
+            void Snapshot(string suffix, double width = 480)
+            {
+                Layout(width, 860); Layout(width, 860);
+                var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap((int)width, 860, 96, 96, PixelFormats.Pbgra32);
+                bitmap.Render(content);
+                var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder(); encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+                var path = Path.ChangeExtension(args[1], suffix + ".png");
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+                using var file = File.Create(path); encoder.Save(file);
+            }
+            Call("DrawCiaoRoom"); Snapshot("speaker"); Snapshot("narrow", 300);
+            preview.Declare("플레이어1", preview.Revision, CiaoRules.MaxDeclaration);
+            Set("userId", "플레이어2"); Set("ciaoRoom", preview.ViewFor("플레이어2")); Call("DrawCiaoRoom"); Snapshot("responder");
+            Call("CreateCiaoRoom"); Snapshot("create");
+            Call("DetachCiaoRoom"); Directory.Delete(root, true); return;
+        }
         if (args.Length == 2 && args[0] == "--slap-preview")
         {
             var preview = new SlapRoom { Id = Guid.NewGuid(), Status = SlapStatus.Playing,
@@ -200,6 +225,7 @@ internal static class RankingChecks
         Set("store", store); Set("userId", "player00");
         Call("ShowGameList"); Layout();
         Assert(Find<Button>(content).Any(b => b.Content is TextBlock t && t.Text == "맞짱"), "게임 선택에 맞짱 이름 표시");
+        Assert(Find<Button>(content).Any(b => b.Content is TextBlock t && t.Text == "차오차오"), "게임 선택에 차오차오 이름 표시");
         Call("ShowRankings"); Layout(); Wait(() => List() is not null);
         Assert(Labels().Contains("3,900점"), "똥 피하기 최고 점수 표시");
         var list = List()!;
@@ -533,6 +559,78 @@ internal static class RankingChecks
         Assert(((DispatcherTimer)Get("slapTimer")!).IsEnabled, "새로고침 버튼으로 최신 목록 조회 및 자동 갱신 재시작");
         Call("DetachSlapRoom"); GuestCall("DetachSlapRoom");
         Console.WriteLine("맞짱 실행 중 방 목록·P2 갱신·파일 잠금 복구 검증 완료");
+        Set("store", new LocalStore(root)); Set("userId", "player00");
+        GuestSet("store", new LocalStore(root)); GuestSet("userId", "player01");
+        var ciao = new CiaoStore(root, () => 0);
+        Call("ShowGameList"); Layout(); ClickGame("차오차오");
+        Wait(() => Equals(Get("panel"), "ciao-lobby"));
+        ClickAction("방 만들기"); Layout();
+        var ciaoTitle = Find<TextBox>(content).Single(t => t.Name == "CiaoRoomTitle");
+        ClickAction("방 만들기");
+        Wait(() => !(bool)Get("busy")! && Labels().Contains("방 제목을 입력해 주세요."));
+        ciaoTitle.Text = "네 명의 차오차오"; ClickAction("방 만들기");
+        Wait(() => !(bool)Get("busy")! && Equals(Get("panel"), "ciao-room"));
+        var ciaoId = (Guid)Get("ciaoRoomId")!;
+        Assert(Labels().Any(t => t.Contains("네 명의 차오차오")) && Labels().Contains("참가자 1/4"), "제목 입력 후 차오차오 대기실 표시");
+        GuestCall("ShowCiaoLobby");
+        Wait(() => { GuestLabels(); return Find<Button>(guestContent).Any(b => b.Tag is Guid id && id == ciaoId); });
+        Find<Button>(guestContent).Single(b => b.Tag is Guid id && id == ciaoId).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Wait(() => !(bool)GuestGet("busy")! && GuestLabels().Contains("참가자 2/4"));
+        ciao.Join(ciaoId, "player02"); ciao.Join(ciaoId, "player03");
+        Wait(() => Labels().Contains("참가자 4/4") && GuestLabels().Contains("참가자 4/4"));
+        ClickAction("준비 완료"); GuestClick("준비 완료");
+        Wait(() => !(bool)Get("busy")! && !(bool)GuestGet("busy")! && Labels().Any(t => t.Contains("player01 · 준비 완료")));
+        ciao.SetReady(ciaoId, "player02", true);
+        Assert(ciao.Rooms("player00").Single().Status == CiaoStatus.Waiting, "4인 방에서 전원 준비 전 대기 유지");
+        ciao.SetReady(ciaoId, "player03", true);
+        Wait(() => Labels().Contains("내 차례") && GuestLabels().Contains("상대 차례"));
+        Assert(Find<Button>(content).Any(b => Equals(b.Content, "주사위 굴리기"))
+            && !Find<Button>(guestContent).Any(b => Equals(b.Content, "주사위 굴리기")), "주사위 굴리기는 발언자에게만 표시");
+        var ciaoState = ciao.Rooms("player00").Single();
+        ciao.Roll(ciaoId, "player00", ciaoState.Revision);
+        Wait(() => Labels().Contains("내 주사위  X") && GuestLabels().Any(t => t.Contains("숫자를 선언")));
+        Assert(!GuestLabels().Any(t => t.StartsWith("내 주사위")) && ((CiaoRoom)GuestGet("ciaoRoom")!).Die is null,
+            "상대 창·조회 모델에서 실제 주사위 숨김");
+        Assert(Enumerable.Range(1, CiaoRules.MaxDeclaration).All(n => Find<Button>(content).Any(b => b.Tag is int value && value == n)), "1~4 선언 버튼 표시");
+        Call("DetachCiaoRoom"); Call("ShowCiaoLobby");
+        Wait(() => Find<Button>(content).Any(b => b.Tag is Guid id && id == ciaoId));
+        Find<Button>(content).Single(b => b.Tag is Guid id && id == ciaoId).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Wait(() => !(bool)Get("busy")! && Labels().Contains("내 주사위  X"));
+        Assert(!Find<Button>(content).Any(b => Equals(b.Content, "주사위 굴리기")), "재입장 시 주사위 보존·다시 굴리기 금지");
+        Layout(300, 740);
+        var declareButtons = Find<Button>(content).Where(b => b.Tag is int).ToArray();
+        Assert(declareButtons.Length == CiaoRules.MaxDeclaration && declareButtons.All(b => b.ActualWidth > 25), "300px 창에서 모든 선언 버튼 배치");
+        DependencyObject? ciaoAncestor = (FrameworkElement)window.FindName("DialogContent");
+        while (ciaoAncestor is not null && ciaoAncestor is not ScrollViewer) ciaoAncestor = VisualTreeHelper.GetParent(ciaoAncestor);
+        var ciaoScroller = (ScrollViewer)ciaoAncestor!;
+        Assert(declareButtons.All(b => b.TransformToAncestor(ciaoScroller).TransformBounds(new Rect(b.RenderSize)).Bottom <= ciaoScroller.ActualHeight),
+            "작은 창에서도 스크롤 없이 숫자 선언 가능");
+        ClickAction(CiaoRules.MaxDeclaration.ToString());
+        Wait(() => !(bool)Get("busy")! && GuestLabels().Contains($"player00님의 선언  {CiaoRules.MaxDeclaration}"));
+        Assert(Find<Button>(guestContent).Single(b => Equals(b.Content, "PASS")).IsEnabled
+            && Find<Button>(guestContent).Single(b => Equals(b.Content, "의심")).IsEnabled, "다른 참가자에게 PASS·의심 버튼 표시");
+        GuestClick("PASS");
+        Wait(() => !(bool)GuestGet("busy")! && GuestLabels().Contains("응답 차례 · player02"));
+        Assert(!Find<Button>(guestContent).Single(b => Equals(b.Content, "의심")).IsEnabled, "PASS 후 중복 의심 금지");
+        ciaoState = ciao.Rooms("player02").Single(); ciao.Respond(ciaoId, "player02", ciaoState.Revision, false);
+        ciaoState = ciao.Rooms("player03").Single(); ciao.Respond(ciaoId, "player03", ciaoState.Revision, true);
+        Wait(() => Labels().Any(t => t.Contains("의심 성공! 실제 주사위 X")) && GuestLabels().Contains("내 차례"));
+        Assert(((CiaoRoom)Get("ciaoRoom")!).Find("player00")!.Fallen == 1 && ((CiaoRoom)Get("ciaoRoom")!).Find("player03")!.Position == CiaoRules.MaxDeclaration,
+            "의심 결과와 보드 이동을 양쪽 화면에 반영");
+        GuestClick("주사위 굴리기");
+        Wait(() => !(bool)GuestGet("busy")! && GuestLabels().Any(t => t.StartsWith("내 주사위")));
+        GuestClick("1");
+        Wait(() => !(bool)GuestGet("busy")! && Labels().Contains("player01님의 선언  1"));
+        ciaoState = ciao.Rooms("player02").Single(); ciao.Respond(ciaoId, "player02", ciaoState.Revision, false);
+        ciaoState = ciao.Rooms("player03").Single(); ciao.Respond(ciaoId, "player03", ciaoState.Revision, false);
+        Wait(() => Labels().Contains("응답 차례 · player00")); ClickAction("PASS");
+        Wait(() => !(bool)Get("busy")! && Labels().Any(t => t.Contains("모두 PASS")) && GuestLabels().Contains("상대 차례"));
+        Assert(((CiaoRoom)Get("ciaoRoom")!).LastResult!.RevealedDie is null && !Labels().Any(t => t.StartsWith("내 주사위")), "전원 PASS 결과는 실제 눈을 공개하지 않음");
+        ClickAction("방 목록으로 · 게임 유지");
+        Wait(() => Find<Button>(content).Any(b => b.Tag is Guid id && id == ciaoId));
+        Assert(ciao.Rooms("player00").Single().Status == CiaoStatus.Playing, "목록으로 나가도 게임 유지");
+        Call("DetachCiaoRoom"); GuestCall("DetachCiaoRoom");
+        Console.WriteLine("차오차오 4인 방·준비·비공개 주사위·PASS·의심·재접속 화면 검증 완료");
         Directory.Delete(root, true);
     }
 

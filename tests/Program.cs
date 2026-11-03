@@ -32,6 +32,7 @@ RhythmNote AdvanceTo(RhythmEngine game, double offset)
 
 try
 {
+    CiaoChecks.Run(root, Check, Assert);
     var store = new LocalStore(Path.Combine(root, "계정 저장 폴더"));
     Check("새 폴더 읽기에는 파일 생성 없음", () => { store.Validate(); Assert(!Directory.Exists(store.Folder), "읽기 작업에서 파일을 만들었습니다."); });
     Check("회원가입과 영속 저장", () => { Assert(store.Register("테스트User", "test-password-123") == "테스트User", "계정 생성 실패"); Assert(File.Exists(store.FilePath), "JSON 저장 실패"); });
