@@ -1,0 +1,15 @@
+{
+  "mode": "builtin image_gen",
+  "assets": [
+    {
+      "path": "Assets/Slap/mint-charge.png",
+      "reference": "Assets/Slap/mint-atlas.png",
+      "prompt": "Use case: precise-object-edit. Asset type: transparent single character game sprite. Use the attached sprite atlas ONLY as an identity and style reference. Produce ONE single isolated mint marshmallow/bean fighter in a new ENERGY CHARGING pose, no atlas/grid. Preserve its mint green round bean body, cream oval face, two leaf-like tufts, oversized rounded mitten hands, stubby feet, thick dark evergreen outlines and polished 2D cel-shaded sticker style. Face right in a three-quarter view. Feet planted, eyes closed with concentrated calm expression, both mittens held cupped near the belly gathering a small glowing golden energy orb; a few upward golden sparks make energy gathering unmistakable. No punching, no attack wind-up, no impact or shield. Full body centered on a square 1024x1024 canvas with generous transparent margins, body occupies about 75 percent of image height including tufts; keep the same proportions and baseline as the reference atlas cells, so it reads well at 140px. Genuine transparent alpha background everywhere outside the character and contained energy effects; no ground/background, no text, no watermark, no other character."
+    },
+    {
+      "path": "Assets/Slap/cat-charge.png",
+      "reference": "Assets/Slap/cat-atlas.png",
+      "prompt": "Use case: precise-object-edit. Asset type: transparent single character game sprite. Use the attached sprite atlas ONLY as an identity and style reference. Produce ONE single isolated peach-orange cat fighter in a new ENERGY CHARGING pose, no atlas/grid. Preserve its orange kitten fur, cream muzzle and belly, oversized cream mitten paws, triangular ears, curled tail, stubby feet, thick dark brown/evergreen outlines and polished 2D cel-shaded sticker style. Face right in a three-quarter view. Feet planted, eyes closed with concentrated calm expression, both mitten paws held cupped near the belly gathering a small glowing golden energy orb; a few upward golden sparks make energy gathering unmistakable. No punching, no attack wind-up, no impact or shield. Full body centered on a square 1024x1024 canvas with generous transparent margins, body occupies about 75 percent of image height including ears; keep the same proportions and baseline as the reference atlas cells, so it reads well at 140px. Genuine transparent alpha background everywhere outside the character and contained energy effects; no ground/background, no text, no watermark, no other character."
+    }
+  ]
+}

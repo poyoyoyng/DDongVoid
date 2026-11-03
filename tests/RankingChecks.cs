@@ -12,7 +12,7 @@ using DDongVoid.Core;
 internal static class RankingChecks
 {
     [STAThread]
-    private static void Main()
+    private static void Main(string[] args)
     {
         var styles = System.Xml.Linq.XDocument.Load(Path.Combine(AppContext.BaseDirectory, "AppStyles.txt"));
         System.Xml.Linq.XNamespace ns = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -82,6 +82,47 @@ internal static class RankingChecks
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         }
         string[] Labels() => Find<TextBlock>(content).Select(t => t.Text).ToArray();
+        bool OwnCharge(FrameworkElement surface) => Find<SlapFighterView>(surface).Any(f => f.Visual.CurrentChoice && f.Visual.Charging);
+        bool SubmittedBy(FrameworkElement surface, string id) => Find<SlapFighterView>(surface).Any(f => f.PlayerId == id && f.Visual.Submitted);
+        if (args.Length == 2 && args[0] == "--slap-preview")
+        {
+            var preview = new SlapRoom { Id = Guid.NewGuid(), Status = SlapStatus.Playing,
+                Players = [new() { Id = "돼지현이", Gauge = 1 }, new() { Id = "esul", Gauge = 2 }] };
+            preview.Submit("돼지현이", new(SlapMove.Slap, SlapZone.High, 2));
+            preview.Submit("esul", new(SlapMove.Block, SlapZone.Low));
+            Set("store", store); Set("userId", "돼지현이"); Set("slapRoom", preview); Set("slapRoomId", preview.Id);
+            Call("ShowSlapRoom"); Layout(480, 860);
+            var fighters = Find<SlapFighterView>(content).ToArray();
+            Assert(fighters.Length == 2 && fighters[0].Character == 0 && fighters[1].Character == 1, "서로 다른 두 캐릭터 표시");
+            Assert(fighters[0].Visual.Pose == SlapPose.AttackSuccess && fighters[1].Visual.Pose == SlapPose.Hit,
+                "각 캐릭터에 공격 성공·피격 결과 연결");
+            void Save(FrameworkElement element, string path, int width, int height)
+            {
+                var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+                bitmap.Render(element);
+                var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder(); encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+                using var file = File.Create(path); encoder.Save(file);
+            }
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(args[1]))!);
+            Save(content, args[1], 480, 860);
+            Set("userId", "esul"); Set("slapDrawn", null); Call("DrawSlapRoom"); Layout();
+            Assert(Find<SlapFighterView>(content).Single(f => f.PlayerId == "돼지현이").Character == 0
+                && Find<SlapFighterView>(content).Single(f => f.PlayerId == "esul").Character == 1, "상대 화면에서도 캐릭터 배정 유지");
+            Layout(300, 740);
+            Assert(Find<SlapFighterView>(content).All(f => f.ActualWidth >= 140), "좁은 창에서 세로 배치로 상태 표시 공간 확보");
+            var gallery = new System.Windows.Controls.Primitives.UniformGrid { Rows = 2, Columns = 6, Background = new SolidColorBrush(Color.FromRgb(16, 27, 23)) };
+            for (int character = 0; character < 2; character++)
+                foreach (var pose in Enum.GetValues<SlapPose>())
+                {
+                    var card = new StackPanel { Margin = new Thickness(5) };
+                    card.Children.Add(new SlapFighterView { PlayerId = "preview", Character = character, Visual = new(pose, "", "", Charging: pose == SlapPose.Charge), Hp = 4, Gauge = 2 });
+                    card.Children.Add(new TextBlock { Text = new[] { "평소", "기 모으기", "공격 성공", "공격 실패", "막았다", "맞았다" }[(int)pose], Foreground = Brushes.White, TextAlignment = TextAlignment.Center });
+                    gallery.Children.Add(card);
+                }
+            gallery.Measure(new Size(1080, 440)); gallery.Arrange(new Rect(0, 0, 1080, 440)); gallery.UpdateLayout();
+            Save(gallery, Path.ChangeExtension(args[1], "poses.png"), 1080, 440);
+            Call("DetachSlapRoom"); Directory.Delete(root, true); return;
+        }
         void ClickAction(string title)
         {
             Layout();
@@ -108,6 +149,8 @@ internal static class RankingChecks
         }
         ScrollViewer? List() => Find<ScrollViewer>(content).FirstOrDefault(s => s.Name == "RankingList");
         Set("store", store); Set("userId", "player00");
+        Call("ShowGameList"); Layout();
+        Assert(Find<Button>(content).Any(b => b.Content is TextBlock t && t.Text == "맞짱"), "게임 선택에 맞짱 이름 표시");
         Call("ShowRankings"); Layout(); Wait(() => List() is not null);
         Assert(Labels().Contains("3,900점"), "똥 피하기 최고 점수 표시");
         var list = List()!;
@@ -118,8 +161,8 @@ internal static class RankingChecks
         list.ScrollToBottom(); Layout(); Assert(list.VerticalOffset >= list.ScrollableHeight - 1, "마지막 플레이어까지 스크롤 가능");
         ClickGame("키보드 리듬"); Wait(() => List() is not null && Labels().Contains("5,000점"));
         Assert(List()!.VerticalOffset == 0, "게임 전환 시 스크롤 위치 초기화");
-        ClickGame("뺨때리기"); Wait(() => Labels().Contains("1승 0패"));
-        Assert(Labels().Contains("0승 1패"), "뺨때리기 승·패를 함께 표시");
+        ClickGame("맞짱"); Wait(() => Labels().Contains("1승 0패"));
+        Assert(Labels().Contains("0승 1패"), "맞짱 승·패를 함께 표시");
         ClickGame("똥 피하기"); ClickGame("키보드 리듬"); Wait(() => Labels().Contains("5,000점"));
         Assert(Labels().Any(t => t.StartsWith("내 순위  1위") && t.Contains("5,000점")), "빠르게 게임을 바꿔도 이전 조회 결과를 표시하지 않음");
         Layout(300, 320);
@@ -163,7 +206,7 @@ internal static class RankingChecks
         room = slap.Submit(room.Id, "player02", new SlapAction(SlapMove.Charge));
         Set("slapRoomId", room.Id); Set("slapRoom", room);
         Call("ShowSlapRoom"); Layout();
-        Assert(Labels().Contains("선택 완료 · 기 모으기"), "저장한 행동을 대전 화면에 표시");
+        Assert(OwnCharge(content), "저장한 행동을 대전 화면에 표시");
         Call("DetachSlapRoom");
         Assert(slap.Sync(room.Id, "player02")!.Find("player02")!.Submitted, "화면을 닫아도 선택한 행동을 보존");
         Call("ShowSlapLobby"); Layout();
@@ -171,12 +214,12 @@ internal static class RankingChecks
         var resume = Find<Button>(content).Single(b => b.Tag is Guid id && id == room.Id);
         Assert(resume.IsEnabled, "게임 중인 내 방의 이어하기 버튼 활성화");
         resume.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Wait(() => Labels().Contains("선택 완료 · 기 모으기"));
+        Wait(() => OwnCharge(content));
         ClickAction("포기하기");
         Wait(() => Labels().Any(t => t.StartsWith("포기를 요청했어요")));
         Assert(slap.Sync(room.Id, "player03")!.Started, "한쪽 포기 요청 후에도 대전 유지");
         ClickAction("포기 요청 취소");
-        Wait(() => Labels().Contains("선택 완료 · 기 모으기"));
+        Wait(() => OwnCharge(content));
         ClickAction("포기하기");
         Wait(() => Labels().Any(t => t.StartsWith("포기를 요청했어요")));
         slap.SetGiveUp(room.Id, "player03", true);
@@ -185,7 +228,7 @@ internal static class RankingChecks
         poll.GetAwaiter().GetResult();
         Assert(!Labels().Any(t => t.StartsWith("승자  ")), "상호 포기 결과에 승자 표시 없음");
         Call("DetachSlapRoom");
-        Console.WriteLine("뺨때리기 이어하기·상호 포기 화면 검증 완료");
+        Console.WriteLine("맞짱 이어하기·상호 포기 화면 검증 완료");
 
         Set("userId", "player10");
         Call("ShowSlapLobby"); Layout();
@@ -214,7 +257,7 @@ internal static class RankingChecks
             Find<Button>(content).Single(b => b.Tag is Guid tag && tag == id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Wait(() => !(bool)Get("busy")! && Equals(Get("slapRoomId"), id) && Labels().Contains("내 공격 차례!"));
             ClickAction("기 모으기  +1");
-            Wait(() => !(bool)Get("busy")! && Labels().Contains("선택 완료 · 기 모으기"));
+            Wait(() => !(bool)Get("busy")! && OwnCharge(content));
             ClickAction("방 목록으로 · 대전 유지"); Layout();
         }
         Assert(simultaneousRooms.All(id => slap.Sync(id, "player10")!.Find("player10")!.Choice == new SlapAction(SlapMove.Charge)),
@@ -222,7 +265,7 @@ internal static class RankingChecks
         Assert(Find<Button>(content).Count(b => b.Tag is Guid id && simultaneousRooms.Contains(id)
             && ((TextBlock)b.Content).Text.Contains("상대 선택 대기")) == 3, "각 방의 진행 상태를 목록에 표시");
         Call("DetachSlapRoom");
-        Console.WriteLine("뺨때리기 세 방 동시 참가·목록·전환 검증 완료");
+        Console.WriteLine("맞짱 세 방 동시 참가·목록·전환 검증 완료");
 
         var guest = new MainWindow();
         var guestContent = (FrameworkElement)guest.Content;
@@ -262,7 +305,7 @@ internal static class RankingChecks
         Find<Button>(content).Single(b => b.Tag is Guid id && id == background.Id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Find<Button>(guestContent).Single(b => b.Tag is Guid id && id == background.Id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Wait(() => !(bool)Get("busy")! && !(bool)GuestGet("busy")! && Labels().Contains("내 공격 차례!") && GuestLabels().Contains("내 수비 차례!"));
-        ClickAction("기 모으기  +1"); Wait(() => !(bool)Get("busy")! && Labels().Contains("선택 완료 · 기 모으기"));
+        ClickAction("기 모으기  +1"); Wait(() => !(bool)Get("busy")! && OwnCharge(content));
         GuestClick("기 모으기  +1  (이번 턴은 못 막아요)");
         Wait(() => ((SlapRoom)Get("slapRoom")!).Round == 2 && ((SlapRoom)GuestGet("slapRoom")!).Round == 2);
         var hostState = (SlapRoom)Get("slapRoom")!; var guestState = (SlapRoom)GuestGet("slapRoom")!;
@@ -272,7 +315,7 @@ internal static class RankingChecks
         ((DispatcherTimer)GuestGet("slapTimer")!).Stop(); GuestCall("ShowSlapRoom");
         Assert(((DispatcherTimer)GuestGet("slapTimer")!).IsEnabled, "방 화면 재진입 시 자동 동기화 재시작");
         Call("DetachSlapRoom"); GuestCall("DetachSlapRoom");
-        Console.WriteLine("뺨때리기 두 창 참가·준비·방별 자동 동기화 검증 완료");
+        Console.WriteLine("맞짱 두 창 참가·준비·방별 자동 동기화 검증 완료");
 
         Call("ShowSlapLobby"); ClickAction("방 만들기");
         Wait(() => !(bool)Get("busy")! && !(bool)Get("slapSyncing")! && Equals(Get("panel"), "slap-room"));
@@ -318,7 +361,7 @@ internal static class RankingChecks
         GuestClick("준비 완료");
         Wait(() => !(bool)GuestGet("busy")! && GuestLabels().Contains("내 수비 차례!"));
         GuestClick("기 모으기  +1  (이번 턴은 못 막아요)");
-        Wait(() => !(bool)GuestGet("busy")! && GuestLabels().Contains("선택 완료 · 기 모으기"));
+        Wait(() => !(bool)GuestGet("busy")! && (GuestLabels().Length > 0 && OwnCharge(guestContent)));
         GuestCall("DetachSlapRoom");
 
         window = new MainWindow(); content = (FrameworkElement)window.Content;
@@ -327,13 +370,13 @@ internal static class RankingChecks
         Wait(() => Find<Button>(content).Any(b => b.Tag is Guid id && id == offlineRoomId));
         Find<Button>(content).Single(b => b.Tag is Guid id && id == offlineRoomId).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Wait(() => !(bool)Get("busy")! && Labels().Contains("내 공격 차례!"));
-        Assert(((SlapRoom)Get("slapRoom")!).Round == 1 && Labels().Any(t => t.Contains("player31") && t.Contains("입력 완료 ✓"))
-            && !Find<Button>(content).Any(b => Equals(b.Content, "준비 완료")) && !Labels().Contains("선택 완료 · 기 모으기"),
+        Assert(((SlapRoom)Get("slapRoom")!).Round == 1 && SubmittedBy(content, "player31")
+            && !Find<Button>(content).Any(b => Equals(b.Content, "준비 완료")) && !OwnCharge(content),
             "방장이 새 창으로 돌아오면 이미 시작된 첫 턴과 상대 입력 여부를 표시하고 재준비 생략");
         Find<Button>(content).Single(b => b.Content is TextBlock t && t.Text == "상단\n때리기").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Wait(() => !(bool)Get("busy")! && ((SlapRoom)Get("slapRoom")!).Round == 2 && Labels().Contains("내 수비 차례!"));
         ClickAction("기 모으기  +1  (이번 턴은 못 막아요)");
-        Wait(() => !(bool)Get("busy")! && Labels().Contains("선택 완료 · 기 모으기"));
+        Wait(() => !(bool)Get("busy")! && OwnCharge(content));
         Call("DetachSlapRoom");
 
         guest = new MainWindow(); guestContent = (FrameworkElement)guest.Content;
@@ -342,7 +385,7 @@ internal static class RankingChecks
         Wait(() => { GuestLabels(); return Find<Button>(guestContent).Any(b => b.Tag is Guid id && id == offlineRoomId); });
         Find<Button>(guestContent).Single(b => b.Tag is Guid id && id == offlineRoomId).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Wait(() => !(bool)GuestGet("busy")! && GuestLabels().Contains("내 공격 차례!"));
-        Assert(((SlapRoom)GuestGet("slapRoom")!).Round == 2 && GuestLabels().Any(t => t.Contains("player30") && t.Contains("입력 완료 ✓")),
+        Assert(((SlapRoom)GuestGet("slapRoom")!).Round == 2 && (GuestLabels().Length > 0 && SubmittedBy(guestContent, "player30")),
             "상대도 새 창으로 돌아오면 공수 교대와 방장의 둘째 턴 입력을 확인");
         Find<Button>(guestContent).Single(b => b.Content is TextBlock t && t.Text.StartsWith("강한 뺨 ×2\n")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         GuestLabels();
@@ -361,7 +404,7 @@ internal static class RankingChecks
             && resumed.Find("player31")!.Hp == 4 && resumed.Find("player31")!.Gauge == 0 && resumed.LastResult!.Round == 2
             && resumed.Players.All(p => !p.Submitted), "양쪽이 번갈아 새 창으로 재접속해도 같은 방·턴·체력·기력·결과 유지");
         Call("DetachSlapRoom");
-        Console.WriteLine("뺨때리기 선준비·오프라인 시작·선입력·재입장 전체 흐름 검증 완료");
+        Console.WriteLine("맞짱 선준비·오프라인 시작·선입력·재입장 전체 흐름 검증 완료");
 
         var liveRoot = Path.Combine(root, "잠금 복구 화면");
         var liveStore = new SlapStore(liveRoot);
@@ -415,7 +458,7 @@ internal static class RankingChecks
         Wait(() => ((List<SlapRoom>)Get("slapRooms")!).Any(r => r.Id == manualRoom.Id));
         Assert(((DispatcherTimer)Get("slapTimer")!).IsEnabled, "새로고침 버튼으로 최신 목록 조회 및 자동 갱신 재시작");
         Call("DetachSlapRoom"); GuestCall("DetachSlapRoom");
-        Console.WriteLine("뺨때리기 실행 중 방 목록·P2 갱신·파일 잠금 복구 검증 완료");
+        Console.WriteLine("맞짱 실행 중 방 목록·P2 갱신·파일 잠금 복구 검증 완료");
         Directory.Delete(root, true);
     }
 

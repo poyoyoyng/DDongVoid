@@ -341,15 +341,46 @@ try
         Throws<InvalidDataException>(() => rhythmStore.AddRecord(rankingRecord));
         Assert(File.ReadAllText(rhythmStore.FilePath) == "{ broken", "손상된 리듬 파일을 덮어씀");
     });
-    var slap = new SlapStore(Path.Combine(root, "뺨때리기"), () => slapClock);
+    var slap = new SlapStore(Path.Combine(root, "맞짱"), () => slapClock);
+    Check("캐릭터 행동·결과 자세와 상대 선택 비공개", () =>
+    {
+        var room = new SlapRoom { Status = SlapStatus.Playing, Players = [new() { Id = "a" }, new() { Id = "b" }] };
+        SlapFighterVisual View(string id, string viewer = "a") => SlapPresentation.ForPlayer(room, id, viewer);
+        Assert(View("a").Pose == SlapPose.Idle, "평소 자세 오류");
+        room.Submit("a", new(SlapMove.Slap, SlapZone.High, 1));
+        Assert(View("a").Pose == SlapPose.Idle && View("a").CurrentChoice && View("a").Zone == SlapZone.High,
+            "공격은 턴 종료 전까지 평소 자세 유지");
+        var hidden = View("a", "b");
+        Assert(hidden.Pose == SlapPose.Idle && hidden.Submitted && !hidden.CurrentChoice && hidden.Zone is null
+            && !hidden.Charging && hidden.Caption == "입력 완료 ✓" && hidden.Description == "입력 완료 ✓", "상대 공격 선택 노출");
+        room.Submit("b", new(SlapMove.Block, SlapZone.High));
+        Assert(SlapPresentation.ShowsResult(room) && View("a").Pose == SlapPose.AttackFailed && View("b").Pose == SlapPose.Guard,
+            "공격 실패·방어 성공 자세 오류");
+        room.Submit("b", new(SlapMove.Slap, SlapZone.Middle, 1));
+        Assert(!SlapPresentation.ShowsResult(room) && View("a").Pose == SlapPose.Idle, "현재 선택 중 지난 결과 재표시");
+        room.Submit("a", new(SlapMove.Charge));
+        Assert(View("b").Pose == SlapPose.AttackSuccess && View("a").Pose == SlapPose.Hit && View("a").Charging
+            && View("a").Caption == "기 모으기 · 맞았다!", "공격 성공·기 모으기 중 피격 자세 오류");
+        room.Submit("b", new(SlapMove.Charge));
+        Assert(View("b", "b").Pose == SlapPose.Charge && View("b", "b").Charging
+            && View("b").Pose == SlapPose.Idle && !View("b").Charging && View("b").Zone is null, "기 모으기 전용 자세·상대 선택 비공개 오류");
+        room.Submit("a", new(SlapMove.Charge));
+        Assert(View("a").Pose == SlapPose.Charge && View("b").Pose == SlapPose.Charge
+            && View("a").Charging && View("b").Charging, "턴 결과 기 모으기 전용 자세 표시 오류");
+        room.Submit("a", new(SlapMove.Block, SlapZone.Low));
+        Assert(View("a").Pose == SlapPose.Guard && View("a").CurrentChoice && View("a", "b").Zone is null,
+            "방어 준비·상대 방어 선택 비공개 오류");
+        room.SetGiveUp("a", true); room.SetGiveUp("b", true);
+        Assert(!SlapPresentation.ShowsResult(room) && View("a").Caption == "대전 종료", "포기 종료 후 이전 결과 표시");
+    });
     SlapRoom Ready2(string a, string b)
     {
         var room = slap.Create(a); slap.Join(room.Id, b);
         slap.SetReady(room.Id, a, true); return slap.SetReady(room.Id, b, true);
     }
-    Check("뺨때리기: 기본공격·강한 뺨·필살뺨 피해 1·2·5", () =>
+    Check("맞짱: 기본공격·강한 뺨·필살뺨 피해 1·2·5", () =>
         Assert(SlapRules.Damage(1) == 1 && SlapRules.Damage(2) == 2 && SlapRules.Damage(3) == 5 && SlapRules.MaxHp == 5, "공격력 배율 또는 체력 오류"));
-    Check("뺨때리기: 기본공격 무료·스킬 기력 소모·모든 기력에서 무료 방어", () =>
+    Check("맞짱: 기본공격 무료·스킬 기력 소모·모든 기력에서 무료 방어", () =>
     {
         foreach (var (power, cost, damage) in new[] { (1, 0, 1), (2, 1, 2), (3, 3, 5) })
         for (int attackGauge = 0; attackGauge <= 3; attackGauge++)
@@ -374,7 +405,7 @@ try
                 && defender.Hp == 5 - (blocked ? 0 : damage), "방어 또는 공격 피해 판정 오류");
         }
     });
-    Check("뺨때리기: 쓰기 잠금을 기다리는 중에도 마지막 완성본 조회 가능", () =>
+    Check("맞짱: 쓰기 잠금을 기다리는 중에도 마지막 완성본 조회 가능", () =>
     {
         var shared = new SlapStore(Path.Combine(root, "조회 쓰기 동시성"));
         var room = shared.Create("host");
@@ -395,7 +426,7 @@ try
         }
         Assert(shared.Rooms().Single(r => r.Id == room.Id).Players.Count == 2, "쓰기 완료 후 새 참가자를 읽지 못함");
     });
-    Check("뺨때리기: 이전 조회 파일을 열어 둬도 새 상태 저장·조회 가능", () =>
+    Check("맞짱: 이전 조회 파일을 열어 둬도 새 상태 저장·조회 가능", () =>
     {
         var shared = new SlapStore(Path.Combine(root, "열린 조회 파일"));
         var room = shared.Create("host");
@@ -407,7 +438,7 @@ try
         Assert(shared.RoomsAsync().GetAwaiter().GetResult().Single(r => r.Id == room.Id).Players.Count == 2,
             "새 조회가 원자적으로 교체된 새 상태를 읽지 못함");
     });
-    Check("뺨때리기: 동시에 여러 방을 저장하는 동안 조회해도 갱신 유실·부분 JSON 없음", () =>
+    Check("맞짱: 동시에 여러 방을 저장하는 동안 조회해도 갱신 유실·부분 JSON 없음", () =>
     {
         var shared = new SlapStore(Path.Combine(root, "동시 저장과 조회"));
         var writers = Task.Run(() => Parallel.For(0, 12, i => shared.Create($"host{i}")));
@@ -420,7 +451,7 @@ try
         writers.GetAwaiter().GetResult();
         Assert(shared.Rooms().Count == 12, "동시 쓰기에서 방 생성 결과가 유실됨");
     });
-    Check("뺨때리기: 응답 없는 조회 시간 제한·취소·다음 조회 재개", () =>
+    Check("맞짱: 응답 없는 조회 시간 제한·취소·다음 조회 재개", () =>
     {
         var stalled = new TaskCompletionSource<List<SlapRoom>>(TaskCreationOptions.RunContinuationsAsynchronously);
         CancellationToken readToken = default;
@@ -437,7 +468,7 @@ try
         }
         finally { stalled.TrySetResult([]); }
     });
-    Check("뺨때리기: 참가·준비·시작 상태를 JSON에 기록", () =>
+    Check("맞짱: 참가·준비·시작 상태를 JSON에 기록", () =>
     {
         var room = slap.Create("p1");
         Assert(room.Players.Count == 1 && !room.Started && room.Status == SlapStatus.Waiting, "방 생성 상태 오류");
@@ -453,7 +484,7 @@ try
         Throws<ArgumentException>(() => slap.Join(room.Id, "p3"));
         slap.Leave(room.Id, "p1");
     });
-    Check("뺨때리기: 상대 입력 여부만 공개하고 둘 다 고르면 판정", () =>
+    Check("맞짱: 상대 입력 여부만 공개하고 둘 다 고르면 판정", () =>
     {
         var room = Ready2("a1", "d1");
         Throws<ArgumentException>(() => slap.Submit(room.Id, "a1", new SlapAction(SlapMove.Slap, SlapZone.High, 2)));
@@ -467,7 +498,7 @@ try
         Assert(room.Round == 2 && room.AttackerId == "d1" && room.Players.All(p => p.Gauge == 1 && !p.Submitted), "판정 후 공수 교대 실패");
         slap.Leave(room.Id, "a1");
     });
-    Check("뺨때리기: 같은 곳을 막으면 피해 없음, 다른 곳이면 맞음", () =>
+    Check("맞짱: 같은 곳을 막으면 피해 없음, 다른 곳이면 맞음", () =>
     {
         var room = Ready2("b1", "b2");
         slap.Submit(room.Id, "b1", new SlapAction(SlapMove.Charge)); slap.Submit(room.Id, "b2", new SlapAction(SlapMove.Charge));
@@ -482,7 +513,7 @@ try
         Assert(!room.LastResult!.Blocked && room.LastResult.Damage == 2 && room.Find("b1")!.Hp == 3 && room.Find("b2")!.Gauge == 1, "강한 뺨 피해 또는 기 소모 오류");
         slap.Leave(room.Id, "b1");
     });
-    Check("뺨때리기: 기 3개 ×5로 체력 0이면 승리, 기는 최대 3개", () =>
+    Check("맞짱: 기 3개 ×5로 체력 0이면 승리, 기는 최대 3개", () =>
     {
         var room = Ready2("c1", "c2");
         slap.Submit(room.Id, "c1", new SlapAction(SlapMove.Charge)); slap.Submit(room.Id, "c2", new SlapAction(SlapMove.Charge));
@@ -501,7 +532,7 @@ try
         Assert(room.Started && room.Players.All(p => p.Hp == 5 && p.Gauge == 0) && room.LastResult is null, "다시 하기 초기화 실패");
         slap.Leave(room.Id, "c1");
     });
-    Check("뺨때리기: 방장 오프라인 선준비·상대 시작과 선입력·번갈아 재접속", () =>
+    Check("맞짱: 방장 오프라인 선준비·상대 시작과 선입력·번갈아 재접속", () =>
     {
         var asyncFolder = Path.Combine(root, "시간 차 대전");
         var asyncClock = DateTimeOffset.UtcNow;
@@ -535,7 +566,7 @@ try
             && room.Find("host")!.Hp == 3 && room.Find("host")!.Gauge == 1 && room.Find("guest")!.Hp == 4 && room.Find("guest")!.Gauge == 0
             && room.Players.All(p => !p.Submitted), "번갈아 재접속 후 턴·결과·체력·기력이 일치하지 않음");
     });
-    Check("뺨때리기: 장기 미접속·나가기·재실행 후에도 선택과 대전을 보존", () =>
+    Check("맞짱: 장기 미접속·나가기·재실행 후에도 선택과 대전을 보존", () =>
     {
         var room = Ready2("e1", "e2");
         slap.Submit(room.Id, "e1", new SlapAction(SlapMove.Charge));
@@ -558,7 +589,7 @@ try
         room = new SlapStore(slap.Folder, () => slapClock).Submit(room.Id, "e1", new SlapAction(SlapMove.Block, SlapZone.Low));
         Assert(room.Round == 3 && room.Find("e1")!.Hp == 3 && room.Find("e2")!.Gauge == 0, "재접속 후 체력·기력·턴 판정 오류");
     });
-    Check("뺨때리기: 포기 요청 보존·취소·상호 포기 종료·승패 미집계", () =>
+    Check("맞짱: 포기 요청 보존·취소·상호 포기 종료·승패 미집계", () =>
     {
         var room = Ready2("f1", "f2");
         var rankings = slap.Rankings();
@@ -588,7 +619,7 @@ try
         slap.Leave(room.Id, "f1"); slap.Leave(room.Id, "f2");
         Assert(slap.Rooms().All(r => r.Id != room.Id), "종료 후 모두 나간 빈 방이 남음");
     });
-    Check("뺨때리기: 누적 승패·승수 정렬·공동 순위·방 삭제 후 보존", () =>
+    Check("맞짱: 누적 승패·승수 정렬·공동 순위·방 삭제 후 보존", () =>
     {
         var rankingSlap = new SlapStore(Path.Combine(root, "대전 랭킹"));
         foreach (var (winner, loser) in new[] { ("e1", "e2"), ("e1", "e2"), ("c1", "c2"), ("c2", "c1"), ("f1", "f2") })
@@ -611,7 +642,7 @@ try
         Assert(rows.Single(r => r.UserId == "c2").Rank == 2 && rows.Single(r => r.UserId == "f1").Rank == 2, "승수가 같은데 패수에 따라 순위가 달라짐");
         Assert(rankingSlap.Rooms().Count == 0, "종료한 방이 삭제되지 않음");
     });
-    Check("뺨때리기: 다른 방 생성·참가가 기존 대전을 유지하고 오래된 대기실도 참가 가능", () =>
+    Check("맞짱: 다른 방 생성·참가가 기존 대전을 유지하고 오래된 대기실도 참가 가능", () =>
     {
         var first = slap.Create("g1"); var second = slap.Create("g1");
         slap.SetReady(first.Id, "g1", true);
@@ -626,7 +657,7 @@ try
         slap.Leave(second.Id, "g1"); slap.Leave(second.Id, "g2");
         Assert(slap.Rooms().All(r => r.Id != second.Id), "대기실을 명시적으로 나간 뒤 빈 방이 남음");
     });
-    Check("뺨때리기: 세 방 동시 참가·독립 진행·한 방 종료 후 다른 방 보존", () =>
+    Check("맞짱: 세 방 동시 참가·독립 진행·한 방 종료 후 다른 방 보존", () =>
     {
         var multi = new SlapStore(Path.Combine(root, "동시 대전"));
         var first = multi.Create("multi"); multi.Join(first.Id, "opponent1");
@@ -654,14 +685,14 @@ try
         Assert(third.Started && third.Round == 2 && third.Find("opponent3")!.Gauge == 1 && third.Find("multi")!.Gauge == 0
             && third.Players.All(p => p.Hp == 5 && !p.Submitted && !p.GaveUp), "방 사이에 체력·기력·턴·선택이 섞임");
     });
-    Check("뺨때리기: 손상된 파일은 대전·승패 기록을 보호", () =>
+    Check("맞짱: 손상된 파일은 대전·승패 기록을 보호", () =>
     {
         File.WriteAllText(slap.FilePath, "{ broken");
         Throws<InvalidDataException>(() => slap.Rooms());
         Throws<InvalidDataException>(() => slap.Create("g2"));
         Assert(File.ReadAllText(slap.FilePath) == "{ broken", "손상된 대전 파일의 승패 기록을 덮어씀");
     });
-    Check("뺨때리기: 이전 버전 대전 파일의 빈 승패 랭킹", () =>
+    Check("맞짱: 이전 버전 대전 파일의 빈 승패 랭킹", () =>
     {
         var legacySlap = new SlapStore(Path.Combine(root, "이전 대전"));
         Directory.CreateDirectory(legacySlap.Folder);

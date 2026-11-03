@@ -217,6 +217,7 @@ public partial class MainWindow : Window
     }
     private void BeginPanel(string name, string eyebrow, string title, string description)
     {
+        Dialog.HorizontalAlignment = name == "slap-room" ? HorizontalAlignment.Stretch : HorizontalAlignment.Center;
         panel = name; Overlay.Visibility = Visibility.Visible; DialogContent.Children.Clear(); message = null;
         AddText(eyebrow, 10, "#A7F3CE", 0, 0, true);
         AddText(title, 27, "#EDF4F0", 9, 10, true);
@@ -272,7 +273,7 @@ public partial class MainWindow : Window
         BeginPanel("games", "AKC MINI GAMES", "게임선택", "");
         AddGameItem("똥 피하기", () => StartGame(MiniGame.Dodge));
         AddGameItem("키보드 리듬", () => StartGame(MiniGame.Rhythm));
-        AddGameItem("뺨때리기", ShowSlapLobby);
+        AddGameItem("맞짱", ShowSlapLobby);
         AddButton("돌아가기", ShowHome);
     }
     private FrameworkElement ActiveSurface => activeGame == MiniGame.Rhythm ? RhythmView : Surface;
@@ -567,7 +568,7 @@ public partial class MainWindow : Window
         BeginPanel("ranking", "HALL OF FAME", "게임별 랭킹", rankingGame == RankingGame.Slap
             ? "누적 승수 순위 · 승수가 같으면 공동 순위" : "아이디별 최고 점수 순위 · 같은 점수는 공동 순위");
         var games = new System.Windows.Controls.Primitives.UniformGrid { Rows = 1, Margin = new Thickness(0, 0, 0, 14) };
-        foreach (var (game, title) in new[] { (RankingGame.Dodge, "똥 피하기"), (RankingGame.Rhythm, "키보드 리듬"), (RankingGame.Slap, "뺨때리기") })
+        foreach (var (game, title) in new[] { (RankingGame.Dodge, "똥 피하기"), (RankingGame.Rhythm, "키보드 리듬"), (RankingGame.Slap, "맞짱") })
         {
             var button = new Button { Content = new TextBlock { Text = title, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center },
                 Padding = new Thickness(6, 10, 6, 10), Margin = new Thickness(2, 0, 2, 0) };

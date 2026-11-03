@@ -8,7 +8,7 @@ using DDongVoid.Core;
 
 namespace DDongVoid;
 
-// 뺨때리기: a turn-based 1:1 match synced through ddongvoid-slap.json in the shared data folder.
+// 맞짱: a turn-based 1:1 match synced through ddongvoid-slap.json in the shared data folder.
 public partial class MainWindow
 {
     private static readonly TimeSpan SlapReadTimeout = TimeSpan.FromSeconds(8);
@@ -45,7 +45,7 @@ public partial class MainWindow
         var signature = "lobby|" + userId + "|" + JsonSerializer.Serialize(slapRooms);
         if (panel == "slap-lobby" && slapDrawn == signature && note is null) return;
         slapDrawn = signature;
-        BeginPanel("slap-lobby", "SLAP BATTLE · 1 : 1", "뺨때리기 대전", "여러 방을 만들거나 동시에 참가할 수 있어요.\n각 방에서 시간 날 때 한 턴씩 진행하고, 목록에서 이어서 플레이하세요.");
+        BeginPanel("slap-lobby", "맞짱 · 1 : 1", "맞짱", "여러 방을 만들거나 동시에 참가할 수 있어요.\n각 방에서 시간 날 때 한 턴씩 진행하고, 목록에서 이어서 플레이하세요.");
         AddSlapSyncControls();
         AddText($"체력 {SlapRules.MaxHp}  ·  기본 공격력 {SlapRules.BaseDamage}  ·  기 최대 {SlapRules.MaxGauge}개\n공격: 상단·중단·하단 중 하나를 때리거나 기 모으기\n수비: 기 소모 없이 상단·중단·하단 중 하나를 막거나 기 모으기\n기본공격: 기 0 · 피해 1  /  강한 뺨: 기 1 · 피해 2\n필살뺨: 기 3 · 피해 5", 11, "#91AB9C", 0, 14);
         AddButton("방 만들기", CreateSlapRoom, true);
@@ -252,22 +252,15 @@ public partial class MainWindow
 
         var finished = room.Status == SlapStatus.Finished;
         var title = finished ? (room.Winner is null ? "대전을 종료했어요" : room.Winner == userId ? "이겼어요! 짝!" : "졌어요… 얼얼하다") : opponent is null ? "상대를 기다리는 중" : "준비되면 시작!";
-        BeginPanel("slap-room", $"SLAP BATTLE · #{room.Id.ToString("N")[..8]} · {(finished ? "GAME OVER" : "WAITING ROOM")}", title,
+        BeginPanel("slap-room", $"맞짱 · #{room.Id.ToString("N")[..8]} · {(finished ? "GAME OVER" : "WAITING ROOM")}", title,
             finished ? "" : "두 사람 모두 준비 완료를 누르면 바로 시작합니다.\n방을 만든 사람(P1)이 먼저 공격합니다.");
         AddSlapSyncControls();
         if (finished)
         {
             if (room.Winner is not null) AddText($"승자  {room.Winner}", 15, "#A7F3CE", 0, 6, true);
             if (room.EndReason is not null) AddText(room.EndReason, 12, "#B6C7BC", 0, 6);
-            if (room.LastResult is { } last) AddText(DescribeSlap(last, room.Players[0].Id), 12, "#B6C7BC", 0, 12);
         }
-        for (int i = 0; i < room.Players.Count; i++)
-        {
-            var p = room.Players[i];
-            var status = p.Ready ? "준비 완료 ✓" : "대기 중";
-            AddSlapCard($"P{i + 1}  {p.Id}{(p == me ? " (나)" : "")}", status, p.Ready);
-        }
-        if (opponent is null) AddSlapCard("P2  —", "참가자를 기다리고 있어요", false);
+        AddSlapArena(room, me, opponent);
         AddButton(me.Ready ? "준비 취소" : finished ? "다시 하기 · 준비 완료" : "준비 완료", () => SetSlapReady(!me.Ready), !me.Ready);
         AddButton("방 목록으로 · 참가 유지", ShowSlapLobby);
         AddButton("방 나가기", LeaveSlapRoom);
@@ -275,11 +268,9 @@ public partial class MainWindow
     private void DrawSlapMatch(SlapRoom room, SlapPlayer me, SlapPlayer opponent)
     {
         var attacking = room.AttackerId == me.Id;
-        BeginPanel("slap-room", $"SLAP BATTLE · #{room.Id.ToString("N")[..8]} · ROUND {room.Round}", attacking ? "내 공격 차례!" : "내 수비 차례!", "");
+        BeginPanel("slap-room", $"맞짱 · #{room.Id.ToString("N")[..8]} · ROUND {room.Round}", attacking ? "내 공격 차례!" : "내 수비 차례!", "");
         AddSlapSyncControls();
-        AddSlapStats(me, true, attacking);
-        AddSlapStats(opponent, false, !attacking);
-        if (room.LastResult is { } last) AddText($"지난 턴 · {DescribeSlap(last, me.Id)}", 11, "#B6C7BC", 2, 8);
+        AddSlapArena(room, me, opponent);
 
         var full = me.Gauge >= SlapRules.MaxGauge;
         if (room.Players.Any(p => p.GaveUp))
@@ -287,10 +278,9 @@ public partial class MainWindow
             AddText(me.GaveUp ? "포기를 요청했어요. 상대도 포기하면 대전이 종료됩니다.\n포기 요청을 취소하면 이어서 진행할 수 있어요."
                 : "상대가 포기를 요청했어요. 나도 포기하면 대전이 종료됩니다.\n상대가 요청을 취소하면 이어서 진행할 수 있어요.", 12, "#F4C59D", 4, 10);
         }
-        else if (me.Choice is { } choice)
+        else if (me.Choice is not null)
         {
-            AddText($"선택 완료 · {DescribeChoice(choice)}", 13, "#A7F3CE", 4, 4, true);
-            AddText(opponent.Submitted ? "상대도 입력했어요. 결과를 계산하는 중…" : "상대가 시간 날 때 선택하면 다음 턴으로 넘어갑니다.\n앱을 꺼도 선택한 행동은 저장됩니다.", 12, "#91AB9C", 0, 10);
+            AddText(opponent.Submitted ? "결과 확인 중…" : "상대 선택을 기다려요 · 앱을 꺼도 저장됩니다.", 11, "#91AB9C", 0, 10);
         }
         else if (attacking)
         {
@@ -310,20 +300,36 @@ public partial class MainWindow
         AddButton(me.GaveUp ? "포기 요청 취소" : "포기하기", () => SetSlapGiveUp(!me.GaveUp)).ToolTip = "두 사람 모두 포기하면 승패 없이 대전이 종료됩니다.";
         AddButton("방 목록으로 · 대전 유지", LeaveSlapRoom);
     }
-    private void AddSlapStats(SlapPlayer p, bool mine, bool attacking)
+    private void AddSlapArena(SlapRoom room, SlapPlayer me, SlapPlayer? opponent)
     {
-        var hearts = new string('♥', p.Hp) + new string('♡', SlapRules.MaxHp - p.Hp);
-        var gauge = new string('●', p.Gauge) + new string('○', SlapRules.MaxGauge - p.Gauge);
-        var input = p.GaveUp ? "  ·  포기 요청" : mine ? "" : p.Submitted ? "  ·  입력 완료 ✓" : "  ·  선택 대기";
-        AddSlapCard($"{(attacking ? "공격" : "수비")}  {p.Id}{(mine ? " (나)" : "")}{input}", $"체력 {hearts}  {p.Hp}/{SlapRules.MaxHp}      기 {gauge}  {p.Gauge}/{SlapRules.MaxGauge}", mine);
-    }
-    private void AddSlapCard(string heading, string detail, bool highlight)
-    {
-        var body = new StackPanel();
-        body.Children.Add(new TextBlock { Text = heading, FontSize = 13, FontWeight = FontWeights.Bold, TextTrimming = TextTrimming.CharacterEllipsis });
-        body.Children.Add(new TextBlock { Text = detail, FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(167, 243, 206)), Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap });
-        DialogContent.Children.Add(new Border { Child = body, Padding = new Thickness(12, 9, 12, 9), Margin = new Thickness(0, 0, 0, 6), CornerRadius = new CornerRadius(8),
-            Background = new SolidColorBrush(highlight ? Color.FromRgb(37, 61, 46) : Color.FromRgb(16, 27, 23)) });
+        if (SlapPresentation.ShowsResult(room)) AddText($"R{room.LastResult!.Round} 결과", 10, "#91AB9C", 0, 4);
+        var arena = new UniformGrid { Rows = 1, Columns = 2, Margin = new Thickness(-3, 0, -3, 10) };
+        arena.SizeChanged += (_, e) => { var narrow = e.NewSize.Width < 260; arena.Rows = narrow ? 2 : 1; arena.Columns = narrow ? 1 : 2; };
+        AddFighter(me, false);
+        AddFighter(opponent, true);
+        DialogContent.Children.Add(arena);
+
+        void AddFighter(SlapPlayer? player, bool right)
+        {
+            int index = player is null ? 1 : room.Players.IndexOf(player);
+            var visual = player is null ? new SlapFighterVisual(SlapPose.Idle, "참가자 대기", "참가자를 기다리고 있어요")
+                : SlapPresentation.ForPlayer(room, player.Id, me.Id);
+            var name = player is null ? "P2  —" : $"P{index + 1}  {player.Id}{(player == me ? " (나)" : "")}";
+            var body = new StackPanel();
+            body.Children.Add(new TextBlock { Text = name, ToolTip = name, FontSize = 12, FontWeight = FontWeights.Bold,
+                TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(4, 0, 4, 6) });
+            var fighter = new SlapFighterView { PlayerId = player?.Id ?? "", Character = index, Visual = visual,
+                Hp = player?.Hp ?? SlapRules.MaxHp, Gauge = player?.Gauge ?? 0, FacingLeft = right, Empty = player is null,
+                ToolTip = visual.Description };
+            System.Windows.Automation.AutomationProperties.SetName(fighter,
+                $"{name} · 체력 {fighter.Hp}/{SlapRules.MaxHp} · 기력 {fighter.Gauge}/{SlapRules.MaxGauge} · {visual.Description}");
+            body.Children.Add(fighter);
+            body.Children.Add(new TextBlock { Text = visual.Caption, ToolTip = visual.Description, TextAlignment = TextAlignment.Center,
+                FontSize = 12, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(167, 243, 206)),
+                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 4) });
+            arena.Children.Add(new Border { Child = body, Padding = new Thickness(6, 9, 6, 6), Margin = new Thickness(3, 0, 3, 0),
+                CornerRadius = new CornerRadius(12), Background = new SolidColorBrush(Color.FromRgb(16, 27, 23)) });
+        }
     }
     private void AddSlapRow(IEnumerable<(string Text, Action Click, bool Enabled, bool Primary)> items)
     {
@@ -336,20 +342,5 @@ public partial class MainWindow
             row.Children.Add(button);
         }
         DialogContent.Children.Add(row);
-    }
-    private static string DescribeChoice(SlapAction a) => a.Move switch
-    {
-        SlapMove.Charge => "기 모으기",
-        SlapMove.Slap => $"{SlapRules.ZoneName(a.Zone!.Value)} {SlapRules.PowerName(a.Power)}",
-        _ => $"{SlapRules.ZoneName(a.Zone!.Value)} 막기",
-    };
-    private static string DescribeSlap(SlapResult r, string topPlayerId)
-    {
-        var outcome = r.Attack.Move != SlapMove.Slap ? "공격 없음" : r.Blocked ? "막았다! 피해 없음" : $"짝! {r.Defender} 체력 -{r.Damage}";
-        var attack = $"{r.Attacker}: {DescribeChoice(r.Attack)}";
-        var defense = $"{r.Defender}: {DescribeChoice(r.Defense)}  →  {outcome}";
-        return r.Attacker == topPlayerId
-            ? $"R{r.Round}  {attack}\n{defense}"
-            : $"R{r.Round}  {defense}\n{attack}";
     }
 }
