@@ -45,9 +45,8 @@ public partial class MainWindow
         var signature = "lobby|" + userId + "|" + JsonSerializer.Serialize(slapRooms);
         if (panel == "slap-lobby" && slapDrawn == signature && note is null) return;
         slapDrawn = signature;
-        BeginPanel("slap-lobby", "맞짱 · 1 : 1", "맞짱", "여러 방을 만들거나 동시에 참가할 수 있어요.\n각 방에서 시간 날 때 한 턴씩 진행하고, 목록에서 이어서 플레이하세요.");
+        BeginPanel("slap-lobby", "맞짱 · 1 : 1", "맞짱", "");
         AddSlapSyncControls();
-        AddText($"체력 {SlapRules.MaxHp}  ·  기본 공격력 {SlapRules.BaseDamage}  ·  기 최대 {SlapRules.MaxGauge}개\n공격: 상단·중단·하단 중 하나를 때리거나 기 모으기\n수비: 기 소모 없이 상단·중단·하단 중 하나를 막거나 기 모으기\n기본공격: 기 0 · 피해 1  /  강한 뺨: 기 1 · 피해 2\n필살뺨: 기 3 · 피해 5", 11, "#91AB9C", 0, 14);
         AddButton("방 만들기", CreateSlapRoom, true);
         if (slapRooms.Count == 0) AddText("열린 방이 없어요. 방을 만들고 상대를 기다려 보세요.", 12, "#91AB9C", 10, 6);
         var mine = slapRooms.Where(r => r.Find(userId!) is not null).OrderByDescending(r => r.CreatedAt).ToList();
