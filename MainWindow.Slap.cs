@@ -304,7 +304,6 @@ public partial class MainWindow
     {
         if (SlapPresentation.ShowsResult(room)) AddText($"R{room.LastResult!.Round} 결과", 10, "#91AB9C", 0, 4);
         var arena = new UniformGrid { Rows = 1, Columns = 2, Margin = new Thickness(-3, 0, -3, 10) };
-        arena.SizeChanged += (_, e) => { var narrow = e.NewSize.Width < 260; arena.Rows = narrow ? 2 : 1; arena.Columns = narrow ? 1 : 2; };
         AddFighter(me, false);
         AddFighter(opponent, true);
         DialogContent.Children.Add(arena);
@@ -320,10 +319,10 @@ public partial class MainWindow
                 TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(4, 0, 4, 6) });
             var fighter = new SlapFighterView { PlayerId = player?.Id ?? "", Character = index, Visual = visual,
                 Hp = player?.Hp ?? SlapRules.MaxHp, Gauge = player?.Gauge ?? 0, FacingLeft = right, Empty = player is null,
-                ToolTip = visual.Description };
+                Width = 160, ToolTip = visual.Description };
             System.Windows.Automation.AutomationProperties.SetName(fighter,
                 $"{name} · 체력 {fighter.Hp}/{SlapRules.MaxHp} · 기력 {fighter.Gauge}/{SlapRules.MaxGauge} · {visual.Description}");
-            body.Children.Add(fighter);
+            body.Children.Add(new Viewbox { Child = fighter, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly });
             body.Children.Add(new TextBlock { Text = visual.Caption, ToolTip = visual.Description, TextAlignment = TextAlignment.Center,
                 FontSize = 12, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(167, 243, 206)),
                 TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 4) });

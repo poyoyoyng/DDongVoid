@@ -84,6 +84,48 @@ internal static class RankingChecks
         string[] Labels() => Find<TextBlock>(content).Select(t => t.Text).ToArray();
         bool OwnCharge(FrameworkElement surface) => Find<SlapFighterView>(surface).Any(f => f.Visual.CurrentChoice && f.Visual.Charging);
         bool SubmittedBy(FrameworkElement surface, string id) => Find<SlapFighterView>(surface).Any(f => f.PlayerId == id && f.Visual.Submitted);
+        var initialPreferences = Get("preferences")!;
+        var preferenceType = initialPreferences.GetType();
+        var preferenceCopy = System.Text.Json.JsonSerializer.Deserialize(System.Text.Json.JsonSerializer.Serialize(initialPreferences), preferenceType)!;
+        Set("preferences", preferenceCopy);
+        void SetPreference(string name, object value) => preferenceType.GetProperty(name)!.SetValue(preferenceCopy, value);
+        SetPreference("PlayerAlpha", .6); SetPreference("HazardAlpha", .8); SetPreference("BackgroundStrength", .4); SetPreference("ScoreAlpha", .5);
+        Call("ApplyAppearance"); Layout();
+        var quickSlider = (Slider)window.FindName("DialogOpacitySlider");
+        var titleSlider = (Slider)window.FindName("TitleOpacitySlider");
+        var surface = (GameSurface)window.FindName("Surface");
+        var rhythmSurface = (RhythmSurface)window.FindName("RhythmView");
+        var dialogContent = (FrameworkElement)window.FindName("DialogContent");
+        quickSlider.Value = 50; Layout();
+        Assert(surface.Opacity == .5 && rhythmSurface.Opacity == .5 && dialogContent.Opacity == .5
+            && surface.PlayerAlpha == .6 && surface.HazardAlpha == .8 && surface.BackgroundStrength == .4,
+            "상단 투명도는 설정값을 유지하며 게임과 메뉴를 50%로 표시");
+        Assert(titleSlider.Value == 50, "메뉴와 창 제목의 투명도 슬라이더 동기화");
+        titleSlider.Value = 0; Layout();
+        bool OpacityVisible(DependencyObject element)
+        {
+            for (DependencyObject? item = element; item is not null; item = VisualTreeHelper.GetParent(item))
+                if (item is UIElement { Opacity: 0 }) return false;
+            return true;
+        }
+        Assert(quickSlider.Value == 0 && dialogContent.Opacity == 0 && quickSlider.Opacity == 1
+            && OpacityVisible(quickSlider),
+            "0%에서도 조절 영역을 유지해 표시 상태 복구 가능");
+        quickSlider.Value = 100;
+        Assert(surface.Opacity == 1 && surface.PlayerAlpha == .6 && rhythmSurface.NoteAlpha == .8
+            && ((TextBlock)window.FindName("QuietScore")).Opacity == .5, "100%에서 각 설정의 원래 표시 상태 복원");
+        var originalPreferencesPath = (string)Get("preferencesPath")!;
+        var quickSettingsPath = Path.Combine(root, "quick-settings.json");
+        Set("preferencesPath", quickSettingsPath);
+        quickSlider.Value = 35; Call("SavePreferences");
+        var restoredPreferences = typeof(MainWindow).GetMethod("LoadPreferences", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null)!;
+        Assert((double)preferenceType.GetProperty("OpacityScale")!.GetValue(restoredPreferences)! == .35
+            && (double)preferenceType.GetProperty("PlayerAlpha")!.GetValue(restoredPreferences)! == .6,
+            "빠른 투명도 비율과 기존 설정값을 별도로 저장·복원");
+        File.WriteAllText(quickSettingsPath, "{\"OpacityScale\":180}");
+        restoredPreferences = typeof(MainWindow).GetMethod("LoadPreferences", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null)!;
+        Assert((double)preferenceType.GetProperty("OpacityScale")!.GetValue(restoredPreferences)! == 1, "저장된 투명도 범위를 0~100%로 제한");
+        Set("preferencesPath", originalPreferencesPath); Set("preferences", initialPreferences); Call("ApplyAppearance");
         if (args.Length == 2 && args[0] == "--slap-preview")
         {
             var preview = new SlapRoom { Id = Guid.NewGuid(), Status = SlapStatus.Playing,
@@ -91,8 +133,10 @@ internal static class RankingChecks
             preview.Submit("돼지현이", new(SlapMove.Slap, SlapZone.High, 2));
             preview.Submit("esul", new(SlapMove.Block, SlapZone.Low));
             Set("store", store); Set("userId", "돼지현이"); Set("slapRoom", preview); Set("slapRoomId", preview.Id);
-            Call("ShowSlapRoom"); Layout(480, 860);
+            Call("ShowSlapRoom"); Layout(480, 860); Layout(480, 860);
             var fighters = Find<SlapFighterView>(content).ToArray();
+            Wait(() => ((FrameworkElement)window.FindName("Dialog")).ActualHeight > 300);
+            Layout(480, 860);
             Assert(fighters.Length == 2 && fighters[0].Character == 0 && fighters[1].Character == 1, "서로 다른 두 캐릭터 표시");
             Assert(fighters[0].Visual.Pose == SlapPose.AttackSuccess && fighters[1].Visual.Pose == SlapPose.Hit,
                 "각 캐릭터에 공격 성공·피격 결과 연결");
@@ -105,11 +149,16 @@ internal static class RankingChecks
             }
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(args[1]))!);
             Save(content, args[1], 480, 860);
+            var wideBounds = fighters.Select(f => f.TransformToAncestor(content).TransformBounds(new Rect(f.RenderSize))).ToArray();
             Set("userId", "esul"); Set("slapDrawn", null); Call("DrawSlapRoom"); Layout();
             Assert(Find<SlapFighterView>(content).Single(f => f.PlayerId == "돼지현이").Character == 0
                 && Find<SlapFighterView>(content).Single(f => f.PlayerId == "esul").Character == 1, "상대 화면에서도 캐릭터 배정 유지");
             Layout(300, 740);
-            Assert(Find<SlapFighterView>(content).All(f => f.ActualWidth >= 140), "좁은 창에서 세로 배치로 상태 표시 공간 확보");
+            var narrowFighters = Find<SlapFighterView>(content).ToArray();
+            var narrowBounds = narrowFighters.Select(f => f.TransformToAncestor(content).TransformBounds(new Rect(f.RenderSize))).ToArray();
+            Assert(Math.Abs(narrowBounds[0].Top - narrowBounds[1].Top) < 1 && narrowBounds[0].Right <= narrowBounds[1].Left
+                && narrowBounds.All(b => b.Width > 40 && b.Width < wideBounds[0].Width), "300px 창에서도 가로 배치·비율 축소·겹침 없음");
+            Save(content, Path.ChangeExtension(args[1], "narrow.png"), 300, 740);
             var gallery = new System.Windows.Controls.Primitives.UniformGrid { Rows = 2, Columns = 6, Background = new SolidColorBrush(Color.FromRgb(16, 27, 23)) };
             for (int character = 0; character < 2; character++)
                 foreach (var pose in Enum.GetValues<SlapPose>())

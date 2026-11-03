@@ -32,6 +32,7 @@ public partial class MainWindow : Window
         public double HazardAlpha { get; set; } = .65;
         public bool ShowQuietScore { get; set; }
         public double ScoreAlpha { get; set; } = .25;
+        public double OpacityScale { get; set; } = 1;
         public double? WindowWidth { get; set; }
         public double? WindowHeight { get; set; }
         public string? RememberedUser { get; set; }
@@ -124,6 +125,7 @@ public partial class MainWindow : Window
             p.PlayerAlpha = double.IsFinite(p.PlayerAlpha) ? Math.Clamp(p.PlayerAlpha, 0, 1) : .8;
             p.HazardAlpha = double.IsFinite(p.HazardAlpha) ? Math.Clamp(p.HazardAlpha, 0, 1) : .65;
             p.ScoreAlpha = double.IsFinite(p.ScoreAlpha) ? Math.Clamp(p.ScoreAlpha, 0, 1) : .25;
+            p.OpacityScale = double.IsFinite(p.OpacityScale) ? Math.Clamp(p.OpacityScale, 0, 1) : 1;
             if (p.WindowWidth is not (> 0 and < 100000) || p.WindowHeight is not (> 0 and < 100000)) p.WindowWidth = p.WindowHeight = null;
             p.RhythmBest ??= [];
             return p;
@@ -156,7 +158,7 @@ public partial class MainWindow : Window
         ModeLabel.Visibility = preferences.Transparent ? Visibility.Hidden : Visibility.Visible;
         var chrome = preferences.Transparent ? Visibility.Collapsed : Visibility.Visible;
         TitleChrome.Visibility = HudChrome.Visibility = FooterChrome.Visibility = chrome;
-        TitleRow.Height = new GridLength(preferences.Transparent ? 0 : 56);
+        TitleRow.Height = new GridLength(preferences.Transparent ? 0 : 80);
         HudRow.Height = new GridLength(preferences.Transparent ? 0 : 88);
         FooterRow.Height = new GridLength(preferences.Transparent ? 0 : 56);
         Shell.BorderBrush = preferences.Transparent ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(59, 80, 68));
@@ -167,7 +169,30 @@ public partial class MainWindow : Window
         MinWidth = preferences.Transparent ? 300 : 480;
         MinHeight = preferences.Transparent ? 320 : 600;
         Topmost = preferences.AlwaysOnTop;
+        ApplyQuickOpacity();
         Surface.InvalidateVisual();
+    }
+    private void ApplyQuickOpacity()
+    {
+        double scale = preferences.OpacityScale;
+        Surface.Opacity = RhythmView.Opacity = Shell.Opacity = HudChrome.Opacity = FooterChrome.Opacity = ModeLabel.Opacity = scale;
+        QuietScore.Opacity = preferences.ScoreAlpha * scale;
+        DialogContent.Opacity = scale;
+        Dialog.Background = new SolidColorBrush(Color.FromArgb((byte)Math.Round(252 * scale), 24, 38, 31));
+        Dialog.BorderBrush = new SolidColorBrush(Color.FromArgb((byte)Math.Round(255 * scale), 64, 87, 74));
+        Overlay.Background = preferences.Transparent ? Brushes.Transparent : new SolidColorBrush(Color.FromArgb((byte)Math.Round(48 * scale), 16, 27, 23));
+        // Keep the drag controls and sliders visible even at 0%, so the user can restore the game.
+        DialogOpacitySlider.Value = scale * 100;
+    }
+    private void QuickOpacity_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (preferences is null || Math.Abs(preferences.OpacityScale - e.NewValue / 100) < .000001) return;
+        preferences.OpacityScale = e.NewValue / 100;
+        ApplyQuickOpacity();
+    }
+    private void QuickOpacity_Commit(object sender, RoutedEventArgs e)
+    {
+        if (preferences is not null) SavePreferences();
     }
     // Hooked only while playing: an attached Rendering handler keeps WPF redrawing every frame,
     // which would burn CPU in the menu, while paused, or while the window is hidden.
@@ -849,6 +874,7 @@ public partial class MainWindow : Window
             e.Handled = true; return;
         }
         if (Keyboard.FocusedElement is TextBox or PasswordBox) return;
+        if (Keyboard.FocusedElement is Slider && e.Key != Key.Escape) return;
         if (playState == PlayState.Playing && activeGame == MiniGame.Rhythm && RhythmKey(e) is char rhythmKey)
         {
             RhythmView.Engine.Hit(rhythmKey); RhythmView.InvalidateVisual(); UpdateHud();
@@ -878,7 +904,8 @@ public partial class MainWindow : Window
     {
         if (e.OriginalSource is DependencyObject d)
         {
-            for (var item = d; item is not null; item = VisualTreeHelper.GetParent(item)) if (item is Button) return;
+            for (var item = d; item is not null; item = item is Visual ? VisualTreeHelper.GetParent(item) : LogicalTreeHelper.GetParent(item))
+                if (item is System.Windows.Controls.Primitives.ButtonBase or System.Windows.Controls.Primitives.RangeBase) return;
         }
         if (e.LeftButton == MouseButtonState.Pressed) { PauseGame(); DragMove(); }
     }
