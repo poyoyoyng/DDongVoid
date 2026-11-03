@@ -665,8 +665,8 @@ internal static class RankingChecks
             "도착한 말만 있는 상대도 계속 의심 가능·자동 종료 보류");
         GuestClick("의심");
         Wait(() => !(bool)GuestGet("busy")! && Labels().Contains("이겼어요!") && GuestLabels().Contains("게임이 끝났어요"));
-        Assert(Labels().Any(t => t.Contains("7개 자동 도착")) && Labels().Any(t => t.Contains("도착 7개 · 28점"))
-            && GuestLabels().Any(t => t.Contains("7개 자동 도착")), "상대 마지막 도착 말 추락 후 양쪽에 자동 정산·최종 점수 표시");
+        Assert(Labels().Any(t => t.Contains("7개 자동 도착")) && ((CiaoRoom)Get("ciaoRoom")!).Find("player00")!.Score == 28
+            && GuestLabels().Any(t => t.Contains("7개 자동 도착")), "상대 마지막 도착 말 추락 후 양쪽에 자동 정산 결과 동기화");
         Assert(Find<System.Windows.Shapes.Ellipse>(content).Count(p => p.Tag is string tag && tag.StartsWith("ciao-reserve:")) == 0
             && Find<System.Windows.Shapes.Ellipse>(content).Count(p => p.Tag is string tag && tag.StartsWith("ciao-active:")) == 0,
             "자동 도착 후 공용 이동판·대기 말 그림에서 남은 말 제거");

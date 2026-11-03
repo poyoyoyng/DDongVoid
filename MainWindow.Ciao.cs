@@ -312,7 +312,7 @@ public partial class MainWindow
         {
             var player = room.Players[i]; var color = colors[i];
             AddText($"{(room.SpeakerId == player.Id ? "▶ " : "")}P{i + 1}  {player.Id}{(player.Id == userId ? " (나)" : "")}", 12, color, 0, 3, true);
-            var remaining = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 3) };
+            var remaining = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 7) };
             remaining.Children.Add(new TextBlock { Text = "남은 말", FontSize = 10, Width = 44, VerticalAlignment = VerticalAlignment.Center,
                 Foreground = new SolidColorBrush(Color.FromRgb(145, 171, 156)) });
             if (player.Position is int position)
@@ -326,8 +326,6 @@ public partial class MainWindow
                 Foreground = new SolidColorBrush(Color.FromRgb(145, 171, 156)) });
             System.Windows.Automation.AutomationProperties.SetName(remaining, $"{player.Id} · 남은 말 {count}개 · 대기 {player.Reserve}개");
             DialogContent.Children.Add(remaining);
-            var arrived = room.Status == CiaoStatus.Finished ? $"도착 {player.GoalScores.Count}개" : $"도착 {player.GoalScores.Count}/3";
-            AddText($"{arrived} · {player.Score}점 · 추락 {player.Fallen}", 10, "#91AB9C", 0, 7);
         }
         AddText("도착대", 11, "#91AB9C", 0, 4);
         var podium = new UniformGrid { Rows = 1, Columns = CiaoRules.PodiumSize, Margin = new Thickness(0, 0, 0, 6) };
