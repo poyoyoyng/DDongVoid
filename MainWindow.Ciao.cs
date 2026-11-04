@@ -24,7 +24,7 @@ public partial class MainWindow
     private TextBlock? ciaoSyncStatus;
     private TextBlock? ciaoResponseCountdown;
     private bool InCiaoMatch => ciaoRoom?.Status == CiaoStatus.Playing;
-    private CiaoStore NewCiaoStore() => new(store.Folder);
+    private ICiaoStore NewCiaoStore() => store.Ciao();
 
     private void StartCiaoTimer()
     {
@@ -95,7 +95,7 @@ public partial class MainWindow
     {
         ciaoRooms.RemoveAll(r => r.Id == room.Id); ciaoRooms.Add(room);
     }
-    private async Task RunCiaoAsync(Func<CiaoStore, string, CiaoRoom?> action)
+    private async Task RunCiaoAsync(Func<ICiaoStore, string, CiaoRoom?> action)
     {
         if (busy || userId is null) return;
         var ciaoStore = NewCiaoStore(); var me = userId;
@@ -107,7 +107,7 @@ public partial class MainWindow
         try
         {
             var room = await Task.Run(() => action(ciaoStore, me));
-            if (version != ciaoStateVersion || userId != me || store.Folder != ciaoStore.Folder) return;
+            if (version != ciaoStateVersion || userId != me || store.Location != ciaoStore.Location) return;
             ciaoRoom = room; ciaoRoomId = room?.Id;
             if (room is null)
             {
@@ -117,7 +117,7 @@ public partial class MainWindow
         }
         catch (Exception ex) when (IsUserError(ex))
         {
-            if (version == ciaoStateVersion && userId == me && store.Folder == ciaoStore.Folder)
+            if (version == ciaoStateVersion && userId == me && store.Location == ciaoStore.Location)
             {
                 SetMessage(ex.Message); refresh = true;
             }
@@ -134,11 +134,11 @@ public partial class MainWindow
             ciaoSyncStatus.ToolTip = CiaoSyncDetails();
         }
     }
-    private string CiaoSyncDetails() => $"앱 버전: {UpdateService.CurrentVersion}\n저장 파일: {System.IO.Path.Combine(store.Folder, "ddongvoid-ciao.json")}"
+    private string CiaoSyncDetails() => $"앱 버전: {UpdateService.CurrentVersion}\n저장 위치: {DataLocation("ddongvoid-ciao.json")}"
         + (ciaoRoom is { } room ? $"\n방 ID: {room.Id}\n방 수정 번호: {room.Revision}\n현재 턴: {room.Turn}" : "");
     private void AddCiaoSyncControls()
     {
-        var row = new DockPanel { Margin = new Thickness(0, 0, 0, 10), ToolTip = store.Folder };
+        var row = new DockPanel { Margin = new Thickness(0, 0, 0, 10), ToolTip = store.Location };
         var refresh = new Button { Content = "새로고침", Padding = new Thickness(9, 5, 9, 5), FontSize = 11 };
         refresh.Click += async (_, _) => await RefreshCiaoAsync();
         DockPanel.SetDock(refresh, Dock.Right); row.Children.Add(refresh);
@@ -178,7 +178,7 @@ public partial class MainWindow
             deadline.CancelAfter(TimeSpan.FromSeconds(8));
             var readToken = deadline.Token;
             var snapshot = await Task.Run(() => ciaoStore.SnapshotAsync(me, readToken), readToken).WaitAsync(readToken);
-            if (version != ciaoStateVersion || userId != me || store.Folder != ciaoStore.Folder || roomId != ciaoRoomId) return;
+            if (version != ciaoStateVersion || userId != me || store.Location != ciaoStore.Location || roomId != ciaoRoomId) return;
             var rooms = snapshot.Rooms;
             if (roomId is Guid id)
             {
@@ -208,10 +208,10 @@ public partial class MainWindow
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception ex) when (IsUserError(ex) || ex is OperationCanceledException)
         {
-            if (version == ciaoStateVersion && userId == me && store.Folder == ciaoStore.Folder && panel.StartsWith("ciao"))
+            if (version == ciaoStateVersion && userId == me && store.Location == ciaoStore.Location && panel.StartsWith("ciao"))
             {
                 SetCiaoSyncNote("조회 실패 · 자동 재시도 중");
-                SetMessage("차오차오 정보를 불러오지 못했습니다. 공유 폴더 연결을 확인해 주세요."); ciaoDrawn = null;
+                SetMessage("차오차오 정보를 불러오지 못했습니다. 서버 연결을 확인해 주세요."); ciaoDrawn = null;
             }
         }
         finally

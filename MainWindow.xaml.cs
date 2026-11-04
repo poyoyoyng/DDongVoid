@@ -11,20 +11,22 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using DDongVoid.Core;
-using Microsoft.Win32;
+using DDongVoid.Online;
 
 namespace DDongVoid;
 
 public partial class MainWindow : Window
 {
-    private const string DefaultDataFolder = @"\\192.168.0.120\SW Team\팀원\최지운\DD";
+    private const string DefaultServerAddress = "http://localhost:5080";
     private enum PlayState { Home, Playing, Paused, Over }
     private enum MiniGame { Dodge, Rhythm }
     private enum RankingGame { Dodge, Rhythm, Slap }
     private RankingGame rankingGame;
     private sealed class Preferences
     {
+        // Kept so the shared-folder build on the same PC keeps its folder when this build saves settings.
         public string? DataFolder { get; set; }
+        public string? ServerAddress { get; set; }
         public bool Transparent { get; set; } = true;
         public double BackgroundStrength { get; set; } = 1;
         public bool AlwaysOnTop { get; set; }
@@ -43,7 +45,7 @@ public partial class MainWindow : Window
     }
     private readonly string preferencesPath;
     private Preferences preferences;
-    private LocalStore store;
+    private IAccountStore store;
     private string? userId;
     private PlayState playState;
     private MiniGame activeGame;
@@ -78,12 +80,12 @@ public partial class MainWindow : Window
         var localFolder = portable ? AppContext.BaseDirectory : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DDongVoid");
         preferencesPath = Path.Combine(localFolder, "settings.json");
         preferences = LoadPreferences();
-        // Resolve the path without network I/O so an offline share cannot delay the game window.
-        try { store = new LocalStore(string.IsNullOrWhiteSpace(preferences.DataFolder) ? DefaultDataFolder : preferences.DataFolder); }
+        // Only parse the address here so an unreachable server cannot delay the game window.
+        try { store = new RemoteAccountStore(new OnlineServer(string.IsNullOrWhiteSpace(preferences.ServerAddress) ? DefaultServerAddress : preferences.ServerAddress)); }
         catch (Exception ex) when (IsUserError(ex))
         {
-            store = new LocalStore(DefaultDataFolder);
-            startupError = "저장 폴더를 확인해 주세요. " + ex.Message;
+            store = new RemoteAccountStore(new OnlineServer(DefaultServerAddress));
+            startupError = "서버 주소를 확인해 주세요. " + ex.Message;
         }
         ApplyAppearance();
         if (preferences.WindowWidth is double savedWidth && preferences.WindowHeight is double savedHeight)
@@ -116,6 +118,7 @@ public partial class MainWindow : Window
             if (source is not null) { if (hotkeyRegistered) UnregisterHotKey(source.Handle, 1); source.RemoveHook(WindowProc); }
         };
     }
+    private string DataLocation(string fileName) => store is LocalStore files ? Path.Combine(files.Folder, fileName) : $"서버 {store.Location}";
     private static bool IsUserError(Exception ex) => ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException or System.Threading.WaitHandleCannotBeOpenedException;
     private Preferences LoadPreferences()
     {
@@ -423,7 +426,7 @@ public partial class MainWindow : Window
         if (pendingRecord is null) return;
         try
         {
-            if (activeGame == MiniGame.Rhythm) new RhythmStore(store.Folder).AddRecord(pendingRecord);
+            if (activeGame == MiniGame.Rhythm) store.Rhythm().AddRecord(pendingRecord);
             else store.AddRecord(pendingRecord);
             pendingRecord = null; lastRecordSaved = true;
             if (panel == "end") ShowEnd();
@@ -499,7 +502,7 @@ public partial class MainWindow : Window
                 password.Clear(); confirm?.Clear();
                 ResetToHome();
                 startupError = null; ShowHome(); SetMessage(register ? "회원가입이 완료되었습니다." : "로그인했습니다.", true);
-                preferences.RememberedUser = loggedIn; preferences.RememberedFolder = store.Folder; preferences.RememberedKey = sessionKey;
+                preferences.RememberedUser = loggedIn; preferences.RememberedFolder = store.Location; preferences.RememberedKey = sessionKey;
                 SavePreferences();
             }
             catch (Exception ex) when (IsUserError(ex)) { SetMessage(ex.Message); }
@@ -510,7 +513,7 @@ public partial class MainWindow : Window
             }
         };
         AddButton(register ? "이미 계정이 있어요 · 로그인" : "처음이에요 · 회원가입", () => ShowAuth(!register));
-        AddButton("저장 폴더 설정", ShowSettings);
+        AddButton("서버 주소 설정", ShowServerSettings);
         AddButton("돌아가기", ReturnToGame);
         idInput.Focus();
     }
@@ -543,8 +546,8 @@ public partial class MainWindow : Window
         {
             var rankings = await Task.Run(() => game switch
             {
-                RankingGame.Rhythm => new RhythmStore(rankingStore.Folder).Rankings(),
-                RankingGame.Slap => new SlapStore(rankingStore.Folder).Rankings(),
+                RankingGame.Rhythm => rankingStore.Rhythm().Rankings(),
+                RankingGame.Slap => rankingStore.Slap().Rankings(),
                 _ => rankingStore.Rankings()
             });
             if (panel != "ranking" || request != rankingRequest || store != rankingStore) return;
@@ -593,7 +596,7 @@ public partial class MainWindow : Window
         {
             if (panel != "ranking" || request != rankingRequest || store != rankingStore) return;
             BeginRankingPanel();
-            AddText("랭킹을 불러오지 못했어요. 저장 폴더의 연결과 접근 권한을 확인해 주세요.", 12, "#F4B69D");
+            AddText("랭킹을 불러오지 못했어요. 서버 주소와 서버 실행 상태를 확인해 주세요.", 12, "#F4B69D");
             AddButton("다시 불러오기", ShowRankings, true);
             AddButton("메인 메뉴로", ReturnToGame);
             SetMessage(ex.Message);
@@ -670,8 +673,8 @@ public partial class MainWindow : Window
         AddButton("창 크기 설정 모드…", EnterSizeMode);
         AddButton("작은 창 360 × 440", () => { preferences.Transparent = true; ApplyAppearance(); Width = 360; Height = 440; RememberWindowSize(); ShowSettings(); SavePreferences(); });
         AddButton("기본 창 480 × 740", () => { Width = 480; Height = 740; RememberWindowSize(); ShowSettings(); SavePreferences(); });
-        AddText("저장 폴더", 12, "#B6C7BC", 12, 6, true);
-        AddButton("저장 폴더 선택…", ChooseFolder).ToolTip = store.Folder;
+        AddText("서버", 12, "#B6C7BC", 12, 6, true);
+        AddButton("서버 주소 설정…", ShowServerSettings).ToolTip = store.Location;
         AddButton("계정 · 로그인 / 로그아웃", ShowAccount);
         AddButton("내 기록 보기", ShowHistory);
         AddButton("완료 · 게임으로", CloseSettings, true);
@@ -767,28 +770,43 @@ public partial class MainWindow : Window
         SavePreferences();
         if (playState == PlayState.Paused) ResumeGame(); else ReturnToGame();
     }
-    private void ChooseFolder()
+    private void ShowServerSettings()
     {
         if (pendingRecord is not null) { SetMessage("미저장 기록이 있습니다. 게임 결과 화면에서 먼저 저장해 주세요."); return; }
-        var dialog = new OpenFolderDialog { Title = "계정과 기록을 저장할 폴더 선택", Multiselect = false };
-        if (Directory.Exists(store.Folder)) dialog.InitialDirectory = store.Folder;
-        if (dialog.ShowDialog(this) != true) return;
-        try
+        BeginPanel("server", "WHERE WE PLAY", "서버 주소", "서버 프로그램을 켠 PC의 주소를 입력하세요.\n예: http://192.168.0.10:5080 · https://game.example.com");
+        AddText("서버 주소", 12, "#B6C7BC", 0, 6);
+        var input = new TextBox { Text = store.Location, Margin = new Thickness(0, 0, 0, 12) };
+        System.Windows.Automation.AutomationProperties.SetName(input, "서버 주소"); DialogContent.Children.Add(input);
+        var connect = AddButton("연결 확인 후 저장", () => { }, true);
+        connect.Click += async (_, _) =>
         {
-            var candidate = new LocalStore(dialog.FolderName); candidate.Validate();
-            var probe = Path.Combine(candidate.Folder, $".ddongvoid-writecheck-{Guid.NewGuid():N}");
-            using (new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose)) { }
-            var old = preferences.DataFolder; preferences.DataFolder = candidate.Folder;
-            if (!SavePreferences()) { preferences.DataFolder = old; return; }
-            DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom();
-            store = candidate; userId = null; bestScore = 0; pendingRecord = null;
-            ResetToHome(); startupError = null;
-            UpdateHud(); ShowSettings(); SetMessage("저장 폴더를 변경했습니다. 이 폴더의 계정으로 로그인해 주세요.", true);
-        }
-        catch (Exception ex) when (IsUserError(ex)) { SetMessage(ex.Message); }
+            if (busy) return;
+            busy = true; connect.IsEnabled = false; input.IsEnabled = false;
+            try
+            {
+                var candidate = new OnlineServer(input.Text);
+                var health = await Task.Run(candidate.Health);
+                var old = preferences.ServerAddress; preferences.ServerAddress = candidate.Address;
+                if (!SavePreferences()) { preferences.ServerAddress = old; return; }
+                var changed = candidate.Address != store.Location;
+                if (changed)
+                {
+                    DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom();
+                    store = new RemoteAccountStore(candidate); userId = null; bestScore = 0;
+                    ResetToHome();
+                }
+                startupError = null; UpdateHud(); ShowSettings();
+                SetMessage(changed ? $"서버 {health.Version}에 연결했습니다. 이 서버의 계정으로 로그인해 주세요." : $"서버 {health.Version} 연결을 확인했습니다.", true);
+                if (changed) _ = ResumeSessionAsync();
+            }
+            catch (Exception ex) when (IsUserError(ex)) { SetMessage(ex.Message); }
+            finally { busy = false; connect.IsEnabled = true; input.IsEnabled = true; }
+        };
+        AddButton("돌아가기", ShowSettings);
+        input.Focus(); input.SelectAll();
     }
     private bool HasRememberedSession => preferences.RememberedUser is not null && preferences.RememberedKey is not null &&
-        string.Equals(preferences.RememberedFolder, store.Folder, StringComparison.OrdinalIgnoreCase);
+        string.Equals(preferences.RememberedFolder, store.Location, StringComparison.OrdinalIgnoreCase);
     private void ForgetSession()
     {
         if (preferences.RememberedUser is null && preferences.RememberedKey is null) return;
@@ -809,7 +827,7 @@ public partial class MainWindow : Window
             if (userId is null && store == sessionStore) { userId = resumed; bestScore = best; startupError = null; }
         }
         catch (ArgumentException ex) { if (store == sessionStore) ForgetSession(); error = ex.Message; }
-        catch (Exception ex) when (IsUserError(ex)) { error = "저장된 로그인을 확인하지 못했습니다. 공유 폴더 연결을 확인해 주세요.\n" + ex.Message; }
+        catch (Exception ex) when (IsUserError(ex)) { error = "저장된 로그인을 확인하지 못했습니다. 서버 주소와 서버 실행 상태를 확인해 주세요.\n" + ex.Message; }
         finally { resumingSession = false; }
         UpdateHud();
         if (panel == "home" && !busy) { ShowHome(); if (error is not null) SetMessage(error); }

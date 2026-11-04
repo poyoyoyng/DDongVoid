@@ -21,7 +21,7 @@ public partial class MainWindow
     private string oneCardSyncNote = "동기화 확인 중…";
     private TextBlock? oneCardSyncStatus;
     private bool InOneCardMatch => oneCardRoom?.Status == OneCardStatus.Playing;
-    private OneCardStore NewOneCardStore() => new(store.Folder);
+    private IOneCardStore NewOneCardStore() => store.OneCard();
 
     private void StartOneCardTimer()
     {
@@ -97,7 +97,7 @@ public partial class MainWindow
     {
         oneCardRooms.RemoveAll(r => r.Id == room.Id); oneCardRooms.Add(room);
     }
-    private async Task RunOneCardAsync(Func<OneCardStore, string, OneCardRoom?> action)
+    private async Task RunOneCardAsync(Func<IOneCardStore, string, OneCardRoom?> action)
     {
         if (busy || userId is null) return;
         var oneCardStore = NewOneCardStore(); var me = userId;
@@ -109,7 +109,7 @@ public partial class MainWindow
         try
         {
             var room = await Task.Run(() => action(oneCardStore, me));
-            if (version != oneCardStateVersion || userId != me || store.Folder != oneCardStore.Folder) return;
+            if (version != oneCardStateVersion || userId != me || store.Location != oneCardStore.Location) return;
             oneCardRoom = room; oneCardRoomId = room?.Id;
             if (room is null)
             {
@@ -119,7 +119,7 @@ public partial class MainWindow
         }
         catch (Exception ex) when (IsUserError(ex))
         {
-            if (version == oneCardStateVersion && userId == me && store.Folder == oneCardStore.Folder)
+            if (version == oneCardStateVersion && userId == me && store.Location == oneCardStore.Location)
             {
                 SetMessage(ex.Message); refresh = true;
             }
@@ -136,11 +136,11 @@ public partial class MainWindow
             oneCardSyncStatus.ToolTip = OneCardSyncDetails();
         }
     }
-    private string OneCardSyncDetails() => $"앱 버전: {UpdateService.CurrentVersion}\n저장 파일: {System.IO.Path.Combine(store.Folder, "ddongvoid-onecard.json")}"
+    private string OneCardSyncDetails() => $"앱 버전: {UpdateService.CurrentVersion}\n저장 위치: {DataLocation("ddongvoid-onecard.json")}"
         + (oneCardRoom is { } room ? $"\n방 ID: {room.Id}\n방 수정 번호: {room.Revision}\n현재 턴: {room.Turn}" : "");
     private void AddOneCardSyncControls()
     {
-        var row = new DockPanel { Margin = new Thickness(0, 0, 0, 10), ToolTip = store.Folder };
+        var row = new DockPanel { Margin = new Thickness(0, 0, 0, 10), ToolTip = store.Location };
         var refresh = new Button { Content = "새로고침", Padding = new Thickness(9, 5, 9, 5), FontSize = 11 };
         refresh.Click += async (_, _) => await RefreshOneCardAsync();
         DockPanel.SetDock(refresh, Dock.Right); row.Children.Add(refresh);
@@ -180,7 +180,7 @@ public partial class MainWindow
             deadline.CancelAfter(TimeSpan.FromSeconds(8));
             var readToken = deadline.Token;
             var snapshot = await Task.Run(() => oneCardStore.SnapshotAsync(me, readToken), readToken).WaitAsync(readToken);
-            if (version != oneCardStateVersion || userId != me || store.Folder != oneCardStore.Folder || roomId != oneCardRoomId) return;
+            if (version != oneCardStateVersion || userId != me || store.Location != oneCardStore.Location || roomId != oneCardRoomId) return;
             var rooms = snapshot.Rooms;
             if (roomId is Guid id)
             {
@@ -210,10 +210,10 @@ public partial class MainWindow
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception ex) when (IsUserError(ex) || ex is OperationCanceledException)
         {
-            if (version == oneCardStateVersion && userId == me && store.Folder == oneCardStore.Folder && panel.StartsWith("onecard"))
+            if (version == oneCardStateVersion && userId == me && store.Location == oneCardStore.Location && panel.StartsWith("onecard"))
             {
                 SetOneCardSyncNote("조회 실패 · 자동 재시도 중");
-                SetMessage("원카드 정보를 불러오지 못했습니다. 공유 폴더 연결을 확인해 주세요."); oneCardDrawn = null;
+                SetMessage("원카드 정보를 불러오지 못했습니다. 서버 연결을 확인해 주세요."); oneCardDrawn = null;
             }
         }
         finally

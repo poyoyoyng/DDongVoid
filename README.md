@@ -1,11 +1,31 @@
 # AKC미니게임
 
-Windows용 크기 조절 가능한 투명 창 미니게임 모음입니다. 로그인 후 `게임 시작`(또는 Space)을 누르면 게임 목록이 나오고, 고른 게임이 시작됩니다. 현재 목록에는 **똥 피하기**, **맞짱(2인 대전)**, **차오차오(2~4인)**, **원카드(2~4인)** 4개가 있습니다. 별도 서버 없이 로컬 계정과 게임 기록을 JSON으로 저장합니다.
+Windows용 크기 조절 가능한 투명 창 미니게임 모음입니다. 로그인 후 `게임 시작`(또는 Space)을 누르면 게임 목록이 나오고, 고른 게임이 시작됩니다. 현재 목록에는 **똥 피하기**, **맞짱(2인 대전)**, **차오차오(2~4인)**, **원카드(2~4인)** 4개가 있습니다. 이 `online` 브랜치의 게임은 공유 폴더 대신 **온라인 서버**에 접속해 계정·기록·방 정보를 주고받습니다.
+
+## 온라인 서버 (online 브랜치)
+
+서버를 켤 PC에서 `DDongVoid.Server.exe`만 실행하면 됩니다. 별도 .NET 설치가 필요 없는 단일 실행 파일이며 기본 포트는 5080입니다.
+
+```powershell
+# 서버 단일 실행 파일과 ZIP 생성 (온라인 검증 포함) → artifacts/server
+powershell -ExecutionPolicy Bypass -File .\scripts\Publish-Server.ps1
+# 실행 (옵션 생략 가능)
+.\DDongVoid.Server.exe --port 5080 --data D:\DDongVoidData
+```
+
+- 데이터는 기본으로 exe 옆 `data` 폴더에 기존과 같은 JSON 파일(`ddongvoid.json`, `ddongvoid-slap.json` 등)로 저장됩니다. 기존 공유 폴더의 JSON을 이 폴더에 복사하면 계정과 기록을 그대로 이어서 씁니다.
+- 게임의 `설정 → 서버 주소 설정…`에 서버 주소를 입력하고 `연결 확인 후 저장`을 누릅니다. 같은 네트워크는 서버 창에 표시되는 `http://<IP>:5080`, 외부에서는 아래 중 하나를 씁니다.
+  - **Tailscale**: 서버 PC와 플레이어 PC가 같은 Tailscale 계정에 로그인하고 `http://<서버 Tailscale IP>:5080`을 입력합니다. 공유기 설정이 필요 없습니다.
+  - **Cloudflare Tunnel**: 서버 PC에서 `cloudflared tunnel --url http://localhost:5080`을 실행하고 표시된 `https://…` 주소를 입력합니다.
+- 서버가 판정과 저장을 모두 처리하므로 다른 사람의 손패(원카드), 주사위(차오차오), 선택(맞짱)은 서버 응답에 포함되지 않습니다. 모든 요청은 로그인한 계정으로만 처리되어 다른 아이디로 카드를 내거나 기록을 저장할 수 없습니다.
+- 원카드 버튼 표시 시각과 차오차오 응답 마감 시각은 서버 시계 기준이며, 게임이 서버와의 시계 차이를 측정해 보정하므로 PC 시계가 달라도 거의 같은 순간에 표시됩니다.
+- 온라인 게임은 `DDongVoid-Online-win-x64.zip` 배포 파일만 자동 업데이트로 받습니다. 공유 폴더용 배포(`DDongVoid-win-x64.zip`)로 바뀌지 않습니다.
+- 서버와 게임은 같은 통신 규약 버전이어야 하며, 서버 주소 확인 시 버전이 다르면 안내합니다.
 
 ## 실행
 
 - 이 폴더의 `실행.cmd`를 더블 클릭합니다. 빌드된 앱이 있으면 즉시 실행합니다.
-- GitHub [최신 배포](https://github.com/poyoyoyng/DDongVoid/releases/latest)의 `DDongVoid-win-x64.zip`을 전체 압축 해제한 뒤 `DDongVoid.exe`를 실행합니다. 업데이트 도우미를 포함한 파일 8개를 모두 유지해야 합니다. `D:\` 같은 드라이브 최상위나 `Program Files` 대신 `D:\AKC미니게임`처럼 쓰기 권한이 있는 폴더를 만들어 압축을 풀어야 자동 업데이트가 됩니다.
+- GitHub [최신 배포](https://github.com/poyoyoyng/DDongVoid/releases/latest)의 `DDongVoid-Online-win-x64.zip`을 전체 압축 해제한 뒤 `DDongVoid.exe`를 실행합니다. 업데이트 도우미를 포함한 파일 8개를 모두 유지해야 합니다. `D:\` 같은 드라이브 최상위나 `Program Files` 대신 `D:\AKC미니게임`처럼 쓰기 권한이 있는 폴더를 만들어 압축을 풀어야 자동 업데이트가 됩니다.
 - 로컬 배포 빌드는 `artifacts/release/package/DDongVoid.exe`입니다. 개발 명령으로 빌드한 실행 파일은 `bin/Release/net10.0-windows`에 생성됩니다.
 - 개발 및 최초 빌드: Windows와 .NET 10 SDK가 필요합니다. 빌드된 앱 실행에는 .NET 10 Desktop Runtime이 필요합니다.
 
@@ -188,6 +208,8 @@ P1은 민트 캐릭터, P2는 고양이로 표시합니다. 캐릭터 위에 이
 dotnet run --project tests/DDongVoid.Tests.csproj -c Release
 dotnet run --project tests/RenderingChecks.csproj -c Release
 dotnet run --project tests/RankingChecks.csproj -c Release
+# 실제 서버를 로컬 포트에 띄우고 두 클라이언트로 가입·각 게임·정보 숨김·대리 행동 차단·재시작 후 유지 확인
+dotnet run --project tests/OnlineChecks.csproj -c Release
 ```
 
 구현 참고: [WPF 투명 창](https://learn.microsoft.com/dotnet/api/system.windows.window.allowstransparency), [WPF 폴더 선택](https://learn.microsoft.com/dotnet/api/microsoft.win32.openfolderdialog).

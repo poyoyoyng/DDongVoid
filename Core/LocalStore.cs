@@ -16,10 +16,15 @@ public sealed class Database
     public List<PlayRecord> Records { get; set; } = [];
 }
 
-public sealed class LocalStore
+public sealed class LocalStore : IAccountStore
 {
     private const int Iterations = 210_000;
     public string Folder { get; }
+    public string Location => Folder;
+    public IRhythmStore Rhythm() => new RhythmStore(Folder);
+    public ISlapStore Slap() => new SlapStore(Folder);
+    public ICiaoStore Ciao() => new CiaoStore(Folder);
+    public IOneCardStore OneCard() => new OneCardStore(Folder);
     public string FilePath => Path.Combine(Folder, "ddongvoid.json");
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     public LocalStore(string folder) => Folder = Path.GetFullPath(folder);

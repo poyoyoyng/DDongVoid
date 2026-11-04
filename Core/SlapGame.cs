@@ -142,9 +142,10 @@ public sealed class SlapDatabase
 
 public sealed record SlapMatch(string Winner, string Loser);
 
-public sealed class SlapStore
+public sealed class SlapStore : ISlapStore
 {
     public string Folder { get; }
+    public string Location => Folder;
     public string FilePath => Path.Combine(Folder, "ddongvoid-slap.json");
     private readonly Func<DateTimeOffset> now;
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };

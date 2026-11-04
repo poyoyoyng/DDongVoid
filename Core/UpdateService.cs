@@ -12,7 +12,7 @@ public sealed record AvailableUpdate(Version Version, string Tag, Uri DownloadUr
 public sealed class UpdateService
 {
     public const string Repository = "poyoyoyng/DDongVoid";
-    public const string AssetName = "DDongVoid-win-x64.zip";
+    public const string AssetName = "DDongVoid-Online-win-x64.zip";
     private readonly HttpClient client;
     public static Version CurrentVersion => NormalizeVersion(Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(1, 0, 0));
     public UpdateService(HttpClient? client = null)

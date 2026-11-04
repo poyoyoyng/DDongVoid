@@ -222,9 +222,10 @@ public sealed class CiaoDatabase
 
 public sealed record CiaoSnapshot(List<CiaoRoom> Rooms, List<Guid> DeletedRoomIds);
 
-public sealed class CiaoStore
+public sealed class CiaoStore : ICiaoStore
 {
     public string Folder { get; }
+    public string Location => Folder;
     public string FilePath => Path.Combine(Folder, "ddongvoid-ciao.json");
     private readonly Func<int> roll;
     private readonly Func<DateTimeOffset> utcNow;

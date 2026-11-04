@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace DDongVoid.Core;
 
 // Keep rhythm scores separate so older clients cannot treat them as dodge scores.
-public sealed class RhythmStore(string folder)
+public sealed class RhythmStore(string folder) : IRhythmStore
 {
     public string FilePath { get; } = Path.Combine(Path.GetFullPath(folder), "ddongvoid-rhythm.json");
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };

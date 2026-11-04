@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>DDongVoid.Server</AssemblyName>
+    <RootNamespace>DDongVoid.Server</RootNamespace>
+    <Version>1.0.34</Version>
+  </PropertyGroup>
+  <!-- The server keeps the game files with the same stores the shared-folder version uses. -->
+  <ItemGroup>
+    <Compile Include="..\Core\LocalStore.cs;..\Core\RhythmStore.cs;..\Core\SlapGame.cs;..\Core\CiaoGame.cs;..\Core\OneCardGame.cs;..\Core\SharedFile.cs;..\Core\Stores.cs;..\Core\Online.cs" LinkBase="Core" />
+  </ItemGroup>
+</Project>

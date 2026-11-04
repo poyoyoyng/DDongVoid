@@ -54,7 +54,7 @@ F2: 설정 / Esc: 일시정지 / Ctrl+Shift+Space: 숨기기·복귀
 "@
 [IO.File]::WriteAllText((Join-Path $taskPackageDirectory 'README.txt'), $taskReadme, [Text.UTF8Encoding]::new($true))
 & (Join-Path $PSScriptRoot 'Test-ReleasePackage.ps1') -PackageDirectory $taskPackageDirectory -Version $Version
-$taskArchivePath = Join-Path ([IO.Path]::GetFullPath($OutputDirectory)) 'DDongVoid-win-x64.zip'
+$taskArchivePath = Join-Path ([IO.Path]::GetFullPath($OutputDirectory)) 'DDongVoid-Online-win-x64.zip'
 $taskFiles = ($taskRequiredNames + @('run.cmd','README.txt')) | ForEach-Object { Join-Path $taskPackageDirectory $_ }
 Compress-Archive -LiteralPath $taskFiles -DestinationPath $taskArchivePath -Force
 Write-Output "Package: $taskArchivePath"

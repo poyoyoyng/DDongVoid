@@ -729,7 +729,7 @@ try
         File.WriteAllText(legacySlap.FilePath, "{\"Version\":1,\"Rooms\":[]}");
         Assert(legacySlap.Rankings().Count == 0 && legacySlap.Create("legacy").Players.Count == 1, "이전 대전 파일을 읽지 못함");
     });
-    string ReleaseJson(string tag, string url = "https://github.com/poyoyoyng/DDongVoid/releases/download/v1.0.10/DDongVoid-win-x64.zip", string? digest = null, bool preview = false)
+    string ReleaseJson(string tag, string url = "https://github.com/poyoyoyng/DDongVoid/releases/download/v1.0.10/DDongVoid-Online-win-x64.zip", string? digest = null, bool preview = false)
         => JsonSerializer.Serialize(new { tag_name = tag, draft = false, prerelease = preview, assets = new[] { new { name = UpdateService.AssetName, browser_download_url = url, size = 100, digest = digest ?? "sha256:" + new string('a', 64) } } });
     Check("업데이트 버전은 문자열이 아닌 숫자로 비교", () =>
     {
@@ -741,8 +741,8 @@ try
     });
     Check("업데이트 주소와 무결성 정보 검사", () =>
     {
-        Throws<InvalidDataException>(() => UpdateService.ParseRelease(ReleaseJson("v1.0.10", "https://example.com/DDongVoid-win-x64.zip"), new Version(1, 0, 0)));
-        Throws<InvalidDataException>(() => UpdateService.ParseRelease(ReleaseJson("v1.0.10", "http://github.com/poyoyoyng/DDongVoid/releases/download/v1.0.10/DDongVoid-win-x64.zip"), new Version(1, 0, 0)));
+        Throws<InvalidDataException>(() => UpdateService.ParseRelease(ReleaseJson("v1.0.10", "https://example.com/DDongVoid-Online-win-x64.zip"), new Version(1, 0, 0)));
+        Throws<InvalidDataException>(() => UpdateService.ParseRelease(ReleaseJson("v1.0.10", "http://github.com/poyoyoyng/DDongVoid/releases/download/v1.0.10/DDongVoid-Online-win-x64.zip"), new Version(1, 0, 0)));
         Throws<InvalidDataException>(() => UpdateService.ParseRelease(ReleaseJson("v1.0.10", digest: "sha256:invalid"), new Version(1, 0, 0)));
     });
     string CreateUpdateArchive(string name, string? extra = null, bool omit = false, bool realAssembly = false)
@@ -772,7 +772,7 @@ try
     {
         using var client = new HttpClient(new StubHttpHandler(() => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent([1, 2, 3]) }));
         var service = new UpdateService(client);
-        var update = new AvailableUpdate(new Version(1, 0, 0), "v1.0.0", new Uri("https://github.com/poyoyoyng/DDongVoid/releases/download/v1.0.0/DDongVoid-win-x64.zip"), new string('0', 64), 3);
+        var update = new AvailableUpdate(new Version(1, 0, 0), "v1.0.0", new Uri("https://github.com/poyoyoyng/DDongVoid/releases/download/v1.0.0/DDongVoid-Online-win-x64.zip"), new string('0', 64), 3);
         Throws<InvalidDataException>(() => service.PrepareAsync(update).GetAwaiter().GetResult());
     });
     Check("검증된 다운로드의 압축 해제와 버전 확인", () =>
@@ -781,7 +781,7 @@ try
         using var client = new HttpClient(new StubHttpHandler(() => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(bytes) }));
         var service = new UpdateService(client);
         var version = UpdateService.NormalizeVersion(Assembly.GetExecutingAssembly().GetName().Version!);
-        var update = new AvailableUpdate(version, "v" + version, new Uri("https://github.com/poyoyoyng/DDongVoid/releases/download/v1.0.0/DDongVoid-win-x64.zip"), Convert.ToHexString(SHA256.HashData(bytes)), bytes.Length);
+        var update = new AvailableUpdate(version, "v" + version, new Uri("https://github.com/poyoyoyng/DDongVoid/releases/download/v1.0.0/DDongVoid-Online-win-x64.zip"), Convert.ToHexString(SHA256.HashData(bytes)), bytes.Length);
         var payload = service.PrepareAsync(update).GetAwaiter().GetResult();
         Assert(UpdatePackage.RequiredFiles.All(f => File.Exists(Path.Combine(payload, f))), "검증 후 실행 파일 누락");
     });

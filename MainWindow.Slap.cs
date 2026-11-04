@@ -8,7 +8,7 @@ using DDongVoid.Core;
 
 namespace DDongVoid;
 
-// 맞짱: a turn-based 1:1 match synced through ddongvoid-slap.json in the shared data folder.
+// 맞짱: a turn-based 1:1 match synced through the online server (ddongvoid-slap.json on the server).
 public partial class MainWindow
 {
     private static readonly TimeSpan SlapReadTimeout = TimeSpan.FromSeconds(8);
@@ -28,7 +28,7 @@ public partial class MainWindow
     private bool slapTimerHooked;
     private bool InSlapMatch => slapRoom?.Status == SlapStatus.Playing;
 
-    private SlapStore NewSlapStore() => new(store.Folder);
+    private ISlapStore NewSlapStore() => store.Slap();
     private void StartSlapTimer()
     {
         if (!slapTimerHooked) { slapTimer.Tick += async (_, _) => await PollSlapAsync(); slapTimerHooked = true; }
@@ -94,7 +94,7 @@ public partial class MainWindow
     }
     private void AddSlapSyncControls()
     {
-        var row = new DockPanel { Margin = new Thickness(0, 0, 0, 10), ToolTip = store.Folder };
+        var row = new DockPanel { Margin = new Thickness(0, 0, 0, 10), ToolTip = store.Location };
         var refresh = new Button { Content = "새로고침", Padding = new Thickness(9, 5, 9, 5), FontSize = 11 };
         refresh.Click += async (_, _) => await RefreshSlapAsync();
         DockPanel.SetDock(refresh, Dock.Right); row.Children.Add(refresh);
@@ -113,7 +113,7 @@ public partial class MainWindow
         if (slapStateVersion == stateVersion) await PollSlapAsync();
     }
     private void LeaveSlapLobby() { slapTimer.Stop(); ShowGameList(); }
-    private async Task RunSlapAsync(Func<SlapStore, string, SlapRoom?> action)
+    private async Task RunSlapAsync(Func<ISlapStore, string, SlapRoom?> action)
     {
         if (busy || userId is null) return;
         var slapStore = NewSlapStore(); var me = userId;
@@ -125,7 +125,7 @@ public partial class MainWindow
         try
         {
             var room = await Task.Run(() => action(slapStore, me));
-            if (slapStateVersion != stateVersion || userId != me || store.Folder != slapStore.Folder) return;
+            if (slapStateVersion != stateVersion || userId != me || store.Location != slapStore.Location) return;
             slapRoom = room; slapRoomId = room?.Id;
             if (room is null)
             {
@@ -138,7 +138,7 @@ public partial class MainWindow
         }
         catch (Exception ex) when (IsUserError(ex))
         {
-            if (slapStateVersion == stateVersion && userId == me && store.Folder == slapStore.Folder) SetMessage(ex.Message);
+            if (slapStateVersion == stateVersion && userId == me && store.Location == slapStore.Location) SetMessage(ex.Message);
         }
         finally { busy = false; }
         if (refresh && slapStateVersion == stateVersion) await PollSlapAsync();
@@ -205,7 +205,7 @@ public partial class MainWindow
         {
             // Read every room from one snapshot, including rooms not currently on screen.
             var rooms = await SlapSnapshotReader.ReadAsync(slapStore.RoomsAsync, SlapReadTimeout, cancellation.Token);
-            if (slapStateVersion != stateVersion || slapRoomId != roomId || userId != me || store.Folder != slapStore.Folder) return;
+            if (slapStateVersion != stateVersion || slapRoomId != roomId || userId != me || store.Location != slapStore.Location) return;
             // The persisted snapshot is authoritative. Request versions above already reject
             // reads started before a local action; room revisions can reset after a file restore.
             if (roomId is Guid id)
@@ -236,10 +236,10 @@ public partial class MainWindow
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception ex) when (IsUserError(ex) || ex is TimeoutException)
         {
-            if (slapStateVersion == stateVersion && userId == me && store.Folder == slapStore.Folder && panel.StartsWith("slap"))
+            if (slapStateVersion == stateVersion && userId == me && store.Location == slapStore.Location && panel.StartsWith("slap"))
             {
                 SetSlapSyncNote(ex is TimeoutException ? "조회 지연 · 자동 재시도 중" : "조회 실패 · 자동 재시도 중");
-                SetMessage("대전 정보를 불러오지 못했습니다. 공유 폴더 연결을 확인해 주세요.\n" + ex.Message);
+                SetMessage("대전 정보를 불러오지 못했습니다. 서버 연결을 확인해 주세요.\n" + ex.Message);
                 // The next successful read must also clear the error when the room is unchanged.
                 slapDrawn = null;
             }

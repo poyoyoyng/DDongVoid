@@ -215,9 +215,10 @@ public sealed class OneCardDatabase
 
 public sealed record OneCardSnapshot(List<OneCardRoom> Rooms, List<Guid> DeletedRoomIds);
 
-public sealed class OneCardStore
+public sealed class OneCardStore : IOneCardStore
 {
     public string Folder { get; }
+    public string Location => Folder;
     public string FilePath => Path.Combine(Folder, "ddongvoid-onecard.json");
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
