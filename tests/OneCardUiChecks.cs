@@ -99,13 +99,14 @@ internal static class OneCardUiChecks
             Assert(((OneCardRoom)Get(host, "oneCardRoom")!).Find("p0")!.CardCount == 8, "카드 받기와 다음 턴 양쪽 동기화");
             Call(host, "DetachOneCardRoom"); Call(guest, "DetachOneCardRoom");
 
-            OneCardRoom Fixture()
+            OneCardRoom Fixture(bool seven = false)
             {
                 var room = new OneCardRoom { Id = id, Title = "친구와 원카드", Status = OneCardStatus.Playing, ActiveSuit = CardSuit.Spade, DiscardPile = [4],
-                    Players = [new() { Id = "p0", Hand = [5, 8], CardCount = 2 }, new() { Id = "p1", Hand = [18, 20], CardCount = 2 },
+                    Players = [new() { Id = "p0", Hand = seven ? [6, 8] : [5, 8], CardCount = 2 }, new() { Id = "p1", Hand = [18, 20], CardCount = 2 },
                         new() { Id = "p2", Hand = [31, 30], CardCount = 2 }, new() { Id = "p3", Hand = [44, 43], CardCount = 2 }] };
                 room.DrawPile = Enumerable.Range(0, OneCardRules.DeckSize).Except(room.Players.SelectMany(p => p.Hand).Concat(room.DiscardPile)).ToList();
-                room.Play("p0", 0, 5); return room;
+                if (!seven) room.Play("p0", 0, 5);
+                return room;
             }
             void Show(OneCardRoom room)
             {
@@ -115,6 +116,22 @@ internal static class OneCardUiChecks
                     Set(w, "oneCardRoomId", id); Set(w, "oneCardRoom", room.ViewFor(w == host ? "p0" : "p1")); Call(w, "ShowOneCardRoom"); Layout(w);
                 }
             }
+            Show(Fixture(true));
+            var seven = Find<Button>((DependencyObject)host.Content).Single(b => b.Tag is int c && c == 6);
+            Assert(seven.IsEnabled, "낼 수 있는 7 카드 활성화");
+            seven.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var suitMenu = seven.ContextMenu!;
+            Assert(suitMenu.IsOpen && suitMenu.Items.Cast<MenuItem>().Select(m => (CardSuit)m.Tag).SequenceEqual(Enum.GetValues<CardSuit>()),
+                "7 클릭 시 네 가지 무늬 선택지 표시");
+            Assert(store.Rooms("p0").Single().TopCard == 4, "무늬 선택 전에는 7을 내지 않음");
+            suitMenu.IsOpen = false;
+            Assert(store.Rooms("p0").Single().Find("p0")!.CardCount == 2, "무늬 선택 취소 시 손패 유지");
+            seven.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            suitMenu.Items.Cast<MenuItem>().Single(m => (CardSuit)m.Tag == CardSuit.Heart).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Wait(() => Idle() && ((OneCardRoom)Get(host, "oneCardRoom")!).TopCard == 6 && ((OneCardRoom)Get(guest, "oneCardRoom")!).ActiveSuit == CardSuit.Heart);
+            Assert(((OneCardRoom)Get(host, "oneCardRoom")!).Find("p0")!.CardCount == 1 && !suitMenu.IsOpen,
+                "무늬 선택 시 7 제출·무늬 변경·다음 턴 양쪽 반영");
+            Call(host, "DetachOneCardRoom"); Call(guest, "DetachOneCardRoom");
             Show(Fixture());
             var callout = (Border)guest.FindName("OneCardCallout"); var overlay = (FrameworkElement)guest.FindName("Overlay");
             var center = callout.TransformToAncestor(overlay).Transform(new Point(callout.ActualWidth / 2, callout.ActualHeight / 2));

@@ -287,10 +287,6 @@ public partial class MainWindow
         AddText($"내 손패 · {me.CardCount}장", 12, "#A7F3CE", 0, 4, true);
         if (room.Status == OneCardStatus.Playing)
         {
-            var suits = new ComboBox { Name = "OneCardSuitChoice", SelectedIndex = 0, Margin = new Thickness(0, 0, 0, 8), FontSize = 12 };
-            foreach (var option in Enum.GetValues<CardSuit>()) suits.Items.Add(new ComboBoxItem { Content = OneCardRules.SuitName(option), Tag = option });
-            System.Windows.Automation.AutomationProperties.SetName(suits, "7을 낼 때 바꿀 무늬");
-            AddText("7을 낼 때 바꿀 무늬", 10, "#91AB9C", 0, 3); DialogContent.Children.Add(suits);
             var hand = new WrapPanel { Name = "OneCardHand", Margin = new Thickness(-1, 0, -1, 6) };
             foreach (var c in me.Hand.Order())
             {
@@ -298,8 +294,25 @@ public partial class MainWindow
                 var button = new Button { Content = OneCardFace(c, 15), Tag = c, Width = 29, Height = 38, Padding = new Thickness(1.5), Margin = new Thickness(1),
                     Background = Brushes.FloralWhite, ToolTip = $"{OneCardRules.Name(c)} · {OneCardRules.Effect(c)}", IsEnabled = room.CanPlay(me.Id, c) };
                 System.Windows.Automation.AutomationProperties.SetName(button, $"{OneCardRules.Name(c)} 내기 · {OneCardRules.Effect(c)}");
-                button.Click += (_, _) => { if (!busy) _ = RunOneCardAsync((s, id) => s.Play(room.Id, id, room.Revision, value,
-                    OneCardRules.Rank(value) == 7 ? (CardSuit)((ComboBoxItem)suits.SelectedItem).Tag : null)); };
+                if (OneCardRules.Rank(value) == 7)
+                {
+                    var choices = new ContextMenu { PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+                    foreach (var suitOption in Enum.GetValues<CardSuit>())
+                    {
+                        var chosen = suitOption;
+                        var option = new MenuItem { Header = OneCardRules.SuitName(chosen), Tag = chosen, FontSize = 14, Padding = new Thickness(12, 8, 12, 8) };
+                        System.Windows.Automation.AutomationProperties.SetName(option, $"{OneCardRules.SuitName(chosen)}로 변경");
+                        option.Click += (_, _) =>
+                        {
+                            choices.IsOpen = false;
+                            if (!busy) _ = RunOneCardAsync((s, id) => s.Play(room.Id, id, room.Revision, value, chosen));
+                        };
+                        choices.Items.Add(option);
+                    }
+                    button.ContextMenu = choices;
+                    button.Click += (_, _) => { if (!busy) choices.IsOpen = true; };
+                }
+                else button.Click += (_, _) => { if (!busy) _ = RunOneCardAsync((s, id) => s.Play(room.Id, id, room.Revision, value)); };
                 hand.Children.Add(button);
             }
             DialogContent.Children.Add(hand);
