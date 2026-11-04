@@ -340,9 +340,9 @@ public partial class MainWindow
         else
         {
             var name = OneCardRules.Name(card).Split(' ');
-            face.Children.Add(new TextBlock { Text = name[1], FontWeight = FontWeights.Bold, Foreground = ink, TextAlignment = TextAlignment.Center,
-                Margin = new Thickness(0, 0, 0, -3) });
-            face.Children.Add(new TextBlock { Text = name[0], FontWeight = FontWeights.Bold, Foreground = ink, TextAlignment = TextAlignment.Center });
+            foreach (var text in new[] { name[1], name[0] })
+                face.Children.Add(new TextBlock { Text = text, FontSize = 12, LineHeight = 10, LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+                    FontWeight = FontWeights.Bold, Foreground = ink, TextAlignment = TextAlignment.Center });
         }
         return new Viewbox { Stretch = Stretch.Uniform, Child = face };
     }
