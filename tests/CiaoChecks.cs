@@ -232,15 +232,44 @@ internal static class CiaoChecks
                 var before = File.ReadAllText(store.FilePath);
                 Reject(() => store.DeleteRoom(room.Id, "guest")); Reject(() => store.DeleteRoom(room.Id, "stranger"));
                 assert(File.ReadAllText(store.FilePath) == before, "방장이 아닌 참가자의 삭제 요청이 파일을 변경");
+                assert(!store.SnapshotAsync("guest").GetAwaiter().GetResult().DeletedRoomIds.Contains(room.Id), "삭제가 거절된 방을 삭제된 것으로 기록");
                 store.DeleteRoom(room.Id, "host");
                 assert(store.Rooms("guest").All(r => r.Id != room.Id) && store.Rooms("other").Any(r => r.Id == other.Id),
                     "방장 삭제 실패 또는 다른 방 유실");
+                var deleted = new CiaoStore(store.Folder).SnapshotAsync("guest").GetAwaiter().GetResult();
+                assert(deleted.DeletedRoomIds.Contains(room.Id) && deleted.Rooms.All(r => r.Id != room.Id),
+                    "실제 삭제 기록·방 제거를 같은 조회 결과에 저장 및 복원 실패");
                 Reject(() => store.Respond(room.Id, "guest", room.Revision, true));
             }
             var inherited = store.Create("host", "방장 승계"); store.Join(inherited.Id, "guest");
             store.Leave(inherited.Id, "host");
             assert(store.Rooms("guest").Single(r => r.Id == inherited.Id).HostId == "guest", "방장 나가기 후 승계 실패");
             Reject(() => store.DeleteRoom(inherited.Id, "host")); store.DeleteRoom(inherited.Id, "guest");
+        });
+        check("차오차오: 삭제 기록과 단순 조회 누락 구분·이전 저장 파일 호환", () =>
+        {
+            var store = new CiaoStore(Path.Combine(root, "차오 삭제 확인"));
+            var room = store.Create("host", "유지할 방");
+            var original = File.ReadAllText(store.FilePath);
+            var legacy = System.Text.Json.Nodes.JsonNode.Parse(original)!;
+            legacy.AsObject().Remove("DeletedRoomIds");
+            File.WriteAllText(store.FilePath, legacy.ToJsonString());
+            var snapshot = store.SnapshotAsync("host").GetAwaiter().GetResult();
+            assert(snapshot.Rooms.Single().Id == room.Id && snapshot.DeletedRoomIds.Count == 0, "이전 저장 파일의 삭제 기록 기본값 오류");
+            File.WriteAllText(store.FilePath, JsonSerializer.Serialize(new CiaoDatabase()));
+            snapshot = store.SnapshotAsync("host").GetAwaiter().GetResult();
+            assert(snapshot.Rooms.Count == 0 && !snapshot.DeletedRoomIds.Contains(room.Id), "빈 목록을 실제 삭제로 간주");
+            File.WriteAllText(store.FilePath, original);
+            store.DeleteRoom(room.Id, "host");
+            var afterDelete = File.ReadAllText(store.FilePath);
+            var next = store.Create("next", "다음 방");
+            snapshot = new CiaoStore(store.Folder).SnapshotAsync("host").GetAwaiter().GetResult();
+            assert(snapshot.DeletedRoomIds.Contains(room.Id) && snapshot.Rooms.Single().Id == next.Id,
+                "다른 방 저장 후 삭제 확인 기록 유실");
+            File.Delete(store.FilePath);
+            snapshot = store.SnapshotAsync("host").GetAwaiter().GetResult();
+            assert(snapshot.Rooms.Count == 0 && snapshot.DeletedRoomIds.Count == 0, "파일 누락을 삭제 기록으로 변환");
+            File.WriteAllText(store.FilePath, afterDelete);
         });
         check("차오차오: 거짓·X 의심 성공과 진실 의심 실패", () =>
         {

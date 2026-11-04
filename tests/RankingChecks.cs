@@ -624,6 +624,53 @@ internal static class RankingChecks
         Assert(!GuestLabels().Any(t => t.StartsWith("내 주사위")) && ((CiaoRoom)GuestGet("ciaoRoom")!).Die is null,
             "상대 창·조회 모델에서 실제 주사위 숨김");
         Assert(Enumerable.Range(1, CiaoRules.MaxDeclaration).All(n => Find<Button>(content).Any(b => b.Tag is int value && value == n)), "1~4 선언 버튼 표시");
+        (Task Poll, Action Complete) DeferIncompleteCiaoPoll(string kind)
+        {
+            ((DispatcherTimer)Get("ciaoTimer")!).Stop(); ((DispatcherTimer)GuestGet("ciaoTimer")!).Stop();
+            Wait(() => !(bool)Get("busy")! && !(bool)Get("ciaoSyncing")! && !(bool)GuestGet("ciaoSyncing")!);
+            var deferred = new DeferredContext();
+            var originalContext = SynchronizationContext.Current;
+            var originalJson = File.ReadAllText(ciao.FilePath);
+            var backupPath = ciao.FilePath + ".poll-test";
+            if (kind == "파일 누락") File.Move(ciao.FilePath, backupPath);
+            else
+            {
+                var snapshotOptions = new System.Text.Json.JsonSerializerOptions
+                    { Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } };
+                var incomplete = System.Text.Json.JsonSerializer.Deserialize<CiaoDatabase>(originalJson, snapshotOptions)!;
+                if (kind == "참가자 누락") incomplete.Rooms.Single(r => r.Id == ciaoId).Players.RemoveAll(p => p.Id == "player00");
+                else incomplete.Rooms.RemoveAll(r => r.Id == ciaoId);
+                if (kind == "다른 방 삭제") incomplete.DeletedRoomIds.Add(Guid.NewGuid());
+                File.WriteAllText(ciao.FilePath, System.Text.Json.JsonSerializer.Serialize(incomplete));
+            }
+            try
+            {
+                SynchronizationContext.SetSynchronizationContext(deferred);
+                var poll = (Task)typeof(MainWindow).GetMethod("PollCiaoAsync", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null)!;
+                return (poll, deferred.TakeContinuation());
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(originalContext);
+                if (kind == "파일 누락") File.Move(backupPath, ciao.FilePath);
+                else File.WriteAllText(ciao.FilePath, originalJson);
+            }
+        }
+        foreach (var kind in new[] { "파일 누락", "방 목록 누락", "참가자 누락", "다른 방 삭제" })
+        {
+            var missingCiaoPoll = DeferIncompleteCiaoPoll(kind);
+            var beforeMissing = (CiaoRoom)Get("ciaoRoom")!;
+            missingCiaoPoll.Complete(); missingCiaoPoll.Poll.GetAwaiter().GetResult(); Layout();
+            Assert(Equals(Get("panel"), "ciao-room") && Equals(Get("ciaoRoomId"), ciaoId)
+                && ReferenceEquals(Get("ciaoRoom"), beforeMissing) && Labels().Contains("내 주사위  X")
+                && !Labels().Any(t => t.Contains("방장이 방을 삭제했습니다")), $"{kind} 조회에도 강제 퇴장 없이 기존 방·비공개 주사위 유지");
+            Assert(((string)Get("ciaoSyncNote")!).StartsWith("방 정보 재확인"), $"{kind} 조회는 삭제 대신 재확인으로 안내");
+            Call("StartCiaoTimer");
+            Wait(() => !(bool)Get("ciaoSyncing")! && Get("message") is null && ((string)Get("ciaoSyncNote")!).StartsWith("자동 갱신"));
+            Assert(Equals(Get("ciaoRoomId"), ciaoId) && Labels().Contains("내 주사위  X")
+                && ((CiaoRoom)Get("ciaoRoom")!).Players.Count == 4, $"{kind} 후 재입장 없이 같은 방에서 자동 복구");
+        }
+        GuestCall("StartCiaoTimer");
         Call("DetachCiaoRoom"); Call("ShowCiaoLobby");
         Wait(() => Find<Button>(content).Any(b => b.Tag is Guid id && id == ciaoId));
         Find<Button>(content).Single(b => b.Tag is Guid id && id == ciaoId).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

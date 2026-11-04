@@ -217,7 +217,10 @@ public sealed class CiaoDatabase
 {
     public int Version { get; set; } = 1;
     public List<CiaoRoom> Rooms { get; set; } = [];
+    public List<Guid> DeletedRoomIds { get; set; } = [];
 }
+
+public sealed record CiaoSnapshot(List<CiaoRoom> Rooms, List<Guid> DeletedRoomIds);
 
 public sealed class CiaoStore
 {
@@ -248,6 +251,10 @@ public sealed class CiaoStore
                 (r.Phase == CiaoPhase.Roll ? r.Die is not null || r.Declaration is not null : r.Die is null || r.Die is < 0 or > CiaoRules.MaxDeclaration) ||
                 (r.Phase == CiaoPhase.Respond && (r.Declaration is null or < 1 or > CiaoRules.MaxDeclaration || r.PendingResponderIds.Count == 0))))))
             throw new JsonException();
+        if (db.DeletedRoomIds is null || db.DeletedRoomIds.Any(id => id == Guid.Empty) ||
+            db.DeletedRoomIds.Distinct().Count() != db.DeletedRoomIds.Count ||
+            db.Rooms.Any(r => db.DeletedRoomIds.Contains(r.Id)))
+            throw new JsonException();
         return db;
     }
     private async Task<CiaoDatabase> ReadAsync(CancellationToken cancellation = default)
@@ -276,7 +283,7 @@ public sealed class CiaoStore
         });
     private static CiaoRoom Room(CiaoDatabase db, Guid id) => db.Rooms.FirstOrDefault(r => r.Id == id)
         ?? throw new ArgumentException("방이 사라졌습니다. 방 목록에서 다시 골라 주세요.");
-    public async Task<List<CiaoRoom>> RoomsAsync(string viewer, CancellationToken cancellation = default)
+    public async Task<CiaoSnapshot> SnapshotAsync(string viewer, CancellationToken cancellation = default)
     {
         var db = await ReadAsync(cancellation).ConfigureAwait(false);
         if (db.Rooms.Any(r => r.NeedsResponseTimeoutUpdate(utcNow())))
@@ -289,8 +296,10 @@ public sealed class CiaoStore
                 return latest;
             }), cancellation).ConfigureAwait(false);
         }
-        return db.Rooms.OrderBy(r => r.CreatedAt).Select(r => r.ViewFor(viewer)).ToList();
+        return new(db.Rooms.OrderBy(r => r.CreatedAt).Select(r => r.ViewFor(viewer)).ToList(), db.DeletedRoomIds.ToList());
     }
+    public async Task<List<CiaoRoom>> RoomsAsync(string viewer, CancellationToken cancellation = default) =>
+        (await SnapshotAsync(viewer, cancellation).ConfigureAwait(false)).Rooms;
     public List<CiaoRoom> Rooms(string viewer) => RoomsAsync(viewer).GetAwaiter().GetResult();
     public CiaoRoom Create(string userId, string title)
     {
@@ -332,6 +341,7 @@ public sealed class CiaoStore
         var room = Room(db, id);
         if (room.HostId != userId) throw new ArgumentException("방장만 방을 없앨 수 있습니다.");
         db.Rooms.Remove(room);
+        db.DeletedRoomIds.Add(id);
         return true;
     });
     public void Leave(Guid id, string userId) => Write(db =>
@@ -341,7 +351,7 @@ public sealed class CiaoStore
         room.Players.RemoveAll(p => p.Id == userId);
         foreach (var player in room.Players) player.Ready = false;
         room.SpeakerIndex = 0; room.Revision++;
-        if (room.Players.Count == 0) db.Rooms.Remove(room);
+        if (room.Players.Count == 0) { db.Rooms.Remove(room); db.DeletedRoomIds.Add(id); }
         return true;
     });
 }

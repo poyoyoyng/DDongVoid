@@ -176,16 +176,27 @@ public partial class MainWindow
         {
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
             deadline.CancelAfter(TimeSpan.FromSeconds(8));
-            var rooms = await Task.Run(() => ciaoStore.RoomsAsync(me, deadline.Token), deadline.Token).WaitAsync(deadline.Token);
+            var readToken = deadline.Token;
+            var snapshot = await Task.Run(() => ciaoStore.SnapshotAsync(me, readToken), readToken).WaitAsync(readToken);
             if (version != ciaoStateVersion || userId != me || store.Folder != ciaoStore.Folder || roomId != ciaoRoomId) return;
+            var rooms = snapshot.Rooms;
             if (roomId is Guid id)
             {
                 var room = rooms.FirstOrDefault(r => r.Id == id && r.Find(me) is not null);
                 if (room is null)
                 {
-                    ciaoRooms = rooms;
-                    ShowCiaoLobby();
-                    SetMessage("방장이 방을 삭제했습니다. 방 목록으로 돌아왔습니다.");
+                    if (snapshot.DeletedRoomIds.Contains(id))
+                    {
+                        ciaoRooms = rooms;
+                        ShowCiaoLobby();
+                        SetMessage("방장이 방을 삭제했습니다. 방 목록으로 돌아왔습니다.");
+                        return;
+                    }
+                    // Missing data is not proof of deletion: keep the last room until a
+                    // snapshot includes it again or explicitly confirms its removal.
+                    ciaoDrawn = null;
+                    SetCiaoSyncNote("방 정보 재확인 중…");
+                    if (panel == "ciao-room") SetMessage("방 정보를 확인하지 못했습니다. 현재 방을 유지하고 다시 확인합니다.");
                     return;
                 }
                 ciaoRoom = room;
