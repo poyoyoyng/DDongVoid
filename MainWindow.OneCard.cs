@@ -275,7 +275,7 @@ public partial class MainWindow
         var table = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8) };
         if (room.TopCard is int card)
             table.Children.Add(new Border { Background = Brushes.FloralWhite, CornerRadius = new CornerRadius(3.5), Padding = new Thickness(4), Width = 41, Height = 50,
-                Child = OneCardFace(card, 21), ToolTip = OneCardRules.Effect(card) });
+                Child = OneCardHandFace(card), ToolTip = OneCardRules.Effect(card) });
         table.Children.Add(new TextBlock { Text = $"{(room.Direction == 1 ? "→ 정방향" : "← 역방향")}\n{(room.ActiveSuit is { } suit ? OneCardRules.SuitName(suit) : "모든 무늬 가능")}"
                 + (room.PendingAttack > 0 ? $"\n누적 공격 +{room.PendingAttack}" : ""),
             Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxWidth = 145,
@@ -346,30 +346,20 @@ public partial class MainWindow
         }
         return new Viewbox { Stretch = Stretch.Uniform, Child = face };
     }
-    private static FrameworkElement OneCardFace(int card, double size)
+    private async Task ShowOneCardCalloutLaterAsync(Guid roomId, DateTimeOffset calloutAt, TimeSpan wait)
     {
-        var ink = OneCardInk(card);
-        var face = new StackPanel { VerticalAlignment = VerticalAlignment.Center, LayoutTransform = new ScaleTransform(.5, .5) };
-        face.Children.Add(new TextBlock { Text = card >= 52 ? "★" : OneCardRules.Name(card), FontSize = size, FontWeight = FontWeights.Bold,
-            Foreground = ink, TextAlignment = TextAlignment.Center });
-        if (card >= 52)
-        {
-            var joker = new TextBlock { FontSize = 9, FontWeight = FontWeights.Bold, Foreground = ink, TextAlignment = TextAlignment.Center };
-            if (card == OneCardRules.ColorJoker)
-            {
-                Brush[] rainbow = [Brushes.Firebrick, Brushes.DarkOrange, Brushes.ForestGreen, Brushes.RoyalBlue, Brushes.DarkViolet];
-                for (var i = 0; i < 5; i++) joker.Inlines.Add(new System.Windows.Documents.Run("JOKER"[i].ToString()) { Foreground = rainbow[i] });
-            }
-            else joker.Text = "JOKER";
-            face.Children.Add(joker);
-        }
-        face.Children.Add(new TextBlock { Text = OneCardRules.Effect(card), FontSize = 9, Foreground = ink,
-            TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Margin = new Thickness(0, 5, 0, 0) });
-        return face;
+        await Task.Delay(wait);
+        if (panel == "onecard-room" && oneCardRoom is { } room && room.Id == roomId)
+            UpdateOneCardCallout(room, room.CalloutAt == calloutAt);
     }
-    private void UpdateOneCardCallout(OneCardRoom room)
+    private void UpdateOneCardCallout(OneCardRoom room, bool waited = false)
     {
         if (room.Status != OneCardStatus.Playing || room.VulnerablePlayerId is not { } target) return;
+        // Every PC shows the callout at the shared CalloutAt time; a clock running behind waits at most one delay.
+        if (!waited && room.CalloutAt is { } calloutAt && calloutAt - DateTimeOffset.UtcNow is var wait && wait > TimeSpan.Zero)
+        {
+            _ = ShowOneCardCalloutLaterAsync(room.Id, calloutAt, wait < OneCardRules.CalloutDelay ? wait : OneCardRules.CalloutDelay); return;
+        }
         var content = new StackPanel();
         content.Children.Add(new TextBlock { Text = $"{target}님이 1장 남았어요!", TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center,
             Foreground = Brushes.White, FontSize = 15, FontWeight = FontWeights.Bold });

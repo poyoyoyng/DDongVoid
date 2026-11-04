@@ -105,7 +105,7 @@ internal static class OneCardUiChecks
                     Players = [new() { Id = "p0", Hand = seven ? [6, 8] : [5, 8], CardCount = 2 }, new() { Id = "p1", Hand = [18, 20], CardCount = 2 },
                         new() { Id = "p2", Hand = [31, 30], CardCount = 2 }, new() { Id = "p3", Hand = [44, 43], CardCount = 2 }] };
                 room.DrawPile = Enumerable.Range(0, OneCardRules.DeckSize).Except(room.Players.SelectMany(p => p.Hand).Concat(room.DiscardPile)).ToList();
-                if (!seven) room.Play("p0", 0, 5);
+                if (!seven) { room.Play("p0", 0, 5); room.CalloutAt = DateTimeOffset.UtcNow; }
                 return room;
             }
             void Show(OneCardRoom room)
@@ -128,9 +128,20 @@ internal static class OneCardUiChecks
             Assert(store.Rooms("p0").Single().Find("p0")!.CardCount == 2, "무늬 선택 취소 시 손패 유지");
             seven.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             suitMenu.Items.Cast<MenuItem>().Single(m => (CardSuit)m.Tag == CardSuit.Heart).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-            Wait(() => Idle() && ((OneCardRoom)Get(host, "oneCardRoom")!).TopCard == 6 && ((OneCardRoom)Get(guest, "oneCardRoom")!).ActiveSuit == CardSuit.Heart);
+            var hostCallout = (Border)host.FindName("OneCardCallout"); var guestCallout = (Border)guest.FindName("OneCardCallout");
+            Wait(() => Idle() && ((OneCardRoom)Get(guest, "oneCardRoom")!).ActiveSuit == CardSuit.Heart);
+            var calloutAt = ((OneCardRoom)Get(host, "oneCardRoom")!).CalloutAt!.Value;
             Assert(((OneCardRoom)Get(host, "oneCardRoom")!).Find("p0")!.CardCount == 1 && !suitMenu.IsOpen,
                 "무늬 선택 시 7 제출·무늬 변경·다음 턴 양쪽 반영");
+            Assert(DateTimeOffset.UtcNow < calloutAt && hostCallout.Visibility == Visibility.Collapsed && guestCallout.Visibility == Visibility.Collapsed,
+                "상태를 받아도 표시 시각 전에는 본인·상대 모두 원카드 버튼 숨김");
+            var shown = new Dictionary<Border, DateTimeOffset>();
+            Wait(() =>
+            {
+                foreach (var c in new[] { hostCallout, guestCallout }) if (c.Visibility == Visibility.Visible) shown.TryAdd(c, DateTimeOffset.UtcNow);
+                return shown.Count == 2;
+            });
+            Assert(shown.Values.All(t => t >= calloutAt && t - calloutAt < TimeSpan.FromSeconds(.3)), "표시 시각에 본인·상대 원카드 버튼 동시 표시");
             Call(host, "DetachOneCardRoom"); Call(guest, "DetachOneCardRoom");
             Show(Fixture());
             var callout = (Border)guest.FindName("OneCardCallout"); var overlay = (FrameworkElement)guest.FindName("Overlay");

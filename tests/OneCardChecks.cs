@@ -106,6 +106,17 @@ internal static class OneCardChecks
             assert(r.Players[0].Hand.Count == 2 && r.VulnerablePlayerId is null && r.CurrentPlayerId == "p1", "벌칙 대상·턴 오류");
             Reject(() => r.Call("p1", old, "p0")); Reject(() => r.Call("p1", r.Revision, "p0")); Conserve(r);
         });
+        check("원카드 버튼 표시 시각을 방에 저장해 모두 동시에 표시", () =>
+        {
+            var r = Table(4, [5, 8], [18, 20], [31, 30]); var before = DateTimeOffset.UtcNow;
+            r.Play("p0", 0, 5);
+            assert(r.CalloutAt is { } first && first >= before + OneCardRules.CalloutDelay && first <= DateTimeOffset.UtcNow + OneCardRules.CalloutDelay, "1장 남은 뒤 표시 시각 누락");
+            var shownAt = r.CalloutAt; r.Play("p1", r.Revision, 18);
+            assert(r.CalloutAt == shownAt, "두 번째 1장 대상이 기존 버튼 표시 시각을 바꿈");
+            r.Call("p0", r.Revision, "p0");
+            assert(r.VulnerablePlayerId == "p1" && r.CalloutAt > shownAt, "다음 대상 표시 시각 갱신 누락");
+            r.Call("p1", r.Revision, "p1"); assert(r.CalloutAt is null, "선언 완료 후 표시 시각 유지");
+        });
         check("원카드 본인 선클릭 선언·중복 클릭 거부", () =>
         {
             var r = Table(4, [5, 8], [18, 20]); r.Play("p0", 0, 5);

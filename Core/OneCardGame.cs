@@ -12,6 +12,8 @@ public static class OneCardRules
 {
     public const int MaxPlayers = 4, MaxTitleLength = 40, StartingCards = 7, DeckSize = 55;
     public const int GrayJoker1 = 52, GrayJoker2 = 53, ColorJoker = 54;
+    // Longer than one poll so every PC has the new state before the callout appears everywhere at once.
+    public static readonly TimeSpan CalloutDelay = TimeSpan.FromSeconds(1.5);
     public static int Rank(int card) => card < 52 ? card % 13 + 1 : 0;
     public static CardSuit Suit(int card) => (CardSuit)(card / 13);
     public static string SuitName(CardSuit suit) => suit switch
@@ -45,7 +47,7 @@ public static class OneCardRules
         + "같은 무늬 3은 2로 쌓인 공격을 모두 취소합니다. 못 막으면 누적 장수를 받고 차례를 마칩니다.\n"
         + "7: 무늬 선택 / J: 다음 사람 건너뛰기 / Q: 방향 전환(2인은 순서 유지) / K: 한 번 더. "
         + "조커는 평소 아무 카드 위에 낼 수 있고, 공격을 받은 뒤에는 아무 무늬나 낼 수 있습니다. 첫 바닥 카드는 일반 숫자이며 특수 효과가 없습니다.\n"
-        + "한 장이 남으면 화면 가운데 원카드! 버튼이 나타납니다. 본인이 먼저 누르면 선언 완료, "
+        + "한 장이 남으면 잠시 뒤 모두의 화면 가운데에 동시에 원카드! 버튼이 나타납니다. 본인이 먼저 누르면 선언 완료, "
         + "다른 사람이 먼저 누르면 한 장 남은 사람이 벌칙 1장을 받습니다. 누르거나 해당 손패가 바뀔 때까지 유지됩니다. 마지막 특수 카드로도 즉시 승리합니다.\n"
         + "더미가 떨어지면 맨 위 카드를 남기고 섞습니다. 모두 더 받을 카드도 낼 카드도 없으면 손패가 가장 적은 사람이 공동 승리합니다. "
         + "파산·여러 장 동시 내기 등 추가 지역룰은 사용하지 않습니다.";
@@ -76,6 +78,7 @@ public sealed class OneCardRoom
     public List<OneCardPlayer> Players { get; set; } = [];
     public List<string> UncalledPlayerIds { get; set; } = [];
     public string? VulnerablePlayerId => UncalledPlayerIds.FirstOrDefault();
+    public DateTimeOffset? CalloutAt { get; set; }
     public int EmptyDraws { get; set; }
     public List<string> Winners { get; set; } = [];
     public string? LastMessage { get; set; }
@@ -95,7 +98,7 @@ public sealed class OneCardRoom
         if (deck.Count != OneCardRules.DeckSize || !deck.Order().SequenceEqual(Enumerable.Range(0, OneCardRules.DeckSize)))
             throw new ArgumentException("카드 구성이 올바르지 않습니다.");
         DrawPile = [.. deck]; DiscardPile.Clear(); Winners.Clear(); EndReason = null;
-        CurrentIndex = 0; Direction = 1; Turn = 1; PendingAttack = EmptyDraws = 0; UncalledPlayerIds.Clear();
+        CurrentIndex = 0; Direction = 1; Turn = 1; PendingAttack = EmptyDraws = 0; UncalledPlayerIds.Clear(); CalloutAt = null;
         // Choose the neutral opener before dealing so it cannot all be in players' hands.
         var first = DrawPile.FindIndex(c => OneCardRules.Rank(c) is >= 4 and <= 10 and not 7);
         var card = DrawPile[first]; DrawPile.RemoveAt(first); DiscardPile.Add(card); ActiveSuit = OneCardRules.Suit(card);
@@ -130,7 +133,7 @@ public sealed class OneCardRoom
         if (!CanPlay(id, card)) throw new ArgumentException("지금 낼 수 없는 카드입니다.");
         if (OneCardRules.Rank(card) == 7 && (chosenSuit is null || !Enum.IsDefined(chosenSuit.Value)))
             throw new ArgumentException("7을 낼 때는 다음 무늬를 선택해 주세요.");
-        var player = Find(id)!;
+        var player = Find(id)!; var target = VulnerablePlayerId;
         UncalledPlayerIds.Remove(id); EmptyDraws = 0; player.Hand.Remove(card); DiscardPile.Add(card);
         ActiveSuit = card >= 52 ? null : OneCardRules.Rank(card) == 7 ? chosenSuit : OneCardRules.Suit(card);
         if (OneCardRules.Rank(card) == 3 && PendingAttack > 0) PendingAttack = 0;
@@ -140,6 +143,7 @@ public sealed class OneCardRoom
         UpdateCounts(); Revision++;
         if (player.Hand.Count == 0) { Finish([id], "손패를 모두 냈습니다!"); return; }
         if (player.Hand.Count == 1) UncalledPlayerIds.Add(id);
+        ScheduleCallout(target);
         var rank = OneCardRules.Rank(card);
         if (rank == 12) Direction *= -1;
         Advance(rank == 13 ? 0 : rank == 11 ? 2 : 1);
@@ -150,7 +154,7 @@ public sealed class OneCardRoom
         // An empty draw is a pass only if this player truly has no legal card.
         if (DrawPile.Count == 0 && DiscardPile.Count == 1 && Find(id)!.Hand.Any(c => CanPlay(id, c)))
             throw new ArgumentException("받을 카드가 없습니다. 낼 수 있는 카드를 내 주세요.");
-        UncalledPlayerIds.Remove(id);
+        var target = VulnerablePlayerId; UncalledPlayerIds.Remove(id); ScheduleCallout(target);
         var requested = Math.Max(1, PendingAttack); var drawn = Take(Find(id)!, requested);
         EmptyDraws = drawn == 0 && PendingAttack == 0 ? EmptyDraws + 1 : 0; PendingAttack = 0;
         LastMessage = $"{id} · 카드 {drawn}장 받기" + (drawn < requested ? $" (남은 카드 부족 · 요청 {requested}장)" : "");
@@ -166,7 +170,7 @@ public sealed class OneCardRoom
         CheckAction(id, revision, false);
         if (!UncalledPlayerIds.Contains(target) || Find(target) is not { CardCount: 1 } player)
             throw new ArgumentException("지금은 원카드를 선언하거나 지적할 수 없습니다.");
-        UncalledPlayerIds.Remove(target); Revision++;
+        UncalledPlayerIds.Remove(target); ScheduleCallout(target); Revision++;
         if (id == target) LastMessage = $"{id} · 원카드!";
         else { var drawn = Take(player, 1); LastMessage = $"{id} · {target}의 원카드 미선언 지적 · 벌칙 {drawn}장"; UpdateCounts(); EmptyDraws = 0; }
     }
@@ -185,9 +189,14 @@ public sealed class OneCardRoom
         }
         return drawn;
     }
+    private void ScheduleCallout(string? previousTarget)
+    {
+        if (VulnerablePlayerId is null) CalloutAt = null;
+        else if (VulnerablePlayerId != previousTarget) CalloutAt = DateTimeOffset.UtcNow + OneCardRules.CalloutDelay;
+    }
     private void UpdateCounts() { foreach (var p in Players) p.CardCount = p.Hand.Count; }
     private void Advance(int steps) { CurrentIndex = (CurrentIndex + Direction * steps % Players.Count + Players.Count) % Players.Count; Turn++; }
-    private void Finish(List<string> winners, string reason) { Winners = winners; EndReason = reason; Status = OneCardStatus.Finished; UncalledPlayerIds.Clear(); }
+    private void Finish(List<string> winners, string reason) { Winners = winners; EndReason = reason; Status = OneCardStatus.Finished; UncalledPlayerIds.Clear(); CalloutAt = null; }
     public OneCardRoom ViewFor(string viewer)
     {
         var copy = JsonSerializer.Deserialize<OneCardRoom>(JsonSerializer.Serialize(this))!;
@@ -327,7 +336,7 @@ public sealed class OneCardStore
         room.Players.RemoveAll(p => p.Id == userId);
         foreach (var player in room.Players) player.Ready = false;
         room.Status = OneCardStatus.Waiting; room.CurrentIndex = 0; room.Direction = 1; room.Turn = 1;
-        room.PendingAttack = room.EmptyDraws = 0; room.ActiveSuit = null; room.UncalledPlayerIds.Clear();
+        room.PendingAttack = room.EmptyDraws = 0; room.ActiveSuit = null; room.UncalledPlayerIds.Clear(); room.CalloutAt = null;
         room.DrawPile.Clear(); room.DiscardPile.Clear(); room.Winners.Clear(); room.LastMessage = room.EndReason = null;
         foreach (var player in room.Players) { player.Hand.Clear(); player.CardCount = 0; }
         room.Revision++;
