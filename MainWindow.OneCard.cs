@@ -319,7 +319,7 @@ public partial class MainWindow
             AddText("밝은 카드를 눌러 내세요. 상대 손패는 장수만 표시합니다.", 10, "#91AB9C", 2, 4);
         }
     }
-    private static Brush OneCardInk(int card) => card >= 52 ? card == OneCardRules.ColorJoker ? Brushes.Firebrick : Brushes.SlateGray
+    private static Brush OneCardInk(int card) => card >= 52 ? card == OneCardRules.ColorJoker ? Brushes.Firebrick : Brushes.Black
         : OneCardRules.Suit(card) is CardSuit.Heart or CardSuit.Diamond ? Brushes.Firebrick : Brushes.DarkSlateGray;
     private static FrameworkElement OneCardHandFace(int card)
     {

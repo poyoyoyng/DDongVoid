@@ -24,15 +24,15 @@ internal static class OneCardChecks
         }
         void Conserve(OneCardRoom room) => assert(room.Players.SelectMany(p => p.Hand).Concat(room.DrawPile).Concat(room.DiscardPile)
             .Order().SequenceEqual(Enumerable.Range(0, OneCardRules.DeckSize)), "카드 누락·중복");
-        check("원카드 회색 조커 2장·컬러 조커 1장·총 55장과 연속 공격", () =>
+        check("원카드 흑조커 1장·컬러 조커 1장·총 54장과 연속 공격", () =>
         {
             var deck = OneCardRules.ShuffledDeck();
-            assert(deck.Count == 55 && deck.Count(c => OneCardRules.Name(c) == "회색 조커") == 2
+            assert(deck.Count == 54 && deck.Count(c => OneCardRules.Name(c) == "흑조커") == 1
                 && deck.Count(c => OneCardRules.Name(c) == "컬러 조커") == 1, "조커 구성 오류");
-            var r = Table(4, [52, 8], [53, 20], [54, 30], [42, 43]);
-            r.Play("p0", r.Revision, 52); r.Play("p1", r.Revision, 53); r.Play("p2", r.Revision, 54);
-            assert(r.PendingAttack == 17 && !r.CanPlay("p3", 42), "회색 2장·컬러 1장 누적 오류");
-            r.Draw("p3", r.Revision); assert(r.Players[3].CardCount == 19 && r.PendingAttack == 0, "조커 공격 받기 오류"); Conserve(r);
+            var r = Table(4, [52, 8], [53, 20], [42, 43]);
+            r.Play("p0", r.Revision, 52); r.Play("p1", r.Revision, 53);
+            assert(r.PendingAttack == 12 && !r.CanPlay("p2", 42), "흑조커·컬러 조커 누적 오류");
+            r.Draw("p2", r.Revision); assert(r.Players[2].CardCount == 14 && r.PendingAttack == 0, "조커 공격 받기 오류"); Conserve(r);
         });
         check("원카드 2·3·4인 준비와 7장 배분·일반 카드 시작", () =>
         {
@@ -64,19 +64,19 @@ internal static class OneCardChecks
         });
         check("원카드 공격 승급·약한 공격 거부·조커 최상위", () =>
         {
-            var r = Table(1, [0, 13, 52, 53, 54, 14, 2], [8, 9]); r.PendingAttack = 2;
+            var r = Table(1, [0, 13, 52, 53, 14, 2], [8, 9]); r.PendingAttack = 2;
             assert(r.CanPlay("p0", 0) && r.CanPlay("p0", 2) && !r.CanPlay("p0", 13), "2 대응 무늬 오류");
             r.DiscardPile = [13]; r.ActiveSuit = CardSuit.Heart; r.PendingAttack = 3;
             assert(!r.CanPlay("p0", 14) && r.CanPlay("p0", 0), "A 대응 오류");
             r.DiscardPile = [0]; r.ActiveSuit = CardSuit.Spade; r.PendingAttack = 5;
             assert(!r.CanPlay("p0", 13) && r.CanPlay("p0", 52), "스페이드 A 대응 오류");
             r.DiscardPile = [52]; r.ActiveSuit = null;
-            assert(r.CanPlay("p0", 0) && !r.CanPlay("p0", 13) && r.CanPlay("p0", 54) && r.CanPlay("p0", 53), "회색 조커 대응 오류");
-            r.DiscardPile = [54]; assert(!r.CanPlay("p0", 0) && !r.CanPlay("p0", 52), "컬러 조커 방어 허용");
+            assert(r.CanPlay("p0", 0) && !r.CanPlay("p0", 13) && r.CanPlay("p0", 53), "흑조커 대응 오류");
+            r.DiscardPile = [53]; assert(!r.CanPlay("p0", 0) && !r.CanPlay("p0", 52), "컬러 조커 방어 허용");
         });
         check("원카드 누적 공격 받으면 실제 장수 증가·턴 종료·조커 뒤 자유 내기", () =>
         {
-            var r = Table(54, [3, 8], [18, 22]); r.PendingAttack = 12;
+            var r = Table(53, [3, 8], [18, 22]); r.PendingAttack = 12;
             r.Draw("p0", 0); assert(r.Players[0].Hand.Count == 14 && r.PendingAttack == 0 && r.CurrentPlayerId == "p1" && r.CanPlay("p1", 18), "공격 받기 오류"); Conserve(r);
         });
         check("원카드 7 선택 무늬 검증과 같은 숫자 연결", () =>
@@ -140,7 +140,7 @@ internal static class OneCardChecks
         });
         check("원카드 더미 재활용·맨 위 카드 보존·공격 장수 부족", () =>
         {
-            var r = Table(54, [3, 8], Enumerable.Range(0, 54).Except(new[] { 3, 8 }).ToArray());
+            var r = Table(53, [3, 8], Enumerable.Range(0, 53).Except(new[] { 3, 8 }).ToArray());
             r.PendingAttack = 7; r.Draw("p0", 0);
             assert(r.Players[0].Hand.Count == 2 && r.PendingAttack == 0 && r.CurrentIndex == 1, "빈 더미 공격 처리 오류"); Conserve(r);
             r = Table(4, [5, 8], [18, 20]); r.DiscardPile.Insert(0, r.DrawPile[^1]); r.DrawPile.RemoveAt(r.DrawPile.Count - 1);

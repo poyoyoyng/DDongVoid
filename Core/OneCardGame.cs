@@ -10,8 +10,8 @@ public enum CardSuit { Spade, Heart, Diamond, Club }
 
 public static class OneCardRules
 {
-    public const int MaxPlayers = 4, MaxTitleLength = 40, StartingCards = 7, DeckSize = 55;
-    public const int GrayJoker1 = 52, GrayJoker2 = 53, ColorJoker = 54;
+    public const int MaxPlayers = 4, MaxTitleLength = 40, StartingCards = 7, DeckSize = 54;
+    public const int BlackJoker = 52, ColorJoker = 53;
     // Longer than one poll so every PC has the new state before the callout appears everywhere at once.
     public static readonly TimeSpan CalloutDelay = TimeSpan.FromSeconds(1.5);
     public static int Rank(int card) => card < 52 ? card % 13 + 1 : 0;
@@ -23,10 +23,10 @@ public static class OneCardRules
     };
     public static string Name(int card) => card switch
     {
-        GrayJoker1 or GrayJoker2 => "회색 조커", ColorJoker => "컬러 조커",
+        BlackJoker => "흑조커", ColorJoker => "컬러 조커",
         _ => $"{SuitName(Suit(card)).Split(' ')[0]} {Rank(card) switch { 1 => "A", 11 => "J", 12 => "Q", 13 => "K", var n => n.ToString() }}",
     };
-    public static int Attack(int card) => card switch { ColorJoker => 7, GrayJoker1 or GrayJoker2 or 0 => 5, _ => Rank(card) switch { 1 => 3, 2 => 2, _ => 0 } };
+    public static int Attack(int card) => card switch { ColorJoker => 7, BlackJoker or 0 => 5, _ => Rank(card) switch { 1 => 3, 2 => 2, _ => 0 } };
     public static string Effect(int card) => Attack(card) is > 0 and var damage ? $"공격 +{damage}"
         : Rank(card) switch { 3 => "2 공격 방어", 7 => "무늬 변경", 11 => "건너뛰기", 12 => "방향 전환", 13 => "한 번 더", _ => "일반 카드" };
     public static List<int> ShuffledDeck()
@@ -40,10 +40,10 @@ public static class OneCardRules
             var j = RandomNumberGenerator.GetInt32(i + 1); (cards[i], cards[j]) = (cards[j], cards[i]);
         }
     }
-    public const string Description = "2~4인 · 회색 조커 2장·컬러 조커 1장 포함 55장 · 각자 7장\n"
+    public const string Description = "2~4인 · 흑조커 1장·컬러 조커 1장 포함 54장 · 각자 7장\n"
         + "같은 무늬나 숫자 1장을 냅니다. 못 내거나 내기 싫으면 1장을 받고 차례를 마칩니다. 먼저 손패를 비우면 승리합니다.\n"
-        + "2: +2 / A: +3 / ♠A: +5 / 회색 조커: +5 / 컬러 조커: +7. 공격은 누적됩니다. "
-        + "2에는 다른 2·같은 무늬 A·조커, A에는 다른 A·조커로 대응합니다. ♠A에는 조커, 회색 조커에는 ♠A·다른 회색 조커·컬러 조커만 가능하고 컬러 조커는 막을 수 없습니다. "
+        + "2: +2 / A: +3 / ♠A: +5 / 흑조커: +5 / 컬러 조커: +7. 공격은 누적됩니다. "
+        + "2에는 다른 2·같은 무늬 A·조커, A에는 다른 A·조커로 대응합니다. ♠A에는 조커, 흑조커에는 ♠A·컬러 조커만 가능하고 컬러 조커는 막을 수 없습니다. "
         + "같은 무늬 3은 2로 쌓인 공격을 모두 취소합니다. 못 막으면 누적 장수를 받고 차례를 마칩니다.\n"
         + "7: 무늬 선택 / J: 다음 사람 건너뛰기 / Q: 방향 전환(2인은 순서 유지) / K: 한 번 더. "
         + "조커는 평소 아무 카드 위에 낼 수 있고, 공격을 받은 뒤에는 아무 무늬나 낼 수 있습니다. 첫 바닥 카드는 일반 숫자이며 특수 효과가 없습니다.\n"
@@ -120,7 +120,7 @@ public sealed class OneCardRoom
         if (PendingAttack == 0)
             return card >= 52 || ActiveSuit is null || OneCardRules.Suit(card) == ActiveSuit || OneCardRules.Rank(card) == OneCardRules.Rank(top);
         if (top == OneCardRules.ColorJoker) return false;
-        if (top is OneCardRules.GrayJoker1 or OneCardRules.GrayJoker2) return card == 0 || card >= 52;
+        if (top == OneCardRules.BlackJoker) return card == 0 || card >= 52;
         if (top == 0) return card >= 52;
         if (card >= 52) return true;
         if (OneCardRules.Rank(top) == 2)
