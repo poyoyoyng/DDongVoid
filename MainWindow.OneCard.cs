@@ -291,7 +291,7 @@ public partial class MainWindow
             foreach (var c in me.Hand.Order())
             {
                 var value = c;
-                var button = new Button { Content = OneCardFace(c, 15), Tag = c, Width = 29, Height = 38, Padding = new Thickness(1.5), Margin = new Thickness(1),
+                var button = new Button { Content = OneCardHandFace(c), Tag = c, Width = 29, Height = 38, Padding = new Thickness(1.5), Margin = new Thickness(1),
                     Background = Brushes.FloralWhite, ToolTip = $"{OneCardRules.Name(c)} · {OneCardRules.Effect(c)}", IsEnabled = room.CanPlay(me.Id, c) };
                 System.Windows.Automation.AutomationProperties.SetName(button, $"{OneCardRules.Name(c)} 내기 · {OneCardRules.Effect(c)}");
                 if (OneCardRules.Rank(value) == 7)
@@ -319,10 +319,36 @@ public partial class MainWindow
             AddText("밝은 카드를 눌러 내세요. 상대 손패는 장수만 표시합니다.", 10, "#91AB9C", 2, 4);
         }
     }
+    private static Brush OneCardInk(int card) => card >= 52 ? card == OneCardRules.ColorJoker ? Brushes.Firebrick : Brushes.SlateGray
+        : OneCardRules.Suit(card) is CardSuit.Heart or CardSuit.Diamond ? Brushes.Firebrick : Brushes.DarkSlateGray;
+    private static FrameworkElement OneCardHandFace(int card)
+    {
+        var ink = OneCardInk(card);
+        var face = new StackPanel();
+        if (card >= 52)
+        {
+            face.Children.Add(new TextBlock { Text = "★", FontWeight = FontWeights.Bold, Foreground = ink, TextAlignment = TextAlignment.Center });
+            var joker = new TextBlock { FontSize = 6, FontWeight = FontWeights.Bold, Foreground = ink, TextAlignment = TextAlignment.Center };
+            if (card == OneCardRules.ColorJoker)
+            {
+                Brush[] rainbow = [Brushes.Firebrick, Brushes.DarkOrange, Brushes.ForestGreen, Brushes.RoyalBlue, Brushes.DarkViolet];
+                for (var i = 0; i < 5; i++) joker.Inlines.Add(new System.Windows.Documents.Run("JOKER"[i].ToString()) { Foreground = rainbow[i] });
+            }
+            else joker.Text = "JOKER";
+            face.Children.Add(joker);
+        }
+        else
+        {
+            var name = OneCardRules.Name(card).Split(' ');
+            face.Children.Add(new TextBlock { Text = name[1], FontWeight = FontWeights.Bold, Foreground = ink, TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(0, 0, 0, -3) });
+            face.Children.Add(new TextBlock { Text = name[0], FontWeight = FontWeights.Bold, Foreground = ink, TextAlignment = TextAlignment.Center });
+        }
+        return new Viewbox { Stretch = Stretch.Uniform, Child = face };
+    }
     private static FrameworkElement OneCardFace(int card, double size)
     {
-        var ink = card >= 52 ? card == OneCardRules.ColorJoker ? Brushes.Firebrick : Brushes.SlateGray
-            : OneCardRules.Suit(card) is CardSuit.Heart or CardSuit.Diamond ? Brushes.Firebrick : Brushes.DarkSlateGray;
+        var ink = OneCardInk(card);
         var face = new StackPanel { VerticalAlignment = VerticalAlignment.Center, LayoutTransform = new ScaleTransform(.5, .5) };
         face.Children.Add(new TextBlock { Text = card >= 52 ? "★" : OneCardRules.Name(card), FontSize = size, FontWeight = FontWeights.Bold,
             Foreground = ink, TextAlignment = TextAlignment.Center });
