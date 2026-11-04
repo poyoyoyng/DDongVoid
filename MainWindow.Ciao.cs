@@ -39,7 +39,7 @@ public partial class MainWindow
     private void ShowCiaoLobby()
     {
         if (!RequireLogin()) return;
-        DetachSlapRoom(); DetachCiaoRoom();
+        DetachOneCardRoom(); DetachSlapRoom(); DetachCiaoRoom();
         DrawCiaoLobby(); StartCiaoTimer(); _ = PollCiaoAsync();
     }
     private void DrawCiaoLobby()

@@ -104,6 +104,7 @@ public partial class MainWindow : Window
         {
             if (panel is "slap-lobby" or "slap-room") { StartSlapTimer(); _ = PollSlapAsync(); }
             if (panel is "ciao-lobby" or "ciao-room") { StartCiaoTimer(); _ = PollCiaoAsync(); }
+            if (panel is "onecard-lobby" or "onecard-room") { StartOneCardTimer(); _ = PollOneCardAsync(); }
             Dispatcher.BeginInvoke((Action)(() => OfferUpdate(false)));
         };
         // The render loop starts with a game (StartGame / ResumeGame), not with the window.
@@ -243,10 +244,14 @@ public partial class MainWindow : Window
     }
     private void BeginPanel(string name, string eyebrow, string title, string description)
     {
-        Dialog.HorizontalAlignment = name is "slap-room" or "ciao-room" ? HorizontalAlignment.Stretch : HorizontalAlignment.Center;
+        var gameList = name == "games";
+        Dialog.HorizontalAlignment = name is "slap-room" or "ciao-room" or "onecard-room" ? HorizontalAlignment.Stretch : HorizontalAlignment.Center;
+        Dialog.Margin = new Thickness(gameList ? 12 : 22);
+        Dialog.Padding = gameList ? new Thickness(18, 14, 18, 14) : new Thickness(28);
+        OneCardCallout.Visibility = Visibility.Collapsed;
         panel = name; Overlay.Visibility = Visibility.Visible; DialogContent.Children.Clear(); message = null;
-        AddText(eyebrow, 10, "#A7F3CE", 0, 0, true);
-        AddText(title, 27, "#EDF4F0", 9, 10, true);
+        if (!gameList) AddText(eyebrow, 10, "#A7F3CE", 0, 0, true);
+        AddText(title, gameList ? 22 : 27, "#EDF4F0", gameList ? 0 : 9, gameList ? 8 : 10, true);
         if (!string.IsNullOrWhiteSpace(description)) AddText(description, 12, "#A8BCAF", 0, 17);
         Dispatcher.BeginInvoke((Action)(() => OfferUpdate(false)));
     }
@@ -297,10 +302,12 @@ public partial class MainWindow : Window
         if (pendingRecord is not null) { ShowEnd(); return; }
         if (!RequireLogin()) return;
         BeginPanel("games", "AKC MINI GAMES", "게임선택", "");
-        AddGameItem("똥 피하기", () => StartGame(MiniGame.Dodge));
-        AddGameItem("키보드 리듬", () => StartGame(MiniGame.Rhythm));
-        AddGameItem("맞짱", ShowSlapLobby);
-        AddGameItem("차오차오", ShowCiaoLobby);
+        var games = new System.Windows.Controls.Primitives.UniformGrid { Name = "GameList", Columns = 2, Rows = 2, Margin = new Thickness(-3, 0, -3, 0) };
+        DialogContent.Children.Add(games);
+        AddGameItem(games, "똥 피하기", () => StartGame(MiniGame.Dodge));
+        AddGameItem(games, "맞짱", ShowSlapLobby);
+        AddGameItem(games, "차오차오", ShowCiaoLobby);
+        AddGameItem(games, "원카드", ShowOneCardLobby);
         AddButton("돌아가기", ShowHome);
     }
     private FrameworkElement ActiveSurface => activeGame == MiniGame.Rhythm ? RhythmView : Surface;
@@ -332,13 +339,13 @@ public partial class MainWindow : Window
             Key.OemComma => ',', Key.OemPeriod => '.', Key.OemQuestion => '/', _ => null,
         };
     }
-    private void AddGameItem(string title, Action start)
+    private void AddGameItem(Panel container, string title, Action start)
     {
-        var body = new TextBlock { Text = title, FontSize = 16, FontWeight = FontWeights.Bold };
-        var button = new Button { Content = body, HorizontalContentAlignment = HorizontalAlignment.Left, Padding = new Thickness(16, 14, 16, 14), Margin = new Thickness(0, 0, 0, 8) };
+        var body = new TextBlock { Text = title, FontSize = 14, FontWeight = FontWeights.Bold };
+        var button = new Button { Content = body, Padding = new Thickness(10), Margin = new Thickness(3, 0, 3, 6) };
         System.Windows.Automation.AutomationProperties.SetName(button, title);
         button.Click += (_, _) => { if (!busy) start(); };
-        DialogContent.Children.Add(button);
+        container.Children.Add(button);
     }
     private void StartGame()
     {
@@ -383,6 +390,7 @@ public partial class MainWindow : Window
     {
         if (slapRoomId is not null) ShowSlapRoom();
         else if (ciaoRoomId is not null) ShowCiaoRoom();
+        else if (oneCardRoomId is not null) ShowOneCardRoom();
         else if (playState == PlayState.Paused) ShowPause();
         else if (playState == PlayState.Over) ShowEnd();
         else ShowHome();
@@ -517,7 +525,7 @@ public partial class MainWindow : Window
     private void Logout()
     {
         if (pendingRecord is not null) { ShowEnd(); return; }
-        DetachSlapRoom(); DetachCiaoRoom();
+        DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom();
         ForgetSession(); userId = null; bestScore = 0; ResetToHome(); ShowHome();
         SetMessage("로그아웃했습니다.", true);
     }
@@ -694,7 +702,7 @@ public partial class MainWindow : Window
     {
         var update = availableUpdate;
         if (update is null || offeringUpdate || installingUpdate || busy || sizeModeRestore is not null || !IsVisible || !IsActive ||
-            pendingRecord is not null || playState == PlayState.Playing || InSlapMatch || InCiaoMatch || (!manual && offeredUpdates.Contains(update.Tag))) return;
+            pendingRecord is not null || playState == PlayState.Playing || InSlapMatch || InCiaoMatch || InOneCardMatch || (!manual && offeredUpdates.Contains(update.Tag))) return;
         offeringUpdate = true; offeredUpdates.Add(update.Tag);
         try
         {
@@ -772,7 +780,7 @@ public partial class MainWindow : Window
             using (new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose)) { }
             var old = preferences.DataFolder; preferences.DataFolder = candidate.Folder;
             if (!SavePreferences()) { preferences.DataFolder = old; return; }
-            DetachSlapRoom(); DetachCiaoRoom();
+            DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom();
             store = candidate; userId = null; bestScore = 0; pendingRecord = null;
             ResetToHome(); startupError = null;
             UpdateHud(); ShowSettings(); SetMessage("저장 폴더를 변경했습니다. 이 폴더의 계정으로 로그인해 주세요.", true);
@@ -951,7 +959,7 @@ public partial class MainWindow : Window
         if (busy) { e.Cancel = true; return; }
         if (pendingRecord is not null && MessageBox.Show(this, "저장하지 못한 기록이 있습니다. 저장하지 않고 종료할까요?", "미저장 기록", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
         { e.Cancel = true; ShowEnd(); return; }
-        DetachSlapRoom(); DetachCiaoRoom();
+        DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom();
         ExitSizeMode(false); RememberWindowSize();
         PauseGame(); SavePreferences();
     }

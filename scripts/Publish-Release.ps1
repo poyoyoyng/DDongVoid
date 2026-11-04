@@ -23,6 +23,8 @@ if (-not $SkipTests) {
     if ($LASTEXITCODE -ne 0) { throw 'Rendering checks failed.' }
     dotnet run --project (Join-Path $taskProjectRoot 'tests\RankingChecks.csproj') -c Release -p:NuGetAudit=false
     if ($LASTEXITCODE -ne 0) { throw 'Ranking checks failed.' }
+    dotnet run --project (Join-Path $taskProjectRoot 'tests\OneCardUiChecks.csproj') -c Release -p:NuGetAudit=false
+    if ($LASTEXITCODE -ne 0) { throw 'One Card UI checks failed.' }
 }
 dotnet publish (Join-Path $taskProjectRoot 'DDongVoid.csproj') -c Release -r win-x64 --no-self-contained -o $taskPackageDirectory "-p:Version=$Version" -p:NuGetAudit=false
 if ($LASTEXITCODE -ne 0) { throw 'Game publish failed.' }
