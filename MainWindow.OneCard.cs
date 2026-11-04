@@ -274,13 +274,16 @@ public partial class MainWindow
         DialogContent.Children.Add(players);
         var table = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8) };
         if (room.TopCard is int card)
-            table.Children.Add(new Border { Background = Brushes.FloralWhite, CornerRadius = new CornerRadius(7), Padding = new Thickness(8), Width = 82, Height = 100,
+            table.Children.Add(new Border { Background = Brushes.FloralWhite, CornerRadius = new CornerRadius(3.5), Padding = new Thickness(4), Width = 41, Height = 50,
                 Child = OneCardFace(card, 21), ToolTip = OneCardRules.Effect(card) });
         table.Children.Add(new TextBlock { Text = $"{(room.Direction == 1 ? "→ 정방향" : "← 역방향")}\n{(room.ActiveSuit is { } suit ? OneCardRules.SuitName(suit) : "모든 무늬 가능")}"
                 + (room.PendingAttack > 0 ? $"\n누적 공격 +{room.PendingAttack}" : ""),
             Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxWidth = 145,
             Foreground = new SolidColorBrush(Color.FromRgb(167, 243, 206)), FontSize = 13 });
         DialogContent.Children.Add(table);
+        if (room.Status == OneCardStatus.Playing)
+            AddButton(room.PendingAttack > 0 ? $"공격 받기 · {room.PendingAttack}장" : "카드 1장 받기 · 차례 넘기기",
+                () => _ = RunOneCardAsync((s, id) => s.Draw(room.Id, id, room.Revision))).IsEnabled = room.CurrentPlayerId == me.Id;
         AddText($"내 손패 · {me.CardCount}장", 12, "#A7F3CE", 0, 4, true);
         if (room.Status == OneCardStatus.Playing)
         {
@@ -288,11 +291,11 @@ public partial class MainWindow
             foreach (var option in Enum.GetValues<CardSuit>()) suits.Items.Add(new ComboBoxItem { Content = OneCardRules.SuitName(option), Tag = option });
             System.Windows.Automation.AutomationProperties.SetName(suits, "7을 낼 때 바꿀 무늬");
             AddText("7을 낼 때 바꿀 무늬", 10, "#91AB9C", 0, 3); DialogContent.Children.Add(suits);
-            var hand = new WrapPanel { Name = "OneCardHand", Margin = new Thickness(-2, 0, -2, 6) };
+            var hand = new WrapPanel { Name = "OneCardHand", Margin = new Thickness(-1, 0, -1, 6) };
             foreach (var c in me.Hand.Order())
             {
                 var value = c;
-                var button = new Button { Content = OneCardFace(c, 15), Tag = c, Width = 58, Height = 76, Padding = new Thickness(3), Margin = new Thickness(2),
+                var button = new Button { Content = OneCardFace(c, 15), Tag = c, Width = 29, Height = 38, Padding = new Thickness(1.5), Margin = new Thickness(1),
                     Background = Brushes.FloralWhite, ToolTip = $"{OneCardRules.Name(c)} · {OneCardRules.Effect(c)}", IsEnabled = room.CanPlay(me.Id, c) };
                 System.Windows.Automation.AutomationProperties.SetName(button, $"{OneCardRules.Name(c)} 내기 · {OneCardRules.Effect(c)}");
                 button.Click += (_, _) => { if (!busy) _ = RunOneCardAsync((s, id) => s.Play(room.Id, id, room.Revision, value,
@@ -300,8 +303,6 @@ public partial class MainWindow
                 hand.Children.Add(button);
             }
             DialogContent.Children.Add(hand);
-            AddButton(room.PendingAttack > 0 ? $"공격 받기 · {room.PendingAttack}장" : "카드 1장 받기 · 차례 넘기기",
-                () => _ = RunOneCardAsync((s, id) => s.Draw(room.Id, id, room.Revision))).IsEnabled = room.CurrentPlayerId == me.Id;
             AddText("밝은 카드를 눌러 내세요. 상대 손패는 장수만 표시합니다.", 10, "#91AB9C", 2, 4);
         }
     }
@@ -309,7 +310,7 @@ public partial class MainWindow
     {
         var ink = card >= 52 ? card == OneCardRules.ColorJoker ? Brushes.Firebrick : Brushes.SlateGray
             : OneCardRules.Suit(card) is CardSuit.Heart or CardSuit.Diamond ? Brushes.Firebrick : Brushes.DarkSlateGray;
-        var face = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var face = new StackPanel { VerticalAlignment = VerticalAlignment.Center, LayoutTransform = new ScaleTransform(.5, .5) };
         face.Children.Add(new TextBlock { Text = card >= 52 ? "★" : OneCardRules.Name(card), FontSize = size, FontWeight = FontWeights.Bold,
             Foreground = ink, TextAlignment = TextAlignment.Center });
         if (card >= 52)
