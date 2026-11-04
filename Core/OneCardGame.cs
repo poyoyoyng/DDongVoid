@@ -12,8 +12,8 @@ public static class OneCardRules
 {
     public const int MaxPlayers = 4, MaxTitleLength = 40, StartingCards = 7, DeckSize = 54;
     public const int BlackJoker = 52, ColorJoker = 53;
-    // Longer than one poll so every PC has the new state before the callout appears everywhere at once.
-    public static readonly TimeSpan CalloutDelay = TimeSpan.FromSeconds(1.5);
+    // Longer than one in-game poll plus a slow share read so every PC has the new state before the callout appears everywhere at once.
+    public static readonly TimeSpan MatchPollInterval = TimeSpan.FromSeconds(.25), CalloutDelay = TimeSpan.FromSeconds(.7);
     public static int Rank(int card) => card < 52 ? card % 13 + 1 : 0;
     public static CardSuit Suit(int card) => (CardSuit)(card / 13);
     public static string SuitName(CardSuit suit) => suit switch

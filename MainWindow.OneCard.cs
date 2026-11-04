@@ -26,7 +26,12 @@ public partial class MainWindow
     private void StartOneCardTimer()
     {
         if (!oneCardTimerHooked) { oneCardTimer.Tick += async (_, _) => await PollOneCardAsync(); oneCardTimerHooked = true; }
-        oneCardTimer.Start();
+        UpdateOneCardPollInterval(); oneCardTimer.Start();
+    }
+    private void UpdateOneCardPollInterval()
+    {
+        var interval = InOneCardMatch ? OneCardRules.MatchPollInterval : TimeSpan.FromSeconds(1);
+        if (oneCardTimer.Interval != interval) oneCardTimer.Interval = interval;
     }
     private void DetachOneCardRoom()
     {
@@ -198,7 +203,7 @@ public partial class MainWindow
                 }
                 oneCardRoom = room;
             }
-            oneCardRooms = rooms; SetOneCardSyncNote($"자동 갱신 · {DateTime.Now:HH:mm:ss}");
+            oneCardRooms = rooms; UpdateOneCardPollInterval(); SetOneCardSyncNote($"자동 갱신 · {DateTime.Now:HH:mm:ss}");
             if (panel == "onecard-room") DrawOneCardRoom();
             else if (panel == "onecard-lobby") DrawOneCardLobby();
         }
