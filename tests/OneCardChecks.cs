@@ -122,7 +122,8 @@ internal static class OneCardChecks
             var r = Table(4, [5, 8], [18, 20]); r.Play("p0", 0, 5);
             var revision = r.Revision; r.Call("p0", revision, "p0");
             assert(r.Players[0].CardCount == 1 && r.VulnerablePlayerId is null, "본인 클릭 시 벌칙");
-            Reject(() => r.Call("p1", revision, "p0")); Conserve(r);
+            Reject(() => r.Call("p1", revision, "p0"));
+            assert(r.CallCount == 1, "원카드 버튼 누른 횟수가 말풍선용으로 한 번만 기록되지 않음"); Conserve(r);
         });
         check("원카드 여러 명 1장일 때 선언 대상을 순서대로 보존", () =>
         {

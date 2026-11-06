@@ -20,6 +20,12 @@ public partial class MainWindow
     private Task? oneCardActivePoll;
     private string oneCardSyncNote = "동기화 확인 중…";
     private TextBlock? oneCardSyncStatus;
+    private Button? oneCardCallButton;
+    // The room's press count last drawn here: a higher count means someone pressed 원카드 since.
+    private (Guid Room, int Calls)? oneCardSeenCalls;
+    private DateTimeOffset oneCardBubbleUntil;
+    private int oneCardBubbleVersion;
+    private static readonly TimeSpan OneCardBubbleTime = TimeSpan.FromSeconds(.5);
     private bool InOneCardMatch => oneCardRoom?.Status == OneCardStatus.Playing;
     private OneCardStore NewOneCardStore() => new(store.Folder);
 
@@ -37,6 +43,7 @@ public partial class MainWindow
     {
         oneCardTimer.Stop(); oneCardSyncCancellation?.Cancel(); oneCardStateVersion++;
         oneCardRoomId = null; oneCardRoom = null; oneCardDrawn = null; oneCardSyncStatus = null;
+        oneCardCallButton = null; oneCardSeenCalls = null; oneCardBubbleUntil = default;
     }
     private void ShowOneCardLobby()
     {
@@ -231,7 +238,7 @@ public partial class MainWindow
         if (oneCardRoom is not { } room || userId is null || room.Find(userId) is not { } me) { ShowOneCardLobby(); return; }
         var signature = "room|" + userId + "|" + JsonSerializer.Serialize(room);
         if (panel == "onecard-room" && oneCardDrawn == signature) return;
-        oneCardDrawn = signature;
+        oneCardDrawn = signature; oneCardCallButton = null;
         var playing = room.Status == OneCardStatus.Playing;
         var finished = room.Status == OneCardStatus.Finished;
         var title = finished ? room.Winners.Contains(userId) ? "이겼어요!" : "게임이 끝났어요"
@@ -263,7 +270,8 @@ public partial class MainWindow
         if (room.HostId == userId)
             AddButton("방 없애기 (방장 전용)", () => _ = RunOneCardAsync((s, id) => { s.DeleteRoom(room.Id, id); return null; }));
         if (!playing) AddButton("방 나가기", () => _ = RunOneCardAsync((s, id) => { s.Leave(room.Id, id); return null; }));
-        UpdateOneCardCallout(room);
+        UpdateOneCardCallButton(room);
+        UpdateOneCardBubble(room);
     }
     private void AddOneCardTable(OneCardRoom room, OneCardPlayer me)
     {
@@ -278,6 +286,16 @@ public partial class MainWindow
         }
         DialogContent.Children.Add(players);
         var table = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8) };
+        if (room.Status == OneCardStatus.Playing)
+        {
+            // Stays disabled until someone is down to one card and the shared callout time arrives.
+            var target = room.VulnerablePlayerId;
+            oneCardCallButton = new Button { Name = "OneCardCallButton", Content = "원카드!", FontSize = 12, Width = 58, Height = 50, Padding = new Thickness(2),
+                Margin = new Thickness(0, 0, 12, 0), Style = (Style)FindResource("Primary"), IsEnabled = false,
+                ToolTip = "누군가 1장 남으면 눌러요.\n본인이 먼저 누르면 선언, 다른 사람이 먼저 누르면 그 사람이 벌칙 1장" };
+            oneCardCallButton.Click += (_, _) => { if (!busy && target is not null) _ = RunOneCardAsync((s, id) => s.Call(room.Id, id, room.Revision, target)); };
+            table.Children.Add(oneCardCallButton);
+        }
         if (room.TopCard is int card)
             table.Children.Add(new Border { Background = Brushes.FloralWhite, CornerRadius = new CornerRadius(3.5), Padding = new Thickness(4), Width = 41, Height = 50,
                 Child = OneCardHandFace(card), ToolTip = OneCardRules.Effect(card) });
@@ -351,30 +369,49 @@ public partial class MainWindow
         }
         return new Viewbox { Stretch = Stretch.Uniform, Child = face };
     }
-    private async Task ShowOneCardCalloutLaterAsync(Guid roomId, DateTimeOffset calloutAt, TimeSpan wait)
+    private async Task EnableOneCardCallLaterAsync(Guid roomId, DateTimeOffset calloutAt, TimeSpan wait)
     {
         await Task.Delay(wait);
         if (panel == "onecard-room" && oneCardRoom is { } room && room.Id == roomId)
-            UpdateOneCardCallout(room, room.CalloutAt == calloutAt);
+            UpdateOneCardCallButton(room, room.CalloutAt == calloutAt);
     }
-    private void UpdateOneCardCallout(OneCardRoom room, bool waited = false)
+    private void UpdateOneCardCallButton(OneCardRoom room, bool waited = false)
     {
-        if (room.Status != OneCardStatus.Playing || room.VulnerablePlayerId is not { } target) return;
-        // Every PC shows the callout at the shared CalloutAt time; a clock running behind waits at most one delay.
+        if (oneCardCallButton is not { } button || room.Status != OneCardStatus.Playing || room.VulnerablePlayerId is not { } target) return;
+        // Every PC enables the button at the shared CalloutAt time; a clock running behind waits at most one delay.
         if (!waited && room.CalloutAt is { } calloutAt && calloutAt - DateTimeOffset.UtcNow is var wait && wait > TimeSpan.Zero)
         {
-            _ = ShowOneCardCalloutLaterAsync(room.Id, calloutAt, wait < OneCardRules.CalloutDelay ? wait : OneCardRules.CalloutDelay); return;
+            _ = EnableOneCardCallLaterAsync(room.Id, calloutAt, wait < OneCardRules.CalloutDelay ? wait : OneCardRules.CalloutDelay); return;
         }
-        var content = new StackPanel();
-        content.Children.Add(new TextBlock { Text = $"{target}님이 1장 남았어요!", TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center,
-            Foreground = Brushes.White, FontSize = 15, FontWeight = FontWeights.Bold });
-        var button = new Button { Name = "OneCardCallButton", Content = "원카드!", FontSize = 27, Padding = new Thickness(22, 12, 22, 12),
-            Style = (Style)FindResource("Primary"), Margin = new Thickness(0, 10, 0, 6) };
+        button.IsEnabled = true;
         System.Windows.Automation.AutomationProperties.SetName(button, $"원카드! · {target}");
-        button.Click += (_, _) => { if (!busy) _ = RunOneCardAsync((s, id) => s.Call(room.Id, id, room.Revision, target)); };
-        content.Children.Add(button);
-        content.Children.Add(new TextBlock { Text = target == userId ? "먼저 눌러 원카드를 선언하세요!" : "먼저 누르면 저 사람이 벌칙 1장!",
-            TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Foreground = Brushes.White, FontSize = 11 });
-        OneCardCallout.Child = content; OneCardCallout.Visibility = Visibility.Visible;
+    }
+    private void UpdateOneCardBubble(OneCardRoom room)
+    {
+        var seen = oneCardSeenCalls; oneCardSeenCalls = (room.Id, room.CallCount);
+        // Opening a room only records its count, so presses made while away do not pop up later.
+        if (seen is { } last && last.Room == room.Id && room.CallCount > last.Calls)
+        {
+            oneCardBubbleUntil = DateTimeOffset.UtcNow + OneCardBubbleTime;
+            var version = ++oneCardBubbleVersion;
+            OneCardCallout.Child = OneCardBubble();
+            _ = HideOneCardBubbleAsync(version);
+        }
+        // Redrawing the room collapses the overlay; keep a bubble that is still within its half second.
+        if (DateTimeOffset.UtcNow < oneCardBubbleUntil && OneCardCallout.Child is not null) OneCardCallout.Visibility = Visibility.Visible;
+    }
+    private async Task HideOneCardBubbleAsync(int version)
+    {
+        await Task.Delay(OneCardBubbleTime);
+        if (version == oneCardBubbleVersion) OneCardCallout.Visibility = Visibility.Collapsed;
+    }
+    private static FrameworkElement OneCardBubble()
+    {
+        var mint = new SolidColorBrush(Color.FromRgb(167, 243, 206));
+        var bubble = new StackPanel();
+        bubble.Children.Add(new Border { Background = mint, CornerRadius = new CornerRadius(20), Padding = new Thickness(26, 10, 26, 12),
+            Child = new TextBlock { Text = "원카드!", FontSize = 30, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(16, 41, 30)) } });
+        bubble.Children.Add(new System.Windows.Shapes.Path { Data = Geometry.Parse("M0,0 L18,0 L5,14 Z"), Fill = mint, Margin = new Thickness(30, -1, 0, 0) });
+        return bubble;
     }
 }
