@@ -45,7 +45,7 @@
               <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="440"><StackPanel x:Name="DialogContent"/></ScrollViewer>
             </Grid>
           </Border>
-          <Border x:Name="OneCardCallout" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="260" Margin="24" Padding="20" CornerRadius="16" Background="#FA31583F" BorderBrush="#A7F3CE" BorderThickness="2" Opacity="{Binding ElementName=DialogContent, Path=Opacity}"/>
+          <Border x:Name="OneCardCallout" Visibility="Collapsed" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24" Opacity="{Binding ElementName=DialogContent, Path=Opacity}"/>
         </Grid>
       </Grid>
       <Border x:Name="FooterChrome" Grid.Row="3" Background="#F2182520" CornerRadius="0,0,15,15" BorderBrush="#2B3C32" BorderThickness="0,1,0,0">

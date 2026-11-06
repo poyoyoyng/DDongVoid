@@ -47,7 +47,7 @@ public static class OneCardRules
         + "같은 무늬 3은 2로 쌓인 공격을 모두 취소합니다. 못 막으면 누적 장수를 받고 차례를 마칩니다.\n"
         + "7: 무늬 선택 / J: 다음 사람 건너뛰기 / Q: 방향 전환(2인은 순서 유지) / K: 한 번 더. "
         + "조커는 평소 아무 카드 위에 낼 수 있고, 공격을 받은 뒤에는 아무 무늬나 낼 수 있습니다. 첫 바닥 카드는 일반 숫자이며 특수 효과가 없습니다.\n"
-        + "한 장이 남으면 잠시 뒤 모두의 화면 가운데에 동시에 원카드! 버튼이 나타납니다. 본인이 먼저 누르면 선언 완료, "
+        + "가운데 카드 왼쪽의 원카드! 버튼은 누군가 한 장 남으면 잠시 뒤 모두의 화면에서 동시에 눌러집니다. 본인이 먼저 누르면 선언 완료, "
         + "다른 사람이 먼저 누르면 한 장 남은 사람이 벌칙 1장을 받습니다. 누르거나 해당 손패가 바뀔 때까지 유지됩니다. 마지막 특수 카드로도 즉시 승리합니다.\n"
         + "더미가 떨어지면 맨 위 카드를 남기고 섞습니다. 모두 더 받을 카드도 낼 카드도 없으면 손패가 가장 적은 사람이 공동 승리합니다. "
         + "파산·여러 장 동시 내기 등 추가 지역룰은 사용하지 않습니다.";
@@ -79,6 +79,8 @@ public sealed class OneCardRoom
     public List<string> UncalledPlayerIds { get; set; } = [];
     public string? VulnerablePlayerId => UncalledPlayerIds.FirstOrDefault();
     public DateTimeOffset? CalloutAt { get; set; }
+    // Counts presses of the 원카드 button so every PC can show the speech bubble once per press.
+    public int CallCount { get; set; }
     public int EmptyDraws { get; set; }
     public List<string> Winners { get; set; } = [];
     public string? LastMessage { get; set; }
@@ -170,7 +172,7 @@ public sealed class OneCardRoom
         CheckAction(id, revision, false);
         if (!UncalledPlayerIds.Contains(target) || Find(target) is not { CardCount: 1 } player)
             throw new ArgumentException("지금은 원카드를 선언하거나 지적할 수 없습니다.");
-        UncalledPlayerIds.Remove(target); ScheduleCallout(target); Revision++;
+        UncalledPlayerIds.Remove(target); ScheduleCallout(target); Revision++; CallCount++;
         if (id == target) LastMessage = $"{id} · 원카드!";
         else { var drawn = Take(player, 1); LastMessage = $"{id} · {target}의 원카드 미선언 지적 · 벌칙 {drawn}장"; UpdateCounts(); EmptyDraws = 0; }
     }
@@ -236,7 +238,7 @@ public sealed class OneCardStore : IOneCardStore
                 r.Players.Any(p => p is null || string.IsNullOrWhiteSpace(p.Id) || p.Hand is null || p.CardCount != p.Hand.Count) ||
                 r.Players.Select(p => p.Id).Distinct().Count() != r.Players.Count ||
                 !Enum.IsDefined(r.Status) || r.Revision < 0 || r.Turn < 1 || r.CurrentIndex < 0 || r.CurrentIndex >= r.Players.Count ||
-                r.Direction is not (1 or -1) || r.PendingAttack < 0 || r.EmptyDraws < 0 || r.DrawPile is null || r.DiscardPile is null ||
+                r.Direction is not (1 or -1) || r.PendingAttack < 0 || r.EmptyDraws < 0 || r.CallCount < 0 || r.DrawPile is null || r.DiscardPile is null ||
                 (r.ActiveSuit is { } suit && !Enum.IsDefined(suit)) || r.Winners is null ||
                 r.Winners.Distinct().Count() != r.Winners.Count || r.Winners.Any(id => r.Find(id) is null) ||
                 r.UncalledPlayerIds is null || r.UncalledPlayerIds.Distinct().Count() != r.UncalledPlayerIds.Count ||
