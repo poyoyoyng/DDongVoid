@@ -23,9 +23,9 @@ public partial class MainWindow
     private Button? oneCardCallButton;
     // The room's press count last drawn here: a higher count means someone pressed 원카드 since.
     private (Guid Room, int Calls)? oneCardSeenCalls;
-    private DateTimeOffset oneCardBubbleUntil;
+    private DateTimeOffset oneCardBubbleUntil, oneCardCallReadyAt;
     private int oneCardBubbleVersion;
-    private static readonly TimeSpan OneCardBubbleTime = TimeSpan.FromSeconds(.5);
+    private static readonly TimeSpan OneCardBubbleTime = TimeSpan.FromSeconds(.5), OneCardCallCooldown = TimeSpan.FromSeconds(1);
     private bool InOneCardMatch => oneCardRoom?.Status == OneCardStatus.Playing;
     private OneCardStore NewOneCardStore() => new(store.Folder);
 
@@ -270,7 +270,6 @@ public partial class MainWindow
         if (room.HostId == userId)
             AddButton("방 없애기 (방장 전용)", () => _ = RunOneCardAsync((s, id) => { s.DeleteRoom(room.Id, id); return null; }));
         if (!playing) AddButton("방 나가기", () => _ = RunOneCardAsync((s, id) => { s.Leave(room.Id, id); return null; }));
-        UpdateOneCardCallButton(room);
         UpdateOneCardBubble(room);
     }
     private void AddOneCardTable(OneCardRoom room, OneCardPlayer me)
@@ -286,16 +285,6 @@ public partial class MainWindow
         }
         DialogContent.Children.Add(players);
         var table = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8) };
-        if (room.Status == OneCardStatus.Playing)
-        {
-            // Stays disabled until someone is down to one card and the shared callout time arrives.
-            var target = room.VulnerablePlayerId;
-            oneCardCallButton = new Button { Name = "OneCardCallButton", Content = "원카드!", FontSize = 12, Width = 58, Height = 50, Padding = new Thickness(2),
-                Margin = new Thickness(0, 0, 12, 0), Style = (Style)FindResource("Primary"), IsEnabled = false,
-                ToolTip = "누군가 1장 남으면 눌러요.\n본인이 먼저 누르면 선언, 다른 사람이 먼저 누르면 그 사람이 벌칙 1장" };
-            oneCardCallButton.Click += (_, _) => { if (!busy && target is not null) _ = RunOneCardAsync((s, id) => s.Call(room.Id, id, room.Revision, target)); };
-            table.Children.Add(oneCardCallButton);
-        }
         if (room.TopCard is int card)
             table.Children.Add(new Border { Background = Brushes.FloralWhite, CornerRadius = new CornerRadius(3.5), Padding = new Thickness(4), Width = 41, Height = 50,
                 Child = OneCardHandFace(card), ToolTip = OneCardRules.Effect(card) });
@@ -305,8 +294,14 @@ public partial class MainWindow
             Foreground = new SolidColorBrush(Color.FromRgb(167, 243, 206)), FontSize = 13 });
         DialogContent.Children.Add(table);
         if (room.Status == OneCardStatus.Playing)
+        {
             AddButton(room.PendingAttack > 0 ? $"공격 받기 · {room.PendingAttack}장" : "카드 1장 받기 · 차례 넘기기",
                 () => _ = RunOneCardAsync((s, id) => s.Draw(room.Id, id, room.Revision))).IsEnabled = room.CurrentPlayerId == me.Id;
+            oneCardCallButton = AddButton("원카드!", () => PressOneCard(room.Id), true);
+            oneCardCallButton.Name = "OneCardCallButton";
+            oneCardCallButton.ToolTip = "언제든 누를 수 있어요.\n한 장 남은 내가 누르면 선언 · 선언 안 한 사람이 있으면 그 사람이 벌칙 1장\n원카드인 사람이 없으면 내가 벌칙 1장 · 누른 뒤 1초 동안 다시 못 눌러요";
+            UpdateOneCardCallCooldown();
+        }
         AddText($"내 손패 · {me.CardCount}장", 12, "#A7F3CE", 0, 4, true);
         if (room.Status == OneCardStatus.Playing)
         {
@@ -369,22 +364,25 @@ public partial class MainWindow
         }
         return new Viewbox { Stretch = Stretch.Uniform, Child = face };
     }
-    private async Task EnableOneCardCallLaterAsync(Guid roomId, DateTimeOffset calloutAt, TimeSpan wait)
+    // The server decides who the press is for, so a press always goes through; only this PC's 1-second cooldown blocks it.
+    private void PressOneCard(Guid roomId)
+    {
+        if (busy || DateTimeOffset.UtcNow < oneCardCallReadyAt) return;
+        oneCardCallReadyAt = DateTimeOffset.UtcNow + OneCardCallCooldown;
+        UpdateOneCardCallCooldown();
+        _ = RunOneCardAsync((s, id) => s.Call(roomId, id));
+    }
+    private void UpdateOneCardCallCooldown()
+    {
+        if (oneCardCallButton is not { } button) return;
+        var wait = oneCardCallReadyAt - DateTimeOffset.UtcNow;
+        button.IsEnabled = wait <= TimeSpan.Zero;
+        if (wait > TimeSpan.Zero) _ = EnableOneCardCallLaterAsync(wait);
+    }
+    private async Task EnableOneCardCallLaterAsync(TimeSpan wait)
     {
         await Task.Delay(wait);
-        if (panel == "onecard-room" && oneCardRoom is { } room && room.Id == roomId)
-            UpdateOneCardCallButton(room, room.CalloutAt == calloutAt);
-    }
-    private void UpdateOneCardCallButton(OneCardRoom room, bool waited = false)
-    {
-        if (oneCardCallButton is not { } button || room.Status != OneCardStatus.Playing || room.VulnerablePlayerId is not { } target) return;
-        // Every PC enables the button at the shared CalloutAt time; a clock running behind waits at most one delay.
-        if (!waited && room.CalloutAt is { } calloutAt && calloutAt - DateTimeOffset.UtcNow is var wait && wait > TimeSpan.Zero)
-        {
-            _ = EnableOneCardCallLaterAsync(room.Id, calloutAt, wait < OneCardRules.CalloutDelay ? wait : OneCardRules.CalloutDelay); return;
-        }
-        button.IsEnabled = true;
-        System.Windows.Automation.AutomationProperties.SetName(button, $"원카드! · {target}");
+        UpdateOneCardCallCooldown();
     }
     private void UpdateOneCardBubble(OneCardRoom room)
     {

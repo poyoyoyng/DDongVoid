@@ -8,6 +8,6 @@
     <AssemblyName>DDongVoid</AssemblyName>
     <Version>1.0.34</Version>
   </PropertyGroup>
-  <ItemGroup><Compile Remove="tests\**;Updater\**;artifacts\**" /></ItemGroup>
+  <ItemGroup><Compile Remove="tests\**;Updater\**;Server\**;artifacts\**" /></ItemGroup>
   <ItemGroup><Resource Include="Assets\Slap\*.png" /></ItemGroup>
 </Project>

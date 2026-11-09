@@ -105,7 +105,7 @@ internal static class OneCardUiChecks
                     Players = [new() { Id = "p0", Hand = seven ? [6, 8] : [5, 8], CardCount = 2 }, new() { Id = "p1", Hand = [18, 20], CardCount = 2 },
                         new() { Id = "p2", Hand = [31, 30], CardCount = 2 }, new() { Id = "p3", Hand = [44, 43], CardCount = 2 }] };
                 room.DrawPile = Enumerable.Range(0, OneCardRules.DeckSize).Except(room.Players.SelectMany(p => p.Hand).Concat(room.DiscardPile)).ToList();
-                if (!seven) { room.Play("p0", 0, 5); room.CalloutAt = DateTimeOffset.UtcNow; }
+                if (!seven) room.Play("p0", 0, 5);
                 return room;
             }
             void Show(OneCardRoom room)
@@ -131,39 +131,28 @@ internal static class OneCardUiChecks
             // The button is rebuilt on every redraw, so look it up again each time.
             Button? CallButton(MainWindow w) => Find<Button>((DependencyObject)w.Content).SingleOrDefault(b => b.Name == "OneCardCallButton");
             Border Bubble(MainWindow w) => (Border)w.FindName("OneCardCallout");
-            Assert(CallButton(host) is { IsEnabled: false } && CallButton(guest) is { IsEnabled: false } && Bubble(host).Visibility == Visibility.Collapsed,
-                "평소에는 원카드 버튼 비활성화·가운데 원카드 창 없음");
+            int Cards(MainWindow w, string player) => ((OneCardRoom)Get(w, "oneCardRoom")!).Find(player)!.CardCount;
             Wait(() => Idle() && ((OneCardRoom)Get(guest, "oneCardRoom")!).ActiveSuit == CardSuit.Heart);
-            var calloutAt = ((OneCardRoom)Get(host, "oneCardRoom")!).CalloutAt!.Value;
-            Assert(((OneCardRoom)Get(host, "oneCardRoom")!).Find("p0")!.CardCount == 1 && !suitMenu.IsOpen,
-                "무늬 선택 시 7 제출·무늬 변경·다음 턴 양쪽 반영");
-            Assert(DateTimeOffset.UtcNow < calloutAt && CallButton(host) is { IsEnabled: false } && CallButton(guest) is { IsEnabled: false },
-                "상태를 받아도 표시 시각 전에는 본인·상대 모두 원카드 버튼 비활성화");
-            var enabled = new Dictionary<MainWindow, DateTimeOffset>();
-            Wait(() =>
-            {
-                foreach (var w in new[] { host, guest }) if (CallButton(w)?.IsEnabled == true) enabled.TryAdd(w, DateTimeOffset.UtcNow);
-                return enabled.Count == 2;
-            });
-            Assert(enabled.Values.All(t => t >= calloutAt && t - calloutAt < TimeSpan.FromSeconds(.3)), "표시 시각에 본인·상대 원카드 버튼 동시 활성화");
-            Assert(Bubble(host).Visibility == Visibility.Collapsed && Bubble(guest).Visibility == Visibility.Collapsed, "1장 남아도 가운데 원카드 창은 띄우지 않음");
+            Assert(Cards(host, "p0") == 1 && !suitMenu.IsOpen, "무늬 선택 시 7 제출·무늬 변경·다음 턴 양쪽 반영");
+            Assert(CallButton(host) is { IsEnabled: true } && CallButton(guest) is { IsEnabled: true } && Bubble(host).Visibility == Visibility.Collapsed,
+                "원카드 버튼은 항상 활성화·누르기 전에는 가운데 말풍선 없음");
+            var draw = Find<Button>((DependencyObject)guest.Content).Single(b => Equals(b.Content, "카드 1장 받기 · 차례 넘기기"));
+            var callButton = CallButton(guest)!;
+            Assert(callButton.Parent == draw.Parent && ((Panel)draw.Parent).Children.IndexOf(callButton) == ((Panel)draw.Parent).Children.IndexOf(draw) + 1
+                && callButton.TransformToAncestor((Visual)guest.Content).Transform(new Point()).Y > draw.TransformToAncestor((Visual)guest.Content).Transform(new Point()).Y,
+                "원카드 버튼을 카드 받기 버튼 바로 아래에 표시");
             Call(host, "DetachOneCardRoom"); Call(guest, "DetachOneCardRoom");
             Show(Fixture());
-            var callButton = CallButton(guest)!;
-            var row = (Panel)callButton.Parent; var topCard = (FrameworkElement)row.Children[1];
-            Assert(callButton.IsEnabled && row.Children.IndexOf(callButton) == 0 && topCard is Border { Child: Viewbox }
-                && callButton.TransformToAncestor(row).Transform(new Point(callButton.ActualWidth, 0)).X <= topCard.TransformToAncestor(row).Transform(new Point()).X,
-                "원카드 버튼을 센터 카드 왼쪽에 표시");
             if (args.Length == 1)
             {
                 var body = (FrameworkElement)guest.Content; var bitmap = new RenderTargetBitmap(480, 740, 96, 96, PixelFormats.Pbgra32); bitmap.Render(body);
                 var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bitmap)); using var file = File.Create(Path.GetFullPath(args[0])); png.Save(file);
             }
             Layout(guest, 360, 640); Assert(CallButton(guest)!.ActualWidth > 0, "좁은 창에서 원카드 버튼 표시"); Layout(guest);
-            Click(guest, "원카드!");
-            Wait(() => Idle() && ((OneCardRoom)Get(host, "oneCardRoom")!).Find("p0")!.CardCount == 2);
-            Assert(CallButton(host) is { IsEnabled: false } && CallButton(guest) is { IsEnabled: false } && ((OneCardRoom)Get(guest, "oneCardRoom")!).Find("p1")!.CardCount == 2,
-                "상대 선클릭 시 1장 남은 사람만 벌칙 1장·버튼 비활성화·양쪽 반영");
+            Click(guest, "원카드!"); var pressedAt = DateTimeOffset.UtcNow;
+            Assert(CallButton(guest) is { IsEnabled: false }, "누른 사람 버튼은 바로 비활성화");
+            Wait(() => Idle() && Cards(host, "p0") == 2 && Cards(guest, "p0") == 2);
+            Assert(Cards(guest, "p1") == 2 && CallButton(host) is { IsEnabled: true }, "선언 안 한 사람을 남이 먼저 누르면 그 사람만 벌칙 1장·다른 사람 버튼은 유지");
             var bubbleShown = new Dictionary<MainWindow, DateTimeOffset>();
             Wait(() =>
             {
@@ -174,13 +163,21 @@ internal static class OneCardUiChecks
             Wait(() => Bubble(host).Visibility == Visibility.Collapsed && Bubble(guest).Visibility == Visibility.Collapsed);
             Assert(bubbleShown.Values.All(t => DateTimeOffset.UtcNow - t is var shownFor && shownFor >= TimeSpan.FromSeconds(.4) && shownFor < TimeSpan.FromSeconds(1)),
                 "원카드! 말풍선은 0.5초 정도 뒤 사라짐");
+            Click(guest, "원카드!"); Wait(Idle);
+            Assert(DateTimeOffset.UtcNow - pressedAt < TimeSpan.FromSeconds(1) && store.Rooms("p1").Single().Find("p1")!.CardCount == 2, "누른 사람은 1초 동안 다시 누를 수 없음");
+            Wait(() => CallButton(guest)?.IsEnabled == true);
+            Assert(DateTimeOffset.UtcNow - pressedAt is var cooldown && cooldown >= TimeSpan.FromSeconds(.9) && cooldown < TimeSpan.FromSeconds(1.6), "1초 뒤 원카드 버튼 다시 활성화");
+            Click(guest, "원카드!");
+            Wait(() => Idle() && Cards(host, "p1") == 3 && Cards(guest, "p1") == 3);
+            Assert(Cards(guest, "p0") == 2, "원카드인 사람이 없을 때 누르면 누른 사람이 벌칙 1장");
             Call(host, "DetachOneCardRoom"); Call(guest, "DetachOneCardRoom"); Show(Fixture());
             Assert(Bubble(host).Visibility == Visibility.Collapsed, "방에 들어올 때 지난 원카드 말풍선은 띄우지 않음");
             Click(host, "원카드!"); Wait(() => Idle() && ((OneCardRoom)Get(guest, "oneCardRoom")!).VulnerablePlayerId is null);
             Assert(((OneCardRoom)Get(host, "oneCardRoom")!).Find("p0")!.CardCount == 1, "본인 선클릭 시 벌칙 없이 원카드 선언");
             Call(host, "DetachOneCardRoom"); Call(guest, "DetachOneCardRoom"); Show(Fixture());
             Call(host, "ShowSettings"); Layout(host); Assert(CallButton(host) is null, "설정 화면에서는 원카드 버튼 숨김");
-            Call(host, "ReturnToGame"); Layout(host); Assert(CallButton(host) is { IsEnabled: true }, "게임 복귀 시 미선언 원카드 버튼 활성화 복원");
+            Call(host, "ReturnToGame"); Layout(host); Wait(() => CallButton(host)?.IsEnabled == true);
+            Assert(CallButton(host) is { IsEnabled: true }, "게임 복귀 시 원카드 버튼 다시 표시·누른 뒤 대기가 끝나면 활성화");
             Click(host, "방 목록으로 · 게임 유지"); Wait(() => Equals(Get(host, "panel"), "onecard-lobby"));
             Assert(store.Rooms("p0").Single().Status == OneCardStatus.Playing, "목록 이동 후 게임 보존");
             var latest = store.Join(id, "p0"); Set(host, "oneCardRoomId", id); Set(host, "oneCardRoom", latest); Call(host, "ShowOneCardRoom"); Layout(host);

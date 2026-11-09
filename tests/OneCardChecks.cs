@@ -97,39 +97,39 @@ internal static class OneCardChecks
                     assert(r.CurrentIndex == next && r.Direction == (special == 11 ? -1 : 1), "특수 차례 처리 오류"); Conserve(r);
                 }
         });
-        check("원카드 가운데 버튼 대상 생성·타인이 먼저 누르면 정확히 1장", () =>
+        check("원카드 버튼: 선언 안 한 사람을 남이 먼저 누르면 그 사람이 정확히 1장", () =>
         {
             var r = Table(4, [5, 8], [18, 20], [31, 30]);
-            r.Play("p0", 0, 5); assert(r.VulnerablePlayerId == "p0", "원카드 버튼 대상 누락");
-            var old = r.Revision;
-            r.Call("p2", old, "p0");
-            assert(r.Players[0].Hand.Count == 2 && r.VulnerablePlayerId is null && r.CurrentPlayerId == "p1", "벌칙 대상·턴 오류");
-            Reject(() => r.Call("p1", old, "p0")); Reject(() => r.Call("p1", r.Revision, "p0")); Conserve(r);
+            r.Play("p0", 0, 5); assert(r.VulnerablePlayerId == "p0", "원카드 대상 누락");
+            r.Call("p2");
+            assert(r.Players[0].Hand.Count == 2 && r.Players[2].Hand.Count == 2 && r.VulnerablePlayerId is null && r.CurrentPlayerId == "p1", "벌칙 대상·턴 오류");
+            Conserve(r);
         });
-        check("원카드 버튼 표시 시각을 방에 저장해 모두 동시에 표시", () =>
+        check("원카드 버튼: 원카드인 사람이 없을 때 누르면 누른 사람이 1장", () =>
         {
-            var r = Table(4, [5, 8], [18, 20], [31, 30]); var before = DateTimeOffset.UtcNow;
-            r.Play("p0", 0, 5);
-            assert(r.CalloutAt is { } first && first >= before + OneCardRules.CalloutDelay && first <= DateTimeOffset.UtcNow + OneCardRules.CalloutDelay, "1장 남은 뒤 표시 시각 누락");
-            var shownAt = r.CalloutAt; r.Play("p1", r.Revision, 18);
-            assert(r.CalloutAt == shownAt, "두 번째 1장 대상이 기존 버튼 표시 시각을 바꿈");
-            r.Call("p0", r.Revision, "p0");
-            assert(r.VulnerablePlayerId == "p1" && r.CalloutAt > shownAt, "다음 대상 표시 시각 갱신 누락");
-            r.Call("p1", r.Revision, "p1"); assert(r.CalloutAt is null, "선언 완료 후 표시 시각 유지");
+            var r = Table(4, [5, 8], [18, 20], [31, 30]);
+            r.Call("p1");
+            assert(r.Players[1].Hand.Count == 3 && r.Players.Where(p => p.Id != "p1").All(p => p.Hand.Count == 2) && r.CurrentPlayerId == "p0",
+                "아무도 1장이 아닐 때 누른 사람 벌칙 오류");
+            r.Play("p0", r.Revision, 5); r.Call("p0"); r.Call("p2");
+            assert(r.Players[0].Hand.Count == 1 && r.Players[2].Hand.Count == 3, "선언 끝난 뒤 늦게 누른 사람 벌칙 오류");
+            Reject(() => r.Call("없는사람")); Conserve(r);
         });
-        check("원카드 본인 선클릭 선언·중복 클릭 거부", () =>
+        check("원카드 버튼: 한 장 남은 본인이 누르면 벌칙 없이 선언·누른 횟수 기록", () =>
         {
             var r = Table(4, [5, 8], [18, 20]); r.Play("p0", 0, 5);
-            var revision = r.Revision; r.Call("p0", revision, "p0");
-            assert(r.Players[0].CardCount == 1 && r.VulnerablePlayerId is null, "본인 클릭 시 벌칙");
-            Reject(() => r.Call("p1", revision, "p0"));
-            assert(r.CallCount == 1, "원카드 버튼 누른 횟수가 말풍선용으로 한 번만 기록되지 않음"); Conserve(r);
+            var revision = r.Revision; r.Call("p0");
+            assert(r.Players[0].CardCount == 1 && r.VulnerablePlayerId is null && r.Revision == revision + 1, "본인 클릭 시 벌칙");
+            assert(r.CallCount == 1, "원카드 버튼 누른 횟수가 말풍선용으로 기록되지 않음"); Conserve(r);
         });
-        check("원카드 여러 명 1장일 때 선언 대상을 순서대로 보존", () =>
+        check("원카드 여러 명 1장일 때 선언 대상을 순서대로 보존·본인은 자기 선언", () =>
         {
             var r = Table(4, [5, 8], [18, 20], [31, 30]); r.Play("p0", 0, 5); r.Play("p1", r.Revision, 18);
             assert(r.UncalledPlayerIds.SequenceEqual(new[] { "p0", "p1" }), "다음 턴에서 기존 대상 유실");
-            r.Call("p0", r.Revision, "p0"); assert(r.VulnerablePlayerId == "p1", "다음 대상 누락");
+            r.Call("p1"); assert(r.VulnerablePlayerId == "p0" && r.Players[0].CardCount == 1 && r.Players[1].CardCount == 1, "뒤 순서 본인 선언이 앞 사람을 지적함");
+            r.Call("p0"); assert(r.VulnerablePlayerId is null, "앞 사람 선언 누락");
+            r = Table(4, [5, 8], [18, 20], [31, 30]); r.Play("p0", 0, 5); r.Play("p1", r.Revision, 18);
+            r.Call("p0"); assert(r.VulnerablePlayerId == "p1", "다음 대상 누락");
             r.Draw("p2", r.Revision); assert(r.VulnerablePlayerId == "p1", "타인 받기에 대상 유실"); Conserve(r);
         });
         check("원카드 대상 손패 변경·마지막 공격 카드 즉시 종료", () =>
@@ -176,14 +176,15 @@ internal static class OneCardChecks
             s.DeleteRoom(r.Id, "p0"); assert(peer.SnapshotAsync("p1").Result.DeletedRoomIds.Contains(r.Id), "삭제 기록 누락");
             s.Leave(other.Id, "p1"); assert(s.Rooms("p0").Count == 0, "마지막 참가자 방 정리 오류");
         });
-        check("원카드 동시 버튼 접수는 한 번만 벌칙·재대전·손상 파일 보존", () =>
+        check("원카드 동시 클릭은 먼저 접수된 한 명만 지적·늦은 사람 벌칙·재대전·손상 파일 보존", () =>
         {
             var s = new OneCardStore(Path.Combine(root, "원카드 동시 클릭")); Directory.CreateDirectory(s.Folder);
             var r = Table(4, [5, 8], [18, 20], [31, 30]); r.Play("p0", 0, 5);
             File.WriteAllText(s.FilePath, JsonSerializer.Serialize(new OneCardDatabase { Rooms = [r] }));
-            var wins = 0;
-            Parallel.ForEach(new[] { "p1", "p2" }, id => { try { s.Call(r.Id, id, r.Revision, "p0"); Interlocked.Increment(ref wins); } catch (ArgumentException) { } });
-            assert(wins == 1 && s.Rooms("p0").Single().Find("p0")!.CardCount == 2, "동시 벌칙 중복");
+            Parallel.ForEach(new[] { "p1", "p2" }, id => s.Call(r.Id, id));
+            var called = s.Rooms("p0").Single();
+            assert(called.Find("p0")!.CardCount == 2 && called.Players.Count(p => p.Id != "p0" && p.CardCount == 3) == 1 && called.CallCount == 2,
+                "동시 클릭 판정 오류");
             r = Table(4, [0], [18, 20]); r.Play("p0", 0, 0);
             File.WriteAllText(s.FilePath, JsonSerializer.Serialize(new OneCardDatabase { Rooms = [r] }));
             s.SetReady(r.Id, "p0", true); var again = s.SetReady(r.Id, "p1", true);
@@ -203,7 +204,7 @@ internal static class OneCardChecks
                     for (var i = 0; i < n; i++) r.SetReady($"p{i}", true);
                     for (var turn = 0; r.Status == OneCardStatus.Playing && turn < 10000; turn++)
                     {
-                        if (r.VulnerablePlayerId is { } target) r.Call($"p{random.Next(n)}", r.Revision, target);
+                        if (r.VulnerablePlayerId is not null) r.Call($"p{random.Next(n)}");
                         var id = r.CurrentPlayerId!; var legal = r.Find(id)!.Hand.Where(c => r.CanPlay(id, c)).ToArray();
                         if (legal.Length == 0) r.Draw(id, r.Revision);
                         else r.Play(id, r.Revision, legal[random.Next(legal.Length)], (CardSuit)random.Next(4));
