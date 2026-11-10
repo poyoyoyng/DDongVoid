@@ -16,8 +16,8 @@ public static class YachtRules
     public static bool IsUpper(YachtCategory category) => category <= YachtCategory.Sixes;
     public static string Name(YachtCategory category) => category switch
     {
-        YachtCategory.Aces => "에이스", YachtCategory.Deuces => "듀스", YachtCategory.Threes => "트레이",
-        YachtCategory.Fours => "포", YachtCategory.Fives => "파이브", YachtCategory.Sixes => "식스",
+        YachtCategory.Aces => "1", YachtCategory.Deuces => "2", YachtCategory.Threes => "3",
+        YachtCategory.Fours => "4", YachtCategory.Fives => "5", YachtCategory.Sixes => "6",
         YachtCategory.Choice => "초이스", YachtCategory.FourOfAKind => "포 다이스", YachtCategory.FullHouse => "풀 하우스",
         YachtCategory.SmallStraight => "S. 스트레이트", YachtCategory.LargeStraight => "L. 스트레이트", _ => "야추",
     };
@@ -52,7 +52,7 @@ public static class YachtRules
     public const string Description = "2인 · 주사위 5개 · 12라운드\n"
         + "내 차례에 주사위를 최대 3번 굴립니다. 굴린 뒤 남길 주사위를 눌러 고정하면 나머지만 다시 굴립니다. "
         + "굴린 결과로 빈 족보 한 칸을 골라 점수를 적어야 하며, 맞지 않는 칸을 고르면 0점입니다.\n"
-        + "상단(에이스~식스)은 해당 눈의 합이고, 상단 소계가 63점 이상이면 보너스 +35점을 받습니다(눈마다 3개씩 모으면 정확히 63점).\n"
+        + "상단(1~6)은 해당 눈의 합이고, 상단 소계가 63점 이상이면 보너스 +35점을 받습니다(눈마다 3개씩 모으면 정확히 63점).\n"
         + "초이스: 5개 합 / 포 다이스: 같은 눈 4개 이상이면 5개 합 / 풀 하우스: 3개+2개면 5개 합 / "
         + "S. 스트레이트: 연속 4개 15점 / L. 스트레이트: 연속 5개 30점 / 야추: 같은 눈 5개 50점.\n"
         + "12칸을 모두 채우면 총점이 가장 높은 사람이 승리합니다.";
@@ -139,7 +139,7 @@ public sealed class YachtRoom
         if (player.Score(category) is not null) throw new ArgumentException("이미 점수를 적은 칸입니다.");
         var hadBonus = player.Bonus() > 0;
         var score = YachtRules.Score(category, Dice); player.Scores[(int)category] = score;
-        LastMessage = $"{id} · {YachtRules.Name(category)} {score}점";
+        LastMessage = $"{id} · {YachtRules.Name(category)} 칸 {score}점";
         if (!hadBonus && player.Bonus() > 0) LastMessage += $" · 상단 {player.UpperSum()}점 달성! 보너스 +{YachtRules.BonusScore}";
         Revision++;
         if (Players.All(p => p.Done()))

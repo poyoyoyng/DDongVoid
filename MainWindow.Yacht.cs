@@ -534,7 +534,7 @@ public partial class MainWindow
                     HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             },
         };
-        System.Windows.Automation.AutomationProperties.SetName(button, $"{YachtRules.Name(category)} {preview}점 적기");
+        System.Windows.Automation.AutomationProperties.SetName(button, $"{YachtRules.Name(category)} 칸 {preview}점 적기");
         button.Click += (_, _) => { if (!busy) _ = RunYachtAsync((s, id) => s.Record(room.Id, id, room.Revision, category)); };
         return button;
     }

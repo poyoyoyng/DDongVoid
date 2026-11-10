@@ -79,7 +79,7 @@ internal static class YachtChecks
                     r.Record(id, r.Revision, category);
                 }
             assert(r.Status == YachtStatus.Finished && r.Winners.SequenceEqual(["p0"]) && r.Players.All(p => p.Done()), "종료 판정 오류");
-            // 6 다섯 개: 식스·초이스·포 다이스·풀 하우스 30, 야추 50 · 상단 30점이라 보너스 없음.
+            // 6 다섯 개: 6 칸·초이스·포 다이스·풀 하우스 30, 야추 50 · 상단 30점이라 보너스 없음.
             assert(r.Players[0].Total() == 170 && r.Players[1].Total() == 70, "최종 점수 오류");
             Reject(() => r.Roll("p0", r.Revision, None()));
             r.SetReady("p1", true); r.SetReady("p0", true);
