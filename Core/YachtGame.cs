@@ -18,7 +18,7 @@ public static class YachtRules
     {
         YachtCategory.Aces => "1", YachtCategory.Deuces => "2", YachtCategory.Threes => "3",
         YachtCategory.Fours => "4", YachtCategory.Fives => "5", YachtCategory.Sixes => "6",
-        YachtCategory.Choice => "초이스", YachtCategory.FourOfAKind => "포 다이스", YachtCategory.FullHouse => "풀 하우스",
+        YachtCategory.Choice => "찬스", YachtCategory.FourOfAKind => "포 다이스", YachtCategory.FullHouse => "풀 하우스",
         YachtCategory.SmallStraight => "S. 스트레이트", YachtCategory.LargeStraight => "L. 스트레이트", _ => "야추",
     };
     public static string Hint(YachtCategory category) => category switch
@@ -53,7 +53,7 @@ public static class YachtRules
         + "내 차례에 주사위를 최대 3번 굴립니다. 굴린 뒤 남길 주사위를 눌러 고정하면 나머지만 다시 굴립니다. "
         + "굴린 결과로 빈 족보 한 칸을 골라 점수를 적어야 하며, 맞지 않는 칸을 고르면 0점입니다.\n"
         + "상단(1~6)은 해당 눈의 합이고, 상단 소계가 63점 이상이면 보너스 +35점을 받습니다(눈마다 3개씩 모으면 정확히 63점).\n"
-        + "초이스: 5개 합 / 포 다이스: 같은 눈 4개 이상이면 5개 합 / 풀 하우스: 3개+2개면 5개 합 / "
+        + "찬스: 5개 합 / 포 다이스: 같은 눈 4개 이상이면 5개 합 / 풀 하우스: 3개+2개면 5개 합 / "
         + "S. 스트레이트: 연속 4개 15점 / L. 스트레이트: 연속 5개 30점 / 야추: 같은 눈 5개 50점.\n"
         + "12칸을 모두 채우면 총점이 가장 높은 사람이 승리합니다.";
 }

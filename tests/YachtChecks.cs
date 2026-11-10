@@ -21,7 +21,7 @@ internal static class YachtChecks
         check("야추 족보 점수 계산", () =>
         {
             assert(Score(YachtCategory.Aces, 1, 1, 3, 1, 6) == 3 && Score(YachtCategory.Sixes, 6, 6, 3, 1, 6) == 18 && Score(YachtCategory.Fours, 1, 2, 3, 5, 6) == 0, "상단 합 오류");
-            assert(Score(YachtCategory.Choice, 1, 2, 3, 4, 6) == 16, "초이스 오류");
+            assert(Score(YachtCategory.Choice, 1, 2, 3, 4, 6) == 16, "찬스 오류");
             assert(Score(YachtCategory.FourOfAKind, 6, 6, 6, 6, 2) == 26 && Score(YachtCategory.FourOfAKind, 3, 3, 3, 3, 3) == 15
                 && Score(YachtCategory.FourOfAKind, 6, 6, 6, 2, 2) == 0, "포 다이스 오류");
             assert(Score(YachtCategory.FullHouse, 3, 3, 3, 5, 5) == 19 && Score(YachtCategory.FullHouse, 6, 6, 6, 6, 6) == 30
@@ -79,7 +79,7 @@ internal static class YachtChecks
                     r.Record(id, r.Revision, category);
                 }
             assert(r.Status == YachtStatus.Finished && r.Winners.SequenceEqual(["p0"]) && r.Players.All(p => p.Done()), "종료 판정 오류");
-            // 6 다섯 개: 6 칸·초이스·포 다이스·풀 하우스 30, 야추 50 · 상단 30점이라 보너스 없음.
+            // 6 다섯 개: 6 칸·찬스·포 다이스·풀 하우스 30, 야추 50 · 상단 30점이라 보너스 없음.
             assert(r.Players[0].Total() == 170 && r.Players[1].Total() == 70, "최종 점수 오류");
             Reject(() => r.Roll("p0", r.Revision, None()));
             r.SetReady("p1", true); r.SetReady("p0", true);
