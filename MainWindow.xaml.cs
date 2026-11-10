@@ -105,6 +105,7 @@ public partial class MainWindow : Window
             if (panel is "slap-lobby" or "slap-room") { StartSlapTimer(); _ = PollSlapAsync(); }
             if (panel is "ciao-lobby" or "ciao-room") { StartCiaoTimer(); _ = PollCiaoAsync(); }
             if (panel is "onecard-lobby" or "onecard-room") { StartOneCardTimer(); _ = PollOneCardAsync(); }
+            if (panel is "yacht-lobby" or "yacht-room") { StartYachtTimer(); _ = PollYachtAsync(); }
             Dispatcher.BeginInvoke((Action)(() => OfferUpdate(false)));
         };
         // The render loop starts with a game (StartGame / ResumeGame), not with the window.
@@ -245,13 +246,15 @@ public partial class MainWindow : Window
     private void BeginPanel(string name, string eyebrow, string title, string description)
     {
         var gameList = name == "games";
-        Dialog.HorizontalAlignment = name is "slap-room" or "ciao-room" or "onecard-room" ? HorizontalAlignment.Stretch : HorizontalAlignment.Center;
-        Dialog.Margin = new Thickness(gameList ? 12 : 22);
-        Dialog.Padding = gameList ? new Thickness(18, 14, 18, 14) : new Thickness(28);
+        // The yacht table needs both players' full score sheets on screen, so its room uses tighter margins.
+        var compact = name == "yacht-room";
+        Dialog.HorizontalAlignment = name is "slap-room" or "ciao-room" or "onecard-room" or "yacht-room" ? HorizontalAlignment.Stretch : HorizontalAlignment.Center;
+        Dialog.Margin = new Thickness(gameList || compact ? 10 : 22);
+        Dialog.Padding = gameList ? new Thickness(18, 14, 18, 14) : compact ? new Thickness(14, 12, 14, 12) : new Thickness(28);
         OneCardCallout.Visibility = Visibility.Collapsed;
         panel = name; Overlay.Visibility = Visibility.Visible; DialogContent.Children.Clear(); message = null;
         if (!gameList) AddText(eyebrow, 10, "#A7F3CE", 0, 0, true);
-        AddText(title, gameList ? 22 : 27, "#EDF4F0", gameList ? 0 : 9, gameList ? 8 : 10, true);
+        AddText(title, gameList ? 22 : compact ? 18 : 27, "#EDF4F0", gameList ? 0 : compact ? 4 : 9, gameList || compact ? 8 : 10, true);
         if (!string.IsNullOrWhiteSpace(description)) AddText(description, 12, "#A8BCAF", 0, 17);
         Dispatcher.BeginInvoke((Action)(() => OfferUpdate(false)));
     }
@@ -302,12 +305,13 @@ public partial class MainWindow : Window
         if (pendingRecord is not null) { ShowEnd(); return; }
         if (!RequireLogin()) return;
         BeginPanel("games", "AKC MINI GAMES", "게임선택", "");
-        var games = new System.Windows.Controls.Primitives.UniformGrid { Name = "GameList", Columns = 2, Rows = 2, Margin = new Thickness(-3, 0, -3, 0) };
+        var games = new System.Windows.Controls.Primitives.UniformGrid { Name = "GameList", Columns = 2, Rows = 3, Margin = new Thickness(-3, 0, -3, 0) };
         DialogContent.Children.Add(games);
         AddGameItem(games, "똥 피하기", () => StartGame(MiniGame.Dodge));
         AddGameItem(games, "맞짱", ShowSlapLobby);
         AddGameItem(games, "차오차오", ShowCiaoLobby);
         AddGameItem(games, "원카드", ShowOneCardLobby);
+        AddGameItem(games, "야추", ShowYachtLobby);
         AddButton("돌아가기", ShowHome);
     }
     private FrameworkElement ActiveSurface => activeGame == MiniGame.Rhythm ? RhythmView : Surface;
@@ -391,6 +395,7 @@ public partial class MainWindow : Window
         if (slapRoomId is not null) ShowSlapRoom();
         else if (ciaoRoomId is not null) ShowCiaoRoom();
         else if (oneCardRoomId is not null) ShowOneCardRoom();
+        else if (yachtRoomId is not null) ShowYachtRoom();
         else if (playState == PlayState.Paused) ShowPause();
         else if (playState == PlayState.Over) ShowEnd();
         else ShowHome();
@@ -525,7 +530,7 @@ public partial class MainWindow : Window
     private void Logout()
     {
         if (pendingRecord is not null) { ShowEnd(); return; }
-        DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom();
+        DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom(); DetachYachtRoom();
         ForgetSession(); userId = null; bestScore = 0; ResetToHome(); ShowHome();
         SetMessage("로그아웃했습니다.", true);
     }
@@ -702,7 +707,7 @@ public partial class MainWindow : Window
     {
         var update = availableUpdate;
         if (update is null || offeringUpdate || installingUpdate || busy || sizeModeRestore is not null || !IsVisible || !IsActive ||
-            pendingRecord is not null || playState == PlayState.Playing || InSlapMatch || InCiaoMatch || InOneCardMatch || (!manual && offeredUpdates.Contains(update.Tag))) return;
+            pendingRecord is not null || playState == PlayState.Playing || InSlapMatch || InCiaoMatch || InOneCardMatch || InYachtMatch || (!manual && offeredUpdates.Contains(update.Tag))) return;
         offeringUpdate = true; offeredUpdates.Add(update.Tag);
         try
         {
@@ -780,7 +785,7 @@ public partial class MainWindow : Window
             using (new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose)) { }
             var old = preferences.DataFolder; preferences.DataFolder = candidate.Folder;
             if (!SavePreferences()) { preferences.DataFolder = old; return; }
-            DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom();
+            DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom(); DetachYachtRoom();
             store = candidate; userId = null; bestScore = 0; pendingRecord = null;
             ResetToHome(); startupError = null;
             UpdateHud(); ShowSettings(); SetMessage("저장 폴더를 변경했습니다. 이 폴더의 계정으로 로그인해 주세요.", true);
@@ -959,7 +964,7 @@ public partial class MainWindow : Window
         if (busy) { e.Cancel = true; return; }
         if (pendingRecord is not null && MessageBox.Show(this, "저장하지 못한 기록이 있습니다. 저장하지 않고 종료할까요?", "미저장 기록", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
         { e.Cancel = true; ShowEnd(); return; }
-        DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom();
+        DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom(); DetachYachtRoom();
         ExitSizeMode(false); RememberWindowSize();
         PauseGame(); SavePreferences();
     }

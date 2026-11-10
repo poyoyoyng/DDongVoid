@@ -67,7 +67,7 @@ internal static class OneCardUiChecks
                     Call(host, "ShowGameList"); Layout(host, size.Width, size.Height);
                     var list = Find<System.Windows.Controls.Primitives.UniformGrid>((DependencyObject)host.Content).Single(p => p.Name == "GameList");
                     var labels = list.Children.Cast<Button>().Select(b => ((TextBlock)b.Content).Text).ToArray();
-                    Assert(labels.SequenceEqual(new[] { "똥 피하기", "맞짱", "차오차오", "원카드" }), "게임 목록 4개·키보드 리듬 제외");
+                    Assert(labels.SequenceEqual(new[] { "똥 피하기", "맞짱", "차오차오", "원카드", "야추" }), "게임 목록 5개·키보드 리듬 제외");
                     var scroller = Find<ScrollViewer>((DependencyObject)host.Content).Single(s => ReferenceEquals(s.Content, host.FindName("DialogContent")));
                     var viewport = Find<ScrollContentPresenter>(scroller).First();
                     foreach (var button in list.Children.Cast<Button>())
