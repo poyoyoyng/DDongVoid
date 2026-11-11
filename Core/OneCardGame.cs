@@ -80,6 +80,8 @@ public sealed class OneCardRoom
     public string? VulnerablePlayerId => UncalledPlayerIds.FirstOrDefault();
     // Counts presses of the 원카드 button so every PC can show the speech bubble once per press.
     public int CallCount { get; set; }
+    // Who pressed last, so the bubble can say who called.
+    public string? LastCallerId { get; set; }
     public int EmptyDraws { get; set; }
     public List<string> Winners { get; set; } = [];
     public string? LastMessage { get; set; }
@@ -173,7 +175,7 @@ public sealed class OneCardRoom
         var presser = Find(id) ?? throw new ArgumentException("이 방의 참가자가 아닙니다.");
         if (Status != OneCardStatus.Playing) throw new ArgumentException("게임이 진행 중이 아닙니다.");
         var target = UncalledPlayerIds.Contains(id) ? id : VulnerablePlayerId;
-        Revision++; CallCount++;
+        Revision++; CallCount++; LastCallerId = id;
         if (target is not null) UncalledPlayerIds.Remove(target);
         if (target == id) { LastMessage = $"{id} · 원카드!"; return; }
         var penalized = target is null ? presser : Find(target)!;

@@ -392,7 +392,7 @@ public partial class MainWindow
         {
             oneCardBubbleUntil = DateTimeOffset.UtcNow + OneCardBubbleTime;
             var version = ++oneCardBubbleVersion;
-            OneCardCallout.Child = OneCardBubble();
+            OneCardCallout.Child = OneCardBubble(room.LastCallerId is { } caller ? caller == userId ? $"{caller} (나)" : caller : null);
             _ = HideOneCardBubbleAsync(version);
         }
         // Redrawing the room collapses the overlay; keep a bubble that is still within its half second.
@@ -403,12 +403,17 @@ public partial class MainWindow
         await Task.Delay(OneCardBubbleTime);
         if (version == oneCardBubbleVersion) OneCardCallout.Visibility = Visibility.Collapsed;
     }
-    private static FrameworkElement OneCardBubble()
+    private static FrameworkElement OneCardBubble(string? caller)
     {
         var mint = Theme.Paint(Color.FromRgb(167, 243, 206));
+        var ink = Theme.Paint(Color.FromRgb(16, 41, 30));
+        var words = new StackPanel();
+        if (caller is not null)
+            words.Children.Add(new TextBlock { Text = caller, FontSize = 14, FontWeight = FontWeights.Bold, Foreground = ink, Opacity = .75,
+                HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 220 });
+        words.Children.Add(new TextBlock { Text = "원카드!", FontSize = 30, FontWeight = FontWeights.Bold, Foreground = ink, HorizontalAlignment = HorizontalAlignment.Center });
         var bubble = new StackPanel();
-        bubble.Children.Add(new Border { Background = mint, CornerRadius = new CornerRadius(20), Padding = new Thickness(26, 10, 26, 12),
-            Child = new TextBlock { Text = "원카드!", FontSize = 30, FontWeight = FontWeights.Bold, Foreground = Theme.Paint(Color.FromRgb(16, 41, 30)) } });
+        bubble.Children.Add(new Border { Background = mint, CornerRadius = new CornerRadius(20), Padding = new Thickness(26, 8, 26, 12), Child = words });
         bubble.Children.Add(new System.Windows.Shapes.Path { Data = Geometry.Parse("M0,0 L18,0 L5,14 Z"), Fill = mint, Margin = new Thickness(30, -1, 0, 0) });
         return bubble;
     }

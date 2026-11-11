@@ -160,6 +160,7 @@ internal static class OneCardUiChecks
                 return bubbleShown.Count == 2;
             });
             Assert(Find<TextBlock>(Bubble(host)).Any(t => t.Text == "원카드!"), "누가 누르면 본인·상대 화면에 원카드! 말풍선 표시");
+            Assert(Find<TextBlock>(Bubble(host)).Any(t => t.Text == "p1") && Find<TextBlock>(Bubble(guest)).Any(t => t.Text == "p1 (나)"), "말풍선에 누른 사람 표시 · 본인 화면은 (나)");
             Wait(() => Bubble(host).Visibility == Visibility.Collapsed && Bubble(guest).Visibility == Visibility.Collapsed);
             Assert(bubbleShown.Values.All(t => DateTimeOffset.UtcNow - t is var shownFor && shownFor >= TimeSpan.FromSeconds(.4) && shownFor < TimeSpan.FromSeconds(1)),
                 "원카드! 말풍선은 0.5초 정도 뒤 사라짐");
