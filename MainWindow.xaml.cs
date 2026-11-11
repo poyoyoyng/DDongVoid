@@ -186,9 +186,19 @@ public partial class MainWindow : Window
         Dialog.Background = Theme.Paint(Color.FromArgb((byte)Math.Round(252 * scale), 24, 38, 31));
         Dialog.BorderBrush = Theme.Paint(Color.FromArgb((byte)Math.Round(255 * scale), 64, 87, 74));
         Overlay.Background = preferences.Transparent ? Brushes.Transparent : Theme.Paint(Color.FromArgb((byte)Math.Round(48 * scale), 16, 27, 23));
-        // Keep the drag controls and sliders visible even at 0%, so the user can restore the game.
+        UpdateQuickControls();
         DialogOpacitySlider.Value = scale * 100;
     }
+    // The opacity slider and theme buttons fade with everything else, but never below 20% and fully on hover,
+    // so the user can always find them to restore the game.
+    private const double QuickControlsFloor = .2;
+    private void UpdateQuickControls()
+    {
+        var faded = Math.Max(preferences.OpacityScale, QuickControlsFloor);
+        DialogHeader.Opacity = DialogHeader.IsMouseOver ? 1 : faded;
+        TitleOpacityRow.Opacity = TitleOpacityRow.IsMouseOver ? 1 : faded;
+    }
+    private void QuickControls_Hover(object sender, MouseEventArgs e) => UpdateQuickControls();
     private void QuickOpacity_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (preferences is null || Math.Abs(preferences.OpacityScale - e.NewValue / 100) < .000001) return;
