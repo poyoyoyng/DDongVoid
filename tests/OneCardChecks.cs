@@ -194,6 +194,18 @@ internal static class OneCardChecks
             try { s.Create("p0", "덮어쓰기 금지"); throw new Exception("손상 감지 실패"); } catch (InvalidDataException) { }
             assert(File.ReadAllText(s.FilePath) == corrupt, "손상 파일 덮어쓰기");
         });
+        check("원카드 이미 참가한 방 재입장은 읽기만 함·다른 PC가 쓰기 잠금 중에도 즉시 입장", () =>
+        {
+            var s = new OneCardStore(Path.Combine(root, "원카드 재입장"));
+            var r = s.Create("p0", "재입장");
+            var before = File.ReadAllText(s.FilePath); var written = File.GetLastWriteTimeUtc(s.FilePath);
+            using (new FileStream(Path.Combine(s.Folder, ".ddongvoid-onecard.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+            {
+                var started = DateTime.UtcNow; var again = s.Join(r.Id, "p0");
+                assert(again.Id == r.Id && DateTime.UtcNow - started < TimeSpan.FromSeconds(2), "쓰기 잠금 중 재입장 실패");
+            }
+            assert(File.ReadAllText(s.FilePath) == before && File.GetLastWriteTimeUtc(s.FilePath) == written, "재입장 때 파일을 다시 씀");
+        });
         check("원카드 무작위 2·3·4인 90판 종료·카드 보존", () =>
         {
             var random = new Random(117);

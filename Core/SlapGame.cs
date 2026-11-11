@@ -245,7 +245,8 @@ public sealed class SlapStore
             return room;
         }, true);
     }
-    public SlapRoom Join(Guid roomId, string userId) => Access(db =>
+    // Re-entering a room you already play in only reads it, so a failing shared-folder write can never lock you out of your own game.
+    public SlapRoom Join(Guid roomId, string userId) => RoomsAsync().GetAwaiter().GetResult().FirstOrDefault(r => r.Id == roomId && r.Find(userId) is not null) ?? Access(db =>
     {
         var room = Room(db, roomId);
         if (room.Find(userId) is not null) return room;

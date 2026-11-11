@@ -243,7 +243,10 @@ public sealed class YachtStore
             db.Rooms.Add(room); return room.Copy();
         });
     }
-    public YachtRoom Join(Guid id, string userId) => Write(db =>
+    private YachtRoom? Member(Guid id, string userId) =>
+        ReadAsync().GetAwaiter().GetResult().Rooms.FirstOrDefault(r => r.Id == id && r.Find(userId) is not null);
+    // Re-entering a room you already play in only reads it, so a failing shared-folder write can never lock you out of your own game.
+    public YachtRoom Join(Guid id, string userId) => Member(id, userId) is { } current ? current.Copy() : Write(db =>
     {
         var room = Room(db, id);
         if (room.Find(userId) is not null) return room.Copy();

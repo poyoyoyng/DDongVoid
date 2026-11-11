@@ -494,6 +494,18 @@ internal static class CiaoChecks
             catch (OperationCanceledException) { }
             assert(store.Rooms("p0").Count == 2, "잠금 해제 후 저장 실패");
         });
+        check("차오차오 이미 참가한 방 재입장은 읽기만 함·다른 PC가 쓰기 잠금 중에도 즉시 입장", () =>
+        {
+            var s = new CiaoStore(Path.Combine(root, "차오차오 재입장"));
+            var r = s.Create("p0", "재입장");
+            var before = File.ReadAllText(s.FilePath); var written = File.GetLastWriteTimeUtc(s.FilePath);
+            using (new FileStream(Path.Combine(s.Folder, ".ddongvoid-ciao.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+            {
+                var started = DateTime.UtcNow; var again = s.Join(r.Id, "p0");
+                assert(again.Id == r.Id && DateTime.UtcNow - started < TimeSpan.FromSeconds(2), "쓰기 잠금 중 재입장 실패");
+            }
+            assert(File.ReadAllText(s.FilePath) == before && File.GetLastWriteTimeUtc(s.FilePath) == written, "재입장 때 파일을 다시 씀");
+        });
         check("차오차오: 손상된 JSON 덮어쓰기 방지", () =>
         {
             var store = new CiaoStore(Path.Combine(root, "차오 손상 보존")); store.Create("p0", "보존");

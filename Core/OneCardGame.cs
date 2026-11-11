@@ -303,7 +303,10 @@ public sealed class OneCardStore
             db.Rooms.Add(room); return room.ViewFor(userId);
         });
     }
-    public OneCardRoom Join(Guid id, string userId) => Write(db =>
+    private OneCardRoom? Member(Guid id, string userId) =>
+        ReadAsync().GetAwaiter().GetResult().Rooms.FirstOrDefault(r => r.Id == id && r.Find(userId) is not null);
+    // Re-entering a room you already play in only reads it, so a failing shared-folder write can never lock you out of your own game.
+    public OneCardRoom Join(Guid id, string userId) => Member(id, userId) is { } current ? current.ViewFor(userId) : Write(db =>
     {
         var room = Room(db, id);
         if (room.Find(userId) is not null) return room.ViewFor(userId);

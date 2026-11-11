@@ -108,6 +108,18 @@ internal static class YachtChecks
             var id = s.Rooms().Single().Id; s.DeleteRoom(id, "p0");
             assert(s.SnapshotAsync().Result.DeletedRoomIds.Contains(id) && s.Rooms().Count == 0, "방 삭제 오류");
         });
+        check("야추 이미 참가한 방 재입장은 읽기만 함·다른 PC가 쓰기 잠금 중에도 즉시 입장", () =>
+        {
+            var s = new YachtStore(Path.Combine(root, "야추 재입장"));
+            var r = s.Create("p0", "재입장");
+            var before = File.ReadAllText(s.FilePath); var written = File.GetLastWriteTimeUtc(s.FilePath);
+            using (new FileStream(Path.Combine(s.Folder, ".ddongvoid-yacht.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+            {
+                var started = DateTime.UtcNow; var again = s.Join(r.Id, "p0");
+                assert(again.Id == r.Id && DateTime.UtcNow - started < TimeSpan.FromSeconds(2), "쓰기 잠금 중 재입장 실패");
+            }
+            assert(File.ReadAllText(s.FilePath) == before && File.GetLastWriteTimeUtc(s.FilePath) == written, "재입장 때 파일을 다시 씀");
+        });
         check("야추 무작위 100판 종료·점수 범위", () =>
         {
             var random = new Random(63);
