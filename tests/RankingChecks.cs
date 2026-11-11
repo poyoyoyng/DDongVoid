@@ -243,6 +243,17 @@ internal static class RankingChecks
         Assert(List()!.VerticalOffset == 0, "게임 전환 시 스크롤 위치 초기화");
         ClickGame("맞짱"); Wait(() => Labels().Contains("1승 0패"));
         Assert(Labels().Contains("0승 1패"), "맞짱 승·패를 함께 표시");
+        var gameResults = new GameResultStore(store.Folder);
+        gameResults.Add(new GameResult(GameResultStore.Yacht, Guid.NewGuid(), 1, DateTimeOffset.UtcNow, ["player00", "player01"], ["player00"]));
+        gameResults.Add(new GameResult(GameResultStore.Yacht, Guid.NewGuid(), 1, DateTimeOffset.UtcNow, ["player00", "player01"], ["player00", "player01"]));
+        gameResults.Add(new GameResult(GameResultStore.OneCard, Guid.NewGuid(), 1, DateTimeOffset.UtcNow, ["player00", "player01", "player02"], ["player02"]));
+        Assert(Find<System.Windows.Controls.Primitives.UniformGrid>(content).Single(g => g.Name == "RankingTabs").Children.Cast<Button>().Select(b => ((TextBlock)b.Content).Text)
+            .SequenceEqual(["똥 피하기", "키보드 리듬", "맞짱", "차오차오", "원카드", "야추"]), "랭킹에 모든 게임 탭 표시");
+        ClickGame("야추"); Wait(() => Labels().Contains("1승 1무 0패"));
+        Assert(Labels().Contains("0승 1무 1패") && Labels().Any(t => t.StartsWith("내 순위  1위") && t.Contains("1승 1무 0패")), "야추 승·무·패와 내 순위 표시");
+        ClickGame("원카드"); Wait(() => Labels().Contains("1승 0패"));
+        Assert(Labels().Count(t => t == "0승 1패") == 2, "원카드 3인 게임은 우승자 1승·나머지 1패");
+        ClickGame("차오차오"); Wait(() => Labels().Any(t => t.StartsWith("아직 등록된 기록이 없어요")));
         ClickGame("똥 피하기"); ClickGame("키보드 리듬"); Wait(() => Labels().Contains("5,000점"));
         Assert(Labels().Any(t => t.StartsWith("내 순위  1위") && t.Contains("5,000점")), "빠르게 게임을 바꿔도 이전 조회 결과를 표시하지 않음");
         Layout(300, 320);

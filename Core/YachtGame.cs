@@ -222,7 +222,11 @@ public sealed class YachtStore
         "다른 PC에서 야추 정보를 저장 중입니다. 잠시 후 다시 시도해 주세요.", () =>
         {
             var db = ReadAsync().GetAwaiter().GetResult();
-            var result = action(db); Validate(db); SharedFile.WriteAtomic(FilePath, db, JsonOptions); return result;
+            var finished = db.Rooms.ToDictionary(r => r.Id, r => r.Status == YachtStatus.Finished);
+            var result = action(db); Validate(db);
+            GameResultStore.RecordFinished(Folder, GameResultStore.Yacht, db.Rooms, finished,
+                r => (r.Id, r.Revision, r.Status == YachtStatus.Finished, r.Players.Select(p => p.Id).ToList(), r.Winners));
+            SharedFile.WriteAtomic(FilePath, db, JsonOptions); return result;
         });
     private static YachtRoom Room(YachtDatabase db, Guid id) => db.Rooms.FirstOrDefault(r => r.Id == id)
         ?? throw new ArgumentException("방이 사라졌습니다. 방 목록에서 다시 골라 주세요.");

@@ -280,7 +280,11 @@ public sealed class OneCardStore
         "다른 PC에서 원카드 정보를 저장 중입니다. 잠시 후 다시 시도해 주세요.", () =>
         {
             var db = ReadAsync().GetAwaiter().GetResult();
-            var result = action(db); Validate(db); SharedFile.WriteAtomic(FilePath, db, JsonOptions); return result;
+            var finished = db.Rooms.ToDictionary(r => r.Id, r => r.Status == OneCardStatus.Finished);
+            var result = action(db); Validate(db);
+            GameResultStore.RecordFinished(Folder, GameResultStore.OneCard, db.Rooms, finished,
+                r => (r.Id, r.Revision, r.Status == OneCardStatus.Finished, r.Players.Select(p => p.Id).ToList(), r.Winners));
+            SharedFile.WriteAtomic(FilePath, db, JsonOptions); return result;
         });
     private static OneCardRoom Room(OneCardDatabase db, Guid id) => db.Rooms.FirstOrDefault(r => r.Id == id)
         ?? throw new ArgumentException("방이 사라졌습니다. 방 목록에서 다시 골라 주세요.");

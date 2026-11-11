@@ -20,7 +20,9 @@ public partial class MainWindow : Window
     private const string DefaultDataFolder = @"\\192.168.0.120\SW Team\팀원\최지운\DD";
     private enum PlayState { Home, Playing, Paused, Over }
     private enum MiniGame { Dodge, Rhythm }
-    private enum RankingGame { Dodge, Rhythm, Slap }
+    private enum RankingGame { Dodge, Rhythm, Slap, Ciao, OneCard, Yacht }
+    // Room games rank by wins; the solo games rank by best score.
+    private static bool RanksByWins(RankingGame game) => game is not (RankingGame.Dodge or RankingGame.Rhythm);
     private RankingGame rankingGame;
     private sealed class Preferences
     {
@@ -594,8 +596,9 @@ public partial class MainWindow : Window
         var request = ++rankingRequest;
         var rankingStore = store;
         var game = rankingGame;
-        var slap = game == RankingGame.Slap;
-        string ScoreLabel(RankingEntry entry) => slap ? $"{entry.BestScore:N0}승 {entry.Losses:N0}패" : $"{entry.BestScore:N0}점";
+        var byWins = RanksByWins(game);
+        string ScoreLabel(RankingEntry entry) => byWins
+            ? $"{entry.BestScore:N0}승{(entry.Draws > 0 ? $" {entry.Draws:N0}무" : "")} {entry.Losses:N0}패" : $"{entry.BestScore:N0}점";
         BeginRankingPanel();
         AddText("랭킹을 불러오는 중입니다…", 12, "#91AB9C");
         AddButton("메인 메뉴로", ReturnToGame);
@@ -605,6 +608,9 @@ public partial class MainWindow : Window
             {
                 RankingGame.Rhythm => new RhythmStore(rankingStore.Folder).Rankings(),
                 RankingGame.Slap => new SlapStore(rankingStore.Folder).Rankings(),
+                RankingGame.Ciao => new GameResultStore(rankingStore.Folder).Rankings(GameResultStore.Ciao),
+                RankingGame.OneCard => new GameResultStore(rankingStore.Folder).Rankings(GameResultStore.OneCard),
+                RankingGame.Yacht => new GameResultStore(rankingStore.Folder).Rankings(GameResultStore.Yacht),
                 _ => rankingStore.Rankings()
             });
             if (panel != "ranking" || request != rankingRequest || store != rankingStore) return;
@@ -661,13 +667,14 @@ public partial class MainWindow : Window
     }
     private void BeginRankingPanel()
     {
-        BeginPanel("ranking", "HALL OF FAME", "게임별 랭킹", rankingGame == RankingGame.Slap
-            ? "누적 승수 순위 · 승수가 같으면 공동 순위" : "아이디별 최고 점수 순위 · 같은 점수는 공동 순위");
-        var games = new System.Windows.Controls.Primitives.UniformGrid { Rows = 1, Margin = new Thickness(0, 0, 0, 14) };
-        foreach (var (game, title) in new[] { (RankingGame.Dodge, "똥 피하기"), (RankingGame.Rhythm, "키보드 리듬"), (RankingGame.Slap, "맞짱") })
+        BeginPanel("ranking", "HALL OF FAME", "게임별 랭킹", RanksByWins(rankingGame)
+            ? rankingGame == RankingGame.Slap ? "누적 승수 순위 · 승수가 같으면 공동 순위" : "누적 승수 순위 · 공동 1위는 무승부로 집계" : "아이디별 최고 점수 순위 · 같은 점수는 공동 순위");
+        var games = new System.Windows.Controls.Primitives.UniformGrid { Name = "RankingTabs", Rows = 2, Columns = 3, Margin = new Thickness(0, 0, 0, 14) };
+        foreach (var (game, title) in new[] { (RankingGame.Dodge, "똥 피하기"), (RankingGame.Rhythm, "키보드 리듬"), (RankingGame.Slap, "맞짱"),
+            (RankingGame.Ciao, "차오차오"), (RankingGame.OneCard, "원카드"), (RankingGame.Yacht, "야추") })
         {
             var button = new Button { Content = new TextBlock { Text = title, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center },
-                Padding = new Thickness(6, 10, 6, 10), Margin = new Thickness(2, 0, 2, 0) };
+                Padding = new Thickness(6, 10, 6, 10), Margin = new Thickness(2, 0, 2, 4) };
             System.Windows.Automation.AutomationProperties.SetName(button, title);
             if (rankingGame == game) button.Style = (Style)FindResource("Primary");
             button.Click += (_, _) => { if (!busy && rankingGame != game) { rankingGame = game; ShowRankings(); } };

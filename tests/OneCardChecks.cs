@@ -194,6 +194,16 @@ internal static class OneCardChecks
             try { s.Create("p0", "덮어쓰기 금지"); throw new Exception("손상 감지 실패"); } catch (InvalidDataException) { }
             assert(File.ReadAllText(s.FilePath) == corrupt, "손상 파일 덮어쓰기");
         });
+        check("원카드 마지막 카드를 내면 승패 저장", () =>
+        {
+            var s = new OneCardStore(Path.Combine(root, "원카드 승패")); Directory.CreateDirectory(s.Folder);
+            var r = Table(4, [5], [18, 20], [31, 30]);
+            File.WriteAllText(s.FilePath, JsonSerializer.Serialize(new OneCardDatabase { Rooms = [r] }));
+            var done = s.Play(r.Id, "p0", r.Revision, 5);
+            var saved = new GameResultStore(s.Folder).Results(GameResultStore.OneCard);
+            assert(done.Status == OneCardStatus.Finished && saved.Count == 1 && saved[0].Winners.SequenceEqual(["p0"]) && saved[0].Players.SequenceEqual(["p0", "p1", "p2"]),
+                "원카드 승패 저장 오류");
+        });
         check("원카드 이미 참가한 방 재입장은 읽기만 함·다른 PC가 쓰기 잠금 중에도 즉시 입장", () =>
         {
             var s = new OneCardStore(Path.Combine(root, "원카드 재입장"));

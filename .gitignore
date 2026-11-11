@@ -19,4 +19,6 @@ tests/obj-render/
 **/ddongvoid-onecard.json
 **/.ddongvoid-onecard.lock
 **/ddongvoid-yacht.json
+**/ddongvoid-results.json
 **/.ddongvoid-yacht.lock
+**/.ddongvoid-results.lock
