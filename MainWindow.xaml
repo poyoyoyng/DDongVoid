@@ -47,7 +47,10 @@
                   </StackPanel>
                   <Slider x:Name="DialogOpacitySlider" MinWidth="70" Minimum="0" Maximum="100" Value="100" TickFrequency="5" IsMoveToPointEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="투명도" ToolTip="100%는 설정에서 정한 표시 상태입니다." ValueChanged="QuickOpacity_Changed" PreviewMouseLeftButtonUp="QuickOpacity_Commit" LostKeyboardFocus="QuickOpacity_Commit"/>
                 </DockPanel>
-                <Button Grid.Column="1" Content="✕" Click="Close_Click" ToolTip="게임 종료" AutomationProperties.Name="게임 종료" Width="30" Height="30" Padding="0" FontSize="15" Background="Transparent"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                  <Button x:Name="DialogMinimizeButton" Content="―" Click="Minimize_Click" ToolTip="최소화" AutomationProperties.Name="최소화" Width="30" Height="30" Padding="0" FontSize="13" Background="Transparent"/>
+                  <Button Content="✕" Click="Close_Click" ToolTip="게임 종료" AutomationProperties.Name="게임 종료" Width="30" Height="30" Padding="0" FontSize="15" Background="Transparent"/>
+                </StackPanel>
               </Grid>
               <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="440"><StackPanel x:Name="DialogContent"/></ScrollViewer>
             </Grid>

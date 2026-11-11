@@ -150,6 +150,7 @@ internal static class YachtUiChecks
                 && ((Button)host.FindName("TitleLightButton")).Style == (Style)host.FindResource("Primary"), "선택한 테마 버튼 강조");
             Assert(Find<TextBlock>((DependencyObject)host.Content).Contains(sum) && Lightness(sum.Foreground) < .5, "게임 중인 야추 점수판을 다시 그리지 않고 그 자리에서 밝게 바꿈");
             Assert(!Find<TextBlock>((DependencyObject)host.Content).Any(t => t.Text.Contains("드래그해서")), "드래그해서 창 이동 문구 없음");
+            Press(Named(host, "DialogMinimizeButton")); Assert(host.WindowState == WindowState.Minimized, "메뉴 위 최소화 버튼으로 창 최소화"); host.WindowState = WindowState.Normal;
             if (args.Length == 1)
             {
                 var body = (FrameworkElement)host.Content; var bitmap = new RenderTargetBitmap(480, 740, 96, 96, PixelFormats.Pbgra32); bitmap.Render(body);
