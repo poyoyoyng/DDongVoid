@@ -86,7 +86,7 @@ public partial class MainWindow : Window
             store = new LocalStore(DefaultDataFolder);
             startupError = "저장 폴더를 확인해 주세요. " + ex.Message;
         }
-        Theme.Capture(this); Theme.Apply(preferences.LightTheme);
+        Theme.Capture(this); Theme.Apply(preferences.LightTheme); UpdateThemeButtons();
         ApplyAppearance();
         if (preferences.WindowWidth is double savedWidth && preferences.WindowHeight is double savedHeight)
         {
@@ -198,6 +198,20 @@ public partial class MainWindow : Window
     private void QuickOpacity_Commit(object sender, RoutedEventArgs e)
     {
         if (preferences is not null) SavePreferences();
+    }
+    private void DarkTheme_Click(object sender, RoutedEventArgs e) => SetTheme(false);
+    private void LightTheme_Click(object sender, RoutedEventArgs e) => SetTheme(true);
+    // Repaints whatever is on screen in place, so a match or a menu keeps going while the colors change.
+    private void SetTheme(bool light)
+    {
+        if (preferences.LightTheme == light) return;
+        preferences.LightTheme = light; Theme.Apply(light); UpdateThemeButtons(); ApplyAppearance(); SavePreferences();
+    }
+    private void UpdateThemeButtons()
+    {
+        var primary = (Style)FindResource("Primary");
+        foreach (var (button, light) in new[] { (DialogDarkButton, false), (DialogLightButton, true), (TitleDarkButton, false), (TitleLightButton, true) })
+            if (preferences.LightTheme == light) button.Style = primary; else button.ClearValue(StyleProperty);
     }
     // Hooked only while playing: an attached Rendering handler keeps WPF redrawing every frame,
     // which would burn CPU in the menu, while paused, or while the window is hidden.
@@ -654,20 +668,6 @@ public partial class MainWindow : Window
     private void ShowSettings()
     {
         BeginPanel("settings", "MAKE IT YOURS", "기척 없이, 가볍게.", "투명 모드는 배경·상하단 바·테두리를 지웁니다.\nF2로 설정 열기 / 닫기 · Alt + 캐릭터 드래그로 창 이동");
-        AddText("테마", 12, "#B6C7BC", 0, 6, true);
-        var themes = new System.Windows.Controls.Primitives.UniformGrid { Name = "ThemeChoice", Rows = 1, Margin = new Thickness(-3, 0, -3, 4) };
-        foreach (var (label, light) in new[] { ("어두운 테마", false), ("밝은 테마", true) })
-        {
-            var choice = new Button { Content = label, Margin = new Thickness(3, 0, 3, 0) };
-            if (preferences.LightTheme == light) choice.Style = (Style)FindResource("Primary");
-            choice.Click += (_, _) =>
-            {
-                if (preferences.LightTheme == light) return;
-                preferences.LightTheme = light; Theme.Apply(light); ApplyAppearance(); SavePreferences(); ShowSettings();
-            };
-            themes.Children.Add(choice);
-        }
-        DialogContent.Children.Add(themes);
         var transparent = new CheckBox { Content = "PNG 배경 제거처럼 완전 투명 · UI 숨기기", IsChecked = preferences.Transparent };
         transparent.Click += (_, _) => { preferences.Transparent = transparent.IsChecked == true; ApplyAppearance(); SavePreferences(); };
         DialogContent.Children.Add(transparent);

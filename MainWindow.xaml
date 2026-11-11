@@ -12,7 +12,11 @@
             <Button Content="✕" Click="Close_Click" ToolTip="닫기" Background="Transparent" Padding="12,8"/>
           </StackPanel>
           <DockPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,0,8,0">
-            <TextBlock Text="{Binding ElementName=DialogOpacitySlider, Path=Value, StringFormat='투명도 {0:0}%'}" FontSize="10" Foreground="#A8BCAF" Width="84" VerticalAlignment="Center"/>
+            <TextBlock Text="{Binding ElementName=DialogOpacitySlider, Path=Value, StringFormat='투명도 {0:0}%'}" FontSize="10" Foreground="#A8BCAF" Width="66" VerticalAlignment="Center"/>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+              <Button x:Name="TitleDarkButton" Content="흑" Click="DarkTheme_Click" ToolTip="어두운 테마" AutomationProperties.Name="어두운 테마" Padding="9,2" FontSize="11" Margin="0,0,3,0"/>
+              <Button x:Name="TitleLightButton" Content="백" Click="LightTheme_Click" ToolTip="밝은 테마" AutomationProperties.Name="밝은 테마" Padding="9,2" FontSize="11"/>
+            </StackPanel>
             <Slider x:Name="TitleOpacitySlider" Minimum="0" Maximum="100" Value="{Binding ElementName=DialogOpacitySlider, Path=Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" TickFrequency="5" IsMoveToPointEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="창 상단 투명도" ToolTip="100%는 설정에서 정한 표시 상태입니다." PreviewMouseLeftButtonUp="QuickOpacity_Commit" LostKeyboardFocus="QuickOpacity_Commit"/>
           </DockPanel>
         </Grid>
@@ -33,14 +37,17 @@
           <Border x:Name="Dialog" MaxWidth="430" Margin="22" Padding="28" CornerRadius="16" BorderBrush="#40574A" BorderThickness="1" Background="#FC18261F" HorizontalAlignment="Center" VerticalAlignment="Center" PreviewMouseLeftButtonDown="Dialog_Drag">
             <Grid>
               <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-              <Grid Margin="0,-12,-12,10">
-                <Grid.RowDefinitions><RowDefinition Height="30"/><RowDefinition Height="24"/></Grid.RowDefinitions>
-                <TextBlock Text="드래그해서 창 이동" FontSize="10" Foreground="#728F7D" VerticalAlignment="Center" Cursor="SizeAll" Margin="0,0,40,0"/>
-                <Button Content="✕" Click="Close_Click" ToolTip="게임 종료" AutomationProperties.Name="게임 종료" Width="30" Height="30" Padding="0" FontSize="15" Background="Transparent" HorizontalAlignment="Right"/>
-                <DockPanel Grid.Row="1" Margin="0,0,8,0">
-                  <TextBlock Text="{Binding ElementName=DialogOpacitySlider, Path=Value, StringFormat='투명도 {0:0}%'}" FontSize="10" Foreground="#A8BCAF" Width="84" VerticalAlignment="Center"/>
-                  <Slider x:Name="DialogOpacitySlider" Minimum="0" Maximum="100" Value="100" TickFrequency="5" IsMoveToPointEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="투명도" ToolTip="100%는 설정에서 정한 표시 상태입니다." ValueChanged="QuickOpacity_Changed" PreviewMouseLeftButtonUp="QuickOpacity_Commit" LostKeyboardFocus="QuickOpacity_Commit"/>
+              <Grid Margin="0,-12,-12,10" Height="30">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <DockPanel Margin="0,0,6,0">
+                  <TextBlock Text="{Binding ElementName=DialogOpacitySlider, Path=Value, StringFormat='투명도 {0:0}%'}" FontSize="10" Foreground="#A8BCAF" Width="66" VerticalAlignment="Center"/>
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                    <Button x:Name="DialogDarkButton" Content="흑" Click="DarkTheme_Click" ToolTip="어두운 테마" AutomationProperties.Name="어두운 테마" Padding="9,3" FontSize="11" Margin="0,0,3,0"/>
+                    <Button x:Name="DialogLightButton" Content="백" Click="LightTheme_Click" ToolTip="밝은 테마" AutomationProperties.Name="밝은 테마" Padding="9,3" FontSize="11"/>
+                  </StackPanel>
+                  <Slider x:Name="DialogOpacitySlider" MinWidth="70" Minimum="0" Maximum="100" Value="100" TickFrequency="5" IsMoveToPointEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="투명도" ToolTip="100%는 설정에서 정한 표시 상태입니다." ValueChanged="QuickOpacity_Changed" PreviewMouseLeftButtonUp="QuickOpacity_Commit" LostKeyboardFocus="QuickOpacity_Commit"/>
                 </DockPanel>
+                <Button Grid.Column="1" Content="✕" Click="Close_Click" ToolTip="게임 종료" AutomationProperties.Name="게임 종료" Width="30" Height="30" Padding="0" FontSize="15" Background="Transparent"/>
               </Grid>
               <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="440"><StackPanel x:Name="DialogContent"/></ScrollViewer>
             </Grid>

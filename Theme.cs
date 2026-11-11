@@ -47,8 +47,13 @@ public static class Theme
         return Invert(color);
     }
     public static Color Map(string color) => Map((Color)ColorConverter.ConvertFromString(color));
-    public static SolidColorBrush Paint(Color color) => new(Map(color));
-    public static SolidColorBrush Paint(string color) => new(Map(color));
+    public static SolidColorBrush Paint(Color color)
+    {
+        var brush = new SolidColorBrush(Map(color));
+        Authored.AddOrUpdate(brush, new AuthoredColor(color));
+        return brush;
+    }
+    public static SolidColorBrush Paint(string color) => Paint((Color)ColorConverter.ConvertFromString(color));
 
     private static Color FromArgb(uint v) => Color.FromArgb((byte)(v >> 24), (byte)(v >> 16), (byte)(v >> 8), (byte)v);
     // Keeps hue and saturation and flips lightness, so dark fills turn pale and pale text turns dark.
@@ -66,22 +71,33 @@ public static class Theme
         return Color.FromArgb(c.A, To(p.R), To(p.G), To(p.B));
     }
 
-    // Colors written in XAML are remembered once and repainted on every theme change.
+    // Each brush remembers its dark-palette color, so screens already on display can be repainted in place.
+    private sealed record AuthoredColor(Color Color);
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<SolidColorBrush, AuthoredColor> Authored = new();
     private static readonly DependencyProperty[] ColorProperties =
         [.. new[] { Panel.BackgroundProperty, Border.BackgroundProperty, Control.BackgroundProperty, TextElement.ForegroundProperty,
             TextBlock.ForegroundProperty, Control.ForegroundProperty, Border.BorderBrushProperty, Control.BorderBrushProperty,
             Shape.FillProperty, Shape.StrokeProperty }.Distinct()];
-    private static readonly List<(DependencyObject Target, DependencyProperty Property, Color Color)> Authored = [];
+    private static List<DependencyObject> Tree(DependencyObject root) =>
+        [root, .. LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>().SelectMany(Tree)];
+    private static List<(DependencyObject Target, DependencyProperty Property, SolidColorBrush Brush)> Painted(DependencyObject root) =>
+        [.. from target in Tree(root) from property in ColorProperties
+            let brush = target.ReadLocalValue(property) as SolidColorBrush where brush is not null select (target, property, brush)];
+    // XAML colors are authored in the dark palette too; record them before the first repaint.
     public static void Capture(DependencyObject root)
     {
-        foreach (var property in ColorProperties)
-            if (root.ReadLocalValue(property) is SolidColorBrush brush) Authored.Add((root, property, brush.Color));
-        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>()) Capture(child);
+        foreach (var (_, _, brush) in Painted(root)) Authored.TryAdd(brush, new AuthoredColor(brush.Color));
     }
     public static void Apply(bool light)
     {
         Light = light;
-        foreach (var (target, property, color) in Authored) target.SetValue(property, Paint(color));
+        foreach (Window window in Application.Current.Windows)
+        {
+            foreach (var (target, property, brush) in Painted(window))
+                if (Authored.TryGetValue(brush, out var authored)) target.SetValue(property, Paint(authored.Color));
+            // Custom-drawn views pick their colors while rendering.
+            foreach (var element in Tree(window).OfType<UIElement>()) element.InvalidateVisual();
+        }
         var resources = Application.Current.Resources;
         resources["Mint"] = Paint("#A7F3CE");
         resources["ButtonText"] = Paint("#E9F1ED");
