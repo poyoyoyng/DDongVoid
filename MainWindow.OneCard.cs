@@ -115,7 +115,7 @@ public partial class MainWindow
         var refresh = false;
         try
         {
-            var room = await Task.Run(() => action(oneCardStore, me));
+            var room = await RunOnShare(() => action(oneCardStore, me));
             if (version != oneCardStateVersion || userId != me || store.Folder != oneCardStore.Folder) return;
             oneCardRoom = room; oneCardRoomId = room?.Id;
             if (room is null)
@@ -128,7 +128,7 @@ public partial class MainWindow
         {
             if (version == oneCardStateVersion && userId == me && store.Folder == oneCardStore.Folder)
             {
-                SetMessage(ex.Message); refresh = true;
+                SetMessage(ShareErrorText(ex, "원카드 동작")); refresh = true;
             }
         }
         finally { busy = false; }
@@ -217,6 +217,7 @@ public partial class MainWindow
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception ex) when (IsUserError(ex) || ex is OperationCanceledException)
         {
+            LogError("원카드 조회", ex);
             if (version == oneCardStateVersion && userId == me && store.Folder == oneCardStore.Folder && panel.StartsWith("onecard"))
             {
                 SetOneCardSyncNote("조회 실패 · 자동 재시도 중");

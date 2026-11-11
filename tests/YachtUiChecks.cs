@@ -159,6 +159,22 @@ internal static class YachtUiChecks
             Press(Named(host, "DialogDarkButton")); Layout(host);
             Assert(!(bool)lightTheme.GetValue(preferences)! && Lightness(dialog.Background) < .2 && Lightness((Brush)Application.Current.Resources["ButtonFill"]) < .3
                 && Lightness(sum.Foreground) > .6 && Named(host, "DialogDarkButton").Style == (Style)host.FindResource("Primary"), "흑 버튼으로 어두운 테마 되돌리기");
+            // A stalled shared folder must not freeze the room: stop waiting, unlock the screen and say so.
+            Set(host, "shareActionTimeout", TimeSpan.FromMilliseconds(300));
+            var stallWatch = Stopwatch.StartNew();
+            _ = (Task)typeof(MainWindow).GetMethod("RunYachtAsync", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(host, [new Func<YachtStore, string, YachtRoom?>((s, me) => { Thread.Sleep(2000); return null; })])!;
+            Assert((bool)Get(host, "busy")!, "공유 폴더 동작 중에는 잠금");
+            Wait(() => !(bool)Get(host, "busy")!);
+            Assert(stallWatch.Elapsed < TimeSpan.FromSeconds(1.5) && ((TextBlock?)Get(host, "message"))?.Text.StartsWith("공유 폴더가 응답하지 않아") == true
+                && Equals(Get(host, "panel"), "yacht-room"), "공유 폴더가 멈춰도 제한 시간 뒤 화면 잠금 해제·안내 표시");
+            Set(host, "shareActionTimeout", TimeSpan.FromSeconds(15));
+            string ErrorText(Exception ex) => (string)typeof(MainWindow).GetMethod("ShareErrorText", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(host, [ex, "테스트"])!;
+            ArgumentException? rule = null;
+            try { Room(host).Copy().Roll("p1", Room(host).Revision, new bool[5]); } catch (ArgumentException ex) { rule = ex; }
+            Assert(rule is not null && ErrorText(rule) == rule.Message
+                && ErrorText(new IOException("매개 변수가 틀립니다.", unchecked((int)0x80070057))) == "매개 변수가 틀립니다. (오류 코드 87)",
+                "게임 규칙 안내는 그대로·Windows 오류는 오류 코드와 함께 표시");
             Press(Named(host, "YachtPickFives"));
             Wait(() => Idle() && Room(guest).Find("p0")!.Bonus() == 35);
             Assert(Room(guest).LastMessage!.Contains("보너스 +35"), "보너스 달성을 양쪽 화면에 알림");

@@ -124,7 +124,7 @@ public partial class MainWindow
         busy = true;
         try
         {
-            var room = await Task.Run(() => action(slapStore, me));
+            var room = await RunOnShare(() => action(slapStore, me));
             if (slapStateVersion != stateVersion || userId != me || store.Folder != slapStore.Folder) return;
             slapRoom = room; slapRoomId = room?.Id;
             if (room is null)
@@ -138,7 +138,7 @@ public partial class MainWindow
         }
         catch (Exception ex) when (IsUserError(ex))
         {
-            if (slapStateVersion == stateVersion && userId == me && store.Folder == slapStore.Folder) SetMessage(ex.Message);
+            if (slapStateVersion == stateVersion && userId == me && store.Folder == slapStore.Folder) SetMessage(ShareErrorText(ex, "맞짱 동작"));
         }
         finally { busy = false; }
         if (refresh && slapStateVersion == stateVersion) await PollSlapAsync();
@@ -236,6 +236,7 @@ public partial class MainWindow
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception ex) when (IsUserError(ex) || ex is TimeoutException)
         {
+            LogError("맞짱 조회", ex);
             if (slapStateVersion == stateVersion && userId == me && store.Folder == slapStore.Folder && panel.StartsWith("slap"))
             {
                 SetSlapSyncNote(ex is TimeoutException ? "조회 지연 · 자동 재시도 중" : "조회 실패 · 자동 재시도 중");

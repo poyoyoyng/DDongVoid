@@ -119,6 +119,35 @@ public partial class MainWindow : Window
             if (source is not null) { if (hotkeyRegistered) UnregisterHotKey(source.Handle, 1); source.RemoveHook(WindowProc); }
         };
     }
+    // A stalled network share must not freeze a room: stop waiting and let polling pick up the outcome.
+    private TimeSpan shareActionTimeout = TimeSpan.FromSeconds(15);
+    private async Task<T> RunOnShare<T>(Func<T> action)
+    {
+        try { return await Task.Run(action).WaitAsync(shareActionTimeout); }
+        catch (TimeoutException ex)
+        { throw new IOException("공유 폴더가 응답하지 않아 기다리지 않고 돌아왔습니다. 잠시 후 화면이 갱신되면 다시 시도해 주세요.", ex); }
+    }
+    // Windows errors from the share are shown with their code and logged in full, so a rare failure can be traced later.
+    private string ShareErrorText(Exception ex, string action)
+    {
+        // Game rule messages ("내 차례가 아닙니다" …) are thrown by this app without a parameter name; they are not faults.
+        if (ex is ArgumentException { ParamName: null } && ex.Source == typeof(MainWindow).Assembly.GetName().Name) return ex.Message;
+        LogError(action, ex);
+        return (ex.HResult & 0xFFFF0000) == 0x80070000 ? $"{ex.Message} (오류 코드 {ex.HResult & 0xFFFF})" : ex.Message;
+    }
+    private void LogError(string action, Exception ex)
+    {
+        // Test harnesses host the window in a plain Application; their staged failures must not land in the player's log.
+        if (Application.Current is not App) return;
+        try
+        {
+            var path = Path.Combine(Path.GetDirectoryName(preferencesPath)!, "error.log");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            if (File.Exists(path) && new FileInfo(path).Length > 256 * 1024) File.Move(path, path + ".old", true);
+            File.AppendAllText(path, $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff}] v{UpdateService.CurrentVersion} {action} · {store.Folder}\n{ex}\n\n");
+        }
+        catch (Exception logError) when (IsUserError(logError)) { }
+    }
     private static bool IsUserError(Exception ex) => ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException or System.Threading.WaitHandleCannotBeOpenedException;
     private Preferences LoadPreferences()
     {

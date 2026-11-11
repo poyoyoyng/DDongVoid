@@ -119,7 +119,7 @@ public partial class MainWindow
         var refresh = false;
         try
         {
-            var room = await Task.Run(() => action(yachtStore, me));
+            var room = await RunOnShare(() => action(yachtStore, me));
             if (version != yachtStateVersion || userId != me || store.Folder != yachtStore.Folder) return;
             yachtRoom = room; yachtRoomId = room?.Id;
             if (room is null)
@@ -133,7 +133,7 @@ public partial class MainWindow
         {
             if (version == yachtStateVersion && userId == me && store.Folder == yachtStore.Folder)
             {
-                SetMessage(ex.Message); refresh = true;
+                SetMessage(ShareErrorText(ex, "야추 동작")); refresh = true;
             }
         }
         finally { busy = false; }
@@ -222,6 +222,7 @@ public partial class MainWindow
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception ex) when (IsUserError(ex) || ex is OperationCanceledException)
         {
+            LogError("야추 조회", ex);
             if (version == yachtStateVersion && userId == me && store.Folder == yachtStore.Folder && panel.StartsWith("yacht"))
             {
                 SetYachtSyncNote("조회 실패 · 자동 재시도 중");

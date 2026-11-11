@@ -106,7 +106,7 @@ public partial class MainWindow
         var refresh = false;
         try
         {
-            var room = await Task.Run(() => action(ciaoStore, me));
+            var room = await RunOnShare(() => action(ciaoStore, me));
             if (version != ciaoStateVersion || userId != me || store.Folder != ciaoStore.Folder) return;
             ciaoRoom = room; ciaoRoomId = room?.Id;
             if (room is null)
@@ -119,7 +119,7 @@ public partial class MainWindow
         {
             if (version == ciaoStateVersion && userId == me && store.Folder == ciaoStore.Folder)
             {
-                SetMessage(ex.Message); refresh = true;
+                SetMessage(ShareErrorText(ex, "차오차오 동작")); refresh = true;
             }
         }
         finally { busy = false; }
@@ -208,6 +208,7 @@ public partial class MainWindow
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception ex) when (IsUserError(ex) || ex is OperationCanceledException)
         {
+            LogError("차오차오 조회", ex);
             if (version == ciaoStateVersion && userId == me && store.Folder == ciaoStore.Folder && panel.StartsWith("ciao"))
             {
                 SetCiaoSyncNote("조회 실패 · 자동 재시도 중");
