@@ -152,7 +152,7 @@ public partial class MainWindow
         refresh.Click += async (_, _) => await RefreshOneCardAsync();
         DockPanel.SetDock(refresh, Dock.Right); row.Children.Add(refresh);
         oneCardSyncStatus = new TextBlock { Name = "OneCardSyncStatus", Text = oneCardSyncNote, FontSize = 10,
-            Foreground = new SolidColorBrush(Color.FromRgb(145, 171, 156)), VerticalAlignment = VerticalAlignment.Center,
+            Foreground = Theme.Paint(Color.FromRgb(145, 171, 156)), VerticalAlignment = VerticalAlignment.Center,
             TextWrapping = TextWrapping.Wrap, ToolTip = OneCardSyncDetails() };
         row.Children.Add(oneCardSyncStatus); DialogContent.Children.Add(row);
     }
@@ -279,9 +279,9 @@ public partial class MainWindow
         {
             var current = p.Id == room.CurrentPlayerId;
             players.Children.Add(new Border { CornerRadius = new CornerRadius(6), Margin = new Thickness(0, 0, 5, 5), Padding = new Thickness(8, 6, 8, 6),
-                Background = new SolidColorBrush(Color.FromRgb(current ? (byte)48 : (byte)16, current ? (byte)75 : (byte)27, current ? (byte)59 : (byte)23)),
+                Background = Theme.Paint(Color.FromRgb(current ? (byte)48 : (byte)16, current ? (byte)75 : (byte)27, current ? (byte)59 : (byte)23)),
                 Child = new TextBlock { Text = $"{(current ? "▶ " : "")}{p.Id}{(p.Id == me.Id ? " (나)" : "")}\n{p.CardCount}장{(p.CardCount == 1 ? " · 원카드" : "")}",
-                    TextWrapping = TextWrapping.Wrap, MaxWidth = 140, FontSize = 12, Foreground = Brushes.White } });
+                    TextWrapping = TextWrapping.Wrap, MaxWidth = 140, FontSize = 12, Foreground = Theme.Paint(Colors.White) } });
         }
         DialogContent.Children.Add(players);
         var table = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8) };
@@ -291,7 +291,7 @@ public partial class MainWindow
         table.Children.Add(new TextBlock { Text = $"{(room.Direction == 1 ? "→ 정방향" : "← 역방향")}\n{(room.ActiveSuit is { } suit ? OneCardRules.SuitName(suit) : "모든 무늬 가능")}"
                 + (room.PendingAttack > 0 ? $"\n누적 공격 +{room.PendingAttack}" : ""),
             Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxWidth = 145,
-            Foreground = new SolidColorBrush(Color.FromRgb(167, 243, 206)), FontSize = 13 });
+            Foreground = Theme.Paint(Color.FromRgb(167, 243, 206)), FontSize = 13 });
         DialogContent.Children.Add(table);
         if (room.Status == OneCardStatus.Playing)
         {
@@ -405,10 +405,10 @@ public partial class MainWindow
     }
     private static FrameworkElement OneCardBubble()
     {
-        var mint = new SolidColorBrush(Color.FromRgb(167, 243, 206));
+        var mint = Theme.Paint(Color.FromRgb(167, 243, 206));
         var bubble = new StackPanel();
         bubble.Children.Add(new Border { Background = mint, CornerRadius = new CornerRadius(20), Padding = new Thickness(26, 10, 26, 12),
-            Child = new TextBlock { Text = "원카드!", FontSize = 30, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(16, 41, 30)) } });
+            Child = new TextBlock { Text = "원카드!", FontSize = 30, FontWeight = FontWeights.Bold, Foreground = Theme.Paint(Color.FromRgb(16, 41, 30)) } });
         bubble.Children.Add(new System.Windows.Shapes.Path { Data = Geometry.Parse("M0,0 L18,0 L5,14 Z"), Fill = mint, Margin = new Thickness(30, -1, 0, 0) });
         return bubble;
     }

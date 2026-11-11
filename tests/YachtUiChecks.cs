@@ -131,6 +131,30 @@ internal static class YachtUiChecks
                 }
             }
             transparentSetting.SetValue(preferences, originalTransparent); Call(host, "ApplyAppearance");
+            // Theme buttons save settings, so keep them away from the real settings file.
+            Set(host, "preferencesPath", Path.Combine(root, "settings.json"));
+            preferences.GetType().GetProperty("OpacityScale")!.SetValue(preferences, 1d); transparentSetting.SetValue(preferences, false); Call(host, "ApplyAppearance");
+            double Lightness(Brush brush) { var c = ((SolidColorBrush)brush).Color; return (c.R * .299 + c.G * .587 + c.B * .114) / 255; }
+            var dialog = (Border)host.FindName("Dialog");
+            Assert(Lightness(dialog.Background) < .2 && Lightness(((TextBlock)host.FindName("ScoreText")).Foreground) > .6, "기본은 어두운 테마");
+            Call(host, "ShowSettings"); Layout(host); Click(host, "밝은 테마"); Layout(host);
+            var lightTheme = preferences.GetType().GetProperty("LightTheme")!;
+            Assert((bool)lightTheme.GetValue(preferences)! && Lightness(dialog.Background) > .9 && Lightness((Brush)Application.Current.Resources["ButtonFill"]) > .8
+                && Lightness(((TextBlock)host.FindName("ScoreText")).Foreground) < .6 && File.ReadAllText(Path.Combine(root, "settings.json")).Contains("\"LightTheme\": true"),
+                "설정에서 밝은 테마 선택 시 창·버튼·글자 색 전환과 설정 저장");
+            Assert(Find<Button>((DependencyObject)host.Content).Single(b => Equals(b.Content, "밝은 테마")).Style == (Style)host.FindResource("Primary"), "선택한 테마 버튼 강조");
+            Set(host, "yachtDrawn", null); Call(host, "ShowYachtRoom"); Layout(host);
+            Assert(Lightness(Find<TextBlock>((DependencyObject)host.Content).Single(t => t.Text == "48/63").Foreground) < .5, "밝은 테마에서 야추 점수판 글자는 어둡게 표시");
+            if (args.Length == 1)
+            {
+                var body = (FrameworkElement)host.Content; var bitmap = new RenderTargetBitmap(480, 740, 96, 96, PixelFormats.Pbgra32); bitmap.Render(body);
+                var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bitmap));
+                using var file = File.Create(Path.GetFullPath(args[0]).Replace(".png", "-light.png")); png.Save(file);
+            }
+            Call(host, "ShowSettings"); Layout(host); Click(host, "어두운 테마"); Layout(host);
+            Assert(!(bool)lightTheme.GetValue(preferences)! && Lightness(dialog.Background) < .2 && Lightness((Brush)Application.Current.Resources["ButtonFill"]) < .3,
+                "어두운 테마로 되돌리기");
+            Set(host, "yachtDrawn", null); Call(host, "ShowYachtRoom"); Layout(host);
             Press(Named(host, "YachtPickFives"));
             Wait(() => Idle() && Room(guest).Find("p0")!.Bonus() == 35);
             Assert(Room(guest).LastMessage!.Contains("보너스 +35"), "보너스 달성을 양쪽 화면에 알림");

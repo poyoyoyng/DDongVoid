@@ -143,7 +143,7 @@ public partial class MainWindow
         refresh.Click += async (_, _) => await RefreshCiaoAsync();
         DockPanel.SetDock(refresh, Dock.Right); row.Children.Add(refresh);
         ciaoSyncStatus = new TextBlock { Name = "CiaoSyncStatus", Text = ciaoSyncNote, FontSize = 10,
-            Foreground = new SolidColorBrush(Color.FromRgb(145, 171, 156)), VerticalAlignment = VerticalAlignment.Center,
+            Foreground = Theme.Paint(Color.FromRgb(145, 171, 156)), VerticalAlignment = VerticalAlignment.Center,
             TextWrapping = TextWrapping.Wrap, ToolTip = CiaoSyncDetails() };
         row.Children.Add(ciaoSyncStatus); DialogContent.Children.Add(row);
     }
@@ -332,7 +332,7 @@ public partial class MainWindow
             var label = step == 0 ? "S →" : step == CiaoRules.Finish ? "G" : step == 4 ? "4 ↓" : step < 4 ? $"{step} →" : $"← {step}";
             var body = new StackPanel();
             body.Children.Add(new TextBlock { Text = label, FontSize = 10, TextAlignment = TextAlignment.Center,
-                Foreground = new SolidColorBrush(Color.FromRgb(145, 171, 156)), Margin = new Thickness(0, 0, 0, 2) });
+                Foreground = Theme.Paint(Color.FromRgb(145, 171, 156)), Margin = new Thickness(0, 0, 0, 2) });
             var pawns = new UniformGrid { Rows = 2, Columns = 2, Height = 26 };
             for (int i = 0; i < CiaoRules.MaxPlayers; i++)
             {
@@ -346,7 +346,7 @@ public partial class MainWindow
             }
             body.Children.Add(pawns);
             var cell = new Border { Tag = step, CornerRadius = new CornerRadius(5), Margin = new Thickness(1), Padding = new Thickness(2, 3, 2, 3),
-                Background = new SolidColorBrush(Color.FromRgb(16, 27, 23)), Child = body };
+                Background = Theme.Paint(Color.FromRgb(16, 27, 23)), Child = body };
             var occupants = string.Join(" · ", room.Players.Where(p => p.Position == step).Select(p => p.Id));
             System.Windows.Automation.AutomationProperties.SetName(cell, $"{(step == 0 ? "출발" : step == CiaoRules.Finish ? "도착" : $"{step}칸")} · {occupants}");
             track.Children.Add(cell);
@@ -358,7 +358,7 @@ public partial class MainWindow
             AddText($"{(room.SpeakerId == player.Id ? "▶ " : "")}P{i + 1}  {player.Id}{(player.Id == userId ? " (나)" : "")}", 12, color, 0, 3, true);
             var remaining = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 7) };
             remaining.Children.Add(new TextBlock { Text = "남은 말", FontSize = 10, Width = 44, VerticalAlignment = VerticalAlignment.Center,
-                Foreground = new SolidColorBrush(Color.FromRgb(145, 171, 156)) });
+                Foreground = Theme.Paint(Color.FromRgb(145, 171, 156)) });
             if (player.Position is int position)
                 remaining.Children.Add(CiaoPawn(color, $"{player.Id} · 이동 중인 말 · {position}칸", "ciao-remaining-active:" + player.Id, true));
             for (int pawn = 0; pawn < player.Reserve; pawn++)
@@ -367,7 +367,7 @@ public partial class MainWindow
             }
             var count = player.Reserve + (player.Position is null ? 0 : 1);
             remaining.Children.Add(new TextBlock { Text = $" {count}개", FontSize = 10, VerticalAlignment = VerticalAlignment.Center,
-                Foreground = new SolidColorBrush(Color.FromRgb(145, 171, 156)) });
+                Foreground = Theme.Paint(Color.FromRgb(145, 171, 156)) });
             System.Windows.Automation.AutomationProperties.SetName(remaining, $"{player.Id} · 남은 말 {count}개 · 대기 {player.Reserve}개");
             DialogContent.Children.Add(remaining);
         }
@@ -379,7 +379,7 @@ public partial class MainWindow
             var vacated = owner < 0 && score <= room.UsedPodiumSlots;
             var slot = new StackPanel { Margin = new Thickness(1) };
             slot.Children.Add(new TextBlock { Text = vacated ? $"{score}×" : score.ToString(), FontSize = 10, TextAlignment = TextAlignment.Center,
-                Foreground = new SolidColorBrush(Color.FromRgb(145, 171, 156)), Margin = new Thickness(0, 0, 0, 3) });
+                Foreground = Theme.Paint(Color.FromRgb(145, 171, 156)), Margin = new Thickness(0, 0, 0, 3) });
             slot.Children.Add(CiaoPawn(owner < 0 ? vacated ? "#26362D" : "#40574A" : colors[owner],
                 owner < 0 ? vacated ? $"{score}점 · 탈락한 자리 · 재사용 안 함" : $"{score}점 · 빈자리"
                     : $"{score}점 · {room.Players[owner].Id}", "ciao-goal:" + score));
@@ -391,8 +391,8 @@ public partial class MainWindow
     {
         var pawn = new Ellipse { Width = 10, Height = 10, Margin = new Thickness(1), Tag = tag, ToolTip = description,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)),
-            Stroke = active ? Brushes.White : Brushes.Transparent, StrokeThickness = active ? 1.2 : 0 };
+            Fill = Theme.Paint(color),
+            Stroke = active ? Theme.Paint(Colors.White) : Brushes.Transparent, StrokeThickness = active ? 1.2 : 0 };
         System.Windows.Automation.AutomationProperties.SetName(pawn, description);
         return pawn;
     }

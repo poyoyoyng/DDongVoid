@@ -26,6 +26,7 @@ public partial class MainWindow : Window
     {
         public string? DataFolder { get; set; }
         public bool Transparent { get; set; } = true;
+        public bool LightTheme { get; set; }
         public double BackgroundStrength { get; set; } = 1;
         public bool AlwaysOnTop { get; set; }
         public double PlayerAlpha { get; set; } = .8;
@@ -85,6 +86,7 @@ public partial class MainWindow : Window
             store = new LocalStore(DefaultDataFolder);
             startupError = "저장 폴더를 확인해 주세요. " + ex.Message;
         }
+        Theme.Capture(this); Theme.Apply(preferences.LightTheme);
         ApplyAppearance();
         if (preferences.WindowWidth is double savedWidth && preferences.WindowHeight is double savedHeight)
         {
@@ -164,9 +166,9 @@ public partial class MainWindow : Window
         TitleRow.Height = new GridLength(preferences.Transparent ? 0 : 80);
         HudRow.Height = new GridLength(preferences.Transparent ? 0 : 88);
         FooterRow.Height = new GridLength(preferences.Transparent ? 0 : 56);
-        Shell.BorderBrush = preferences.Transparent ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(59, 80, 68));
+        Shell.BorderBrush = preferences.Transparent ? Brushes.Transparent : Theme.Paint(Color.FromRgb(59, 80, 68));
         ResizeMarker.Visibility = chrome;
-        Overlay.Background = preferences.Transparent ? Brushes.Transparent : new SolidColorBrush(Color.FromArgb(48, 16, 27, 23));
+        Overlay.Background = preferences.Transparent ? Brushes.Transparent : Theme.Paint(Color.FromArgb(48, 16, 27, 23));
         QuietScore.Visibility = preferences.Transparent && preferences.ShowQuietScore ? Visibility.Visible : Visibility.Collapsed;
         QuietScore.Opacity = preferences.ScoreAlpha;
         MinWidth = preferences.Transparent ? 300 : 480;
@@ -181,9 +183,9 @@ public partial class MainWindow : Window
         Surface.Opacity = RhythmView.Opacity = Shell.Opacity = HudChrome.Opacity = FooterChrome.Opacity = ModeLabel.Opacity = scale;
         QuietScore.Opacity = preferences.ScoreAlpha * scale;
         DialogContent.Opacity = scale;
-        Dialog.Background = new SolidColorBrush(Color.FromArgb((byte)Math.Round(252 * scale), 24, 38, 31));
-        Dialog.BorderBrush = new SolidColorBrush(Color.FromArgb((byte)Math.Round(255 * scale), 64, 87, 74));
-        Overlay.Background = preferences.Transparent ? Brushes.Transparent : new SolidColorBrush(Color.FromArgb((byte)Math.Round(48 * scale), 16, 27, 23));
+        Dialog.Background = Theme.Paint(Color.FromArgb((byte)Math.Round(252 * scale), 24, 38, 31));
+        Dialog.BorderBrush = Theme.Paint(Color.FromArgb((byte)Math.Round(255 * scale), 64, 87, 74));
+        Overlay.Background = preferences.Transparent ? Brushes.Transparent : Theme.Paint(Color.FromArgb((byte)Math.Round(48 * scale), 16, 27, 23));
         // Keep the drag controls and sliders visible even at 0%, so the user can restore the game.
         DialogOpacitySlider.Value = scale * 100;
     }
@@ -260,7 +262,7 @@ public partial class MainWindow : Window
     }
     private TextBlock AddText(string text, double size = 13, string color = "#EDF4F0", double top = 0, double bottom = 10, bool bold = false)
     {
-        var label = new TextBlock { Text = text, FontSize = size, Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)),
+        var label = new TextBlock { Text = text, FontSize = size, Foreground = Theme.Paint(color),
             TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, top, 0, bottom), FontWeight = bold ? FontWeights.Bold : FontWeights.Normal };
         DialogContent.Children.Add(label); return label;
     }
@@ -274,7 +276,7 @@ public partial class MainWindow : Window
     private void SetMessage(string text, bool success = false)
     {
         if (message is null) message = AddText("", 12, "#F4B69D", 12, 0);
-        message.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(success ? "#A7F3CE" : "#F4B69D"));
+        message.Foreground = Theme.Paint(success ? "#A7F3CE" : "#F4B69D");
         message.Text = text;
     }
     private void ShowHome()
@@ -572,12 +574,12 @@ public partial class MainWindow : Window
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                    var rank = new TextBlock { Text = $"{entry.Rank}위", FontSize = 12, Foreground = entry.Rank <= 3 ? Brushes.PaleGoldenrod : Brushes.Gray, VerticalAlignment = VerticalAlignment.Center };
+                    var rank = new TextBlock { Text = $"{entry.Rank}위", FontSize = 12, Foreground = entry.Rank <= 3 ? Theme.Paint(Colors.PaleGoldenrod) : Brushes.Gray, VerticalAlignment = VerticalAlignment.Center };
                     var id = new TextBlock { Text = entry.UserId + (mine ? " (나)" : ""), FontSize = 12, Margin = new Thickness(0, 0, 10, 0), TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = entry.UserId, VerticalAlignment = VerticalAlignment.Center };
-                    var score = new TextBlock { Text = ScoreLabel(entry), FontSize = 13, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(167, 243, 206)), VerticalAlignment = VerticalAlignment.Center };
+                    var score = new TextBlock { Text = ScoreLabel(entry), FontSize = 13, FontWeight = FontWeights.Bold, Foreground = Theme.Paint(Color.FromRgb(167, 243, 206)), VerticalAlignment = VerticalAlignment.Center };
                     Grid.SetColumn(id, 1); Grid.SetColumn(score, 2);
                     row.Children.Add(rank); row.Children.Add(id); row.Children.Add(score);
-                    rows.Children.Add(new Border { Child = row, Padding = new Thickness(10, 12, 10, 12), Margin = new Thickness(0, 0, 0, 5), CornerRadius = new CornerRadius(8), Background = new SolidColorBrush(mine ? Color.FromRgb(37, 61, 46) : Color.FromRgb(16, 27, 23)) });
+                    rows.Children.Add(new Border { Child = row, Padding = new Thickness(10, 12, 10, 12), Margin = new Thickness(0, 0, 0, 5), CornerRadius = new CornerRadius(8), Background = Theme.Paint(mine ? Color.FromRgb(37, 61, 46) : Color.FromRgb(16, 27, 23)) });
                 }
                 var list = new ScrollViewer { Name = "RankingList", Content = rows, MaxHeight = 210, Background = Brushes.Transparent,
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
@@ -636,7 +638,7 @@ public partial class MainWindow : Window
                 var list = new StackPanel();
                 foreach (var r in records.Take(100))
                 {
-                    var row = new Border { Background = new SolidColorBrush(Color.FromRgb(16, 27, 23)), CornerRadius = new CornerRadius(8), Padding = new Thickness(12), Margin = new Thickness(0, 0, 0, 6) };
+                    var row = new Border { Background = Theme.Paint(Color.FromRgb(16, 27, 23)), CornerRadius = new CornerRadius(8), Padding = new Thickness(12), Margin = new Thickness(0, 0, 0, 6) };
                     var body = new StackPanel();
                     body.Children.Add(new TextBlock { Text = $"{r.Score:N0}점   ·   {r.Seconds:F1}초   ·   {r.Dodged}개 회피", FontSize = 13 });
                     body.Children.Add(new TextBlock { Text = r.PlayedAt.ToLocalTime().ToString("yyyy.MM.dd  HH:mm:ss"), FontSize = 10, Foreground = Brushes.Gray, Margin = new Thickness(0, 6, 0, 0) });
@@ -652,6 +654,20 @@ public partial class MainWindow : Window
     private void ShowSettings()
     {
         BeginPanel("settings", "MAKE IT YOURS", "기척 없이, 가볍게.", "투명 모드는 배경·상하단 바·테두리를 지웁니다.\nF2로 설정 열기 / 닫기 · Alt + 캐릭터 드래그로 창 이동");
+        AddText("테마", 12, "#B6C7BC", 0, 6, true);
+        var themes = new System.Windows.Controls.Primitives.UniformGrid { Name = "ThemeChoice", Rows = 1, Margin = new Thickness(-3, 0, -3, 4) };
+        foreach (var (label, light) in new[] { ("어두운 테마", false), ("밝은 테마", true) })
+        {
+            var choice = new Button { Content = label, Margin = new Thickness(3, 0, 3, 0) };
+            if (preferences.LightTheme == light) choice.Style = (Style)FindResource("Primary");
+            choice.Click += (_, _) =>
+            {
+                if (preferences.LightTheme == light) return;
+                preferences.LightTheme = light; Theme.Apply(light); ApplyAppearance(); SavePreferences(); ShowSettings();
+            };
+            themes.Children.Add(choice);
+        }
+        DialogContent.Children.Add(themes);
         var transparent = new CheckBox { Content = "PNG 배경 제거처럼 완전 투명 · UI 숨기기", IsChecked = preferences.Transparent };
         transparent.Click += (_, _) => { preferences.Transparent = transparent.IsChecked == true; ApplyAppearance(); SavePreferences(); };
         DialogContent.Children.Add(transparent);

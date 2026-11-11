@@ -99,7 +99,7 @@ public partial class MainWindow
         refresh.Click += async (_, _) => await RefreshSlapAsync();
         DockPanel.SetDock(refresh, Dock.Right); row.Children.Add(refresh);
         slapSyncStatus = new TextBlock { Name = "SlapSyncStatus", Text = slapSyncNote, FontSize = 10,
-            Foreground = new SolidColorBrush(Color.FromRgb(145, 171, 156)), VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
+            Foreground = Theme.Paint(Color.FromRgb(145, 171, 156)), VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
         row.Children.Add(slapSyncStatus); DialogContent.Children.Add(row);
     }
     private async Task RefreshSlapAsync()
@@ -339,10 +339,10 @@ public partial class MainWindow
                 $"{name} · 체력 {fighter.Hp}/{SlapRules.MaxHp} · 기력 {fighter.Gauge}/{SlapRules.MaxGauge} · {visual.Description}");
             body.Children.Add(new Viewbox { Child = fighter, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly });
             body.Children.Add(new TextBlock { Text = visual.Caption, ToolTip = visual.Description, TextAlignment = TextAlignment.Center,
-                FontSize = 12, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(167, 243, 206)),
+                FontSize = 12, FontWeight = FontWeights.Bold, Foreground = Theme.Paint(Color.FromRgb(167, 243, 206)),
                 TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 4) });
             arena.Children.Add(new Border { Child = body, Padding = new Thickness(6, 9, 6, 6), Margin = new Thickness(3, 0, 3, 0),
-                CornerRadius = new CornerRadius(12), Background = new SolidColorBrush(Color.FromRgb(16, 27, 23)) });
+                CornerRadius = new CornerRadius(12), Background = Theme.Paint(Color.FromRgb(16, 27, 23)) });
         }
     }
     private void AddSlapRow(IEnumerable<(string Text, Action Click, bool Enabled, bool Primary)> items)

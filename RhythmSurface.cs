@@ -12,32 +12,43 @@ public sealed class RhythmSurface : FrameworkElement
     public double BackgroundStrength { get; set; } = 1;
     public double NoteAlpha { get; set; } = 1;
     private const double Side = 16, Gap = 12, BlockHeight = 38, HitOffset = 72;
-    private static SolidColorBrush Brush(string color) { var b = (SolidColorBrush)new BrushConverter().ConvertFromString(color)!; b.Freeze(); return b; }
-    private static readonly Brush[] LaneBrushes = [Brush("#A7F3CE"), Brush("#F4C59D")];
-    private static readonly Brush Ink = Brush("#122A1E"), LaneFill = Brush("#14261E"), LaneEdge = Brush("#2C4234"), Muted = Brush("#91AB9C");
+    private static SolidColorBrush Brush(string color) { var b = Theme.Paint(color); b.Freeze(); return b; }
+    // Brushes are rebuilt whenever the theme changes, not once per frame.
+    private bool paletteLight = Theme.Light;
+    private Brush[] LaneBrushes = null!;
+    private Brush LaneBackground = null!, Ink = null!, LaneFill = null!, LaneEdge = null!, Muted = null!, Combo = null!;
+    private Dictionary<RhythmJudgement, Brush> JudgementBrushes = null!;
     private static readonly Typeface KeyFace = new(new FontFamily("Consolas, Malgun Gothic"),FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
     private static readonly Typeface LabelFace = new(new FontFamily("Malgun Gothic"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
-    private static readonly Dictionary<RhythmJudgement, Brush> JudgementBrushes = new()
+    public RhythmSurface() => LoadPalette();
+    private void LoadPalette()
     {
-        [RhythmJudgement.Perfect] = Brush("#A7F3CE"), [RhythmJudgement.Great] = Brush("#9FD3F3"),
-        [RhythmJudgement.Good] = Brush("#E8E3A1"), [RhythmJudgement.Miss] = Brush("#F4B69D"),
-    };
+        paletteLight = Theme.Light;
+        LaneBrushes = [Brush("#A7F3CE"), Brush("#F4C59D")];
+        LaneBackground = Brush("#101B17"); Ink = Brush("#122A1E"); LaneFill = Brush("#14261E"); LaneEdge = Brush("#2C4234"); Muted = Brush("#91AB9C"); Combo = Brush("#FFFFFF");
+        JudgementBrushes = new()
+        {
+            [RhythmJudgement.Perfect] = Brush("#A7F3CE"), [RhythmJudgement.Great] = Brush("#9FD3F3"),
+            [RhythmJudgement.Good] = Brush("#E8E3A1"), [RhythmJudgement.Miss] = Brush("#F4B69D"),
+        };
+    }
     private double LaneWidth => Math.Max(40, (ActualWidth - Side * 2 - Gap) / 2);
     private double LaneLeft(int lane) => Side + lane * (LaneWidth + Gap);
     private double HitY => Math.Max(BlockHeight * 2, ActualHeight - HitOffset);
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
+        if (paletteLight != Theme.Light) LoadPalette();
         var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         if (!TransparentMode)
         {
             dc.PushOpacity(BackgroundStrength);
-            dc.DrawRectangle(Brush("#101B17"), null, new Rect(RenderSize));
+            dc.DrawRectangle(LaneBackground, null, new Rect(RenderSize));
             dc.Pop();
         }
         // Lanes and the hit line stay faintly visible even in transparent mode; timing is unplayable without them.
         var laneOpacity = TransparentMode ? .35 : BackgroundStrength;
-        var hitPen = new Pen(Brush("#A7F3CE"), 2);
+        var hitPen = new Pen(LaneBrushes[0], 2);
         for (int lane = 0; lane < 2; lane++)
         {
             var x = LaneLeft(lane);
@@ -72,7 +83,7 @@ public sealed class RhythmSurface : FrameworkElement
                     LaneLeft(lane) + LaneWidth / 2, HitY - 64 - sinceJudgement * 30, dpi, 1 - sinceJudgement / .45);
         }
         DrawText(dc, $"SPEED ×{Engine.SpeedMultiplier:0.0}", KeyFace, 11, Muted, ActualWidth / 2, 22, dpi, .7);
-        if (Engine.Combo >= 2) DrawText(dc, $"{Engine.Combo} COMBO", KeyFace, 22, Brushes.White, ActualWidth / 2, ActualHeight * .3, dpi, .75);
+        if (Engine.Combo >= 2) DrawText(dc, $"{Engine.Combo} COMBO", KeyFace, 22, Combo, ActualWidth / 2, ActualHeight * .3, dpi, .75);
         var lifeWidth = ActualWidth - Side * 2;
         dc.DrawRectangle(LaneEdge, null, new Rect(Side, ActualHeight - 6, lifeWidth, 3));
         dc.DrawRectangle(Engine.Life > 30 ? LaneBrushes[0] : JudgementBrushes[RhythmJudgement.Miss], null, new Rect(Side, ActualHeight - 6, lifeWidth * Engine.Life / 100, 3));

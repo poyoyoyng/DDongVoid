@@ -36,10 +36,11 @@ public sealed class GameSurface : FrameworkElement
         if (!TransparentMode)
         {
             dc.PushOpacity(BackgroundStrength);
-            dc.DrawRectangle(Brush("#101B17"), null, new Rect(RenderSize));
-            var pen = new Pen(Brush("#1B2B22"), .6);
+            dc.DrawRectangle(Theme.Paint("#101B17"), null, new Rect(RenderSize));
+            var pen = new Pen(Theme.Paint("#1B2B22"), .6);
+            var dot = Theme.Paint("#2C4234");
             for (double x = 24; x < ActualWidth; x += 36)
-                for (double y = 24; y < ActualHeight; y += 36) dc.DrawEllipse(Brush("#2C4234"), null, new Point(x, y), .8, .8);
+                for (double y = 24; y < ActualHeight; y += 36) dc.DrawEllipse(dot, null, new Point(x, y), .8, .8);
             dc.DrawLine(pen, new Point(24, Engine.PlayerY + 25), new Point(ActualWidth - 24, Engine.PlayerY + 25));
             dc.Pop();
         }

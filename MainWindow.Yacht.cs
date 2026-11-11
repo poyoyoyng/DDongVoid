@@ -157,7 +157,7 @@ public partial class MainWindow
         refresh.Click += async (_, _) => await RefreshYachtAsync();
         DockPanel.SetDock(refresh, Dock.Right); row.Children.Add(refresh);
         yachtSyncStatus = new TextBlock { Name = "YachtSyncStatus", Text = yachtSyncNote, FontSize = 10,
-            Foreground = new SolidColorBrush(Color.FromRgb(145, 171, 156)), VerticalAlignment = VerticalAlignment.Center,
+            Foreground = Theme.Paint(Color.FromRgb(145, 171, 156)), VerticalAlignment = VerticalAlignment.Center,
             TextWrapping = TextWrapping.Wrap, ToolTip = YachtSyncDetails() };
         row.Children.Add(yachtSyncStatus); DialogContent.Children.Add(row);
     }
@@ -281,7 +281,7 @@ public partial class MainWindow
         if (!playing) AddButton("방 나가기", () => _ = RunYachtAsync((s, id) => { s.Leave(room.Id, id); return null; }));
         AnimateYachtRoll(room, dice);
     }
-    private static SolidColorBrush YachtBrush(string color) => new((Color)ColorConverter.ConvertFromString(color));
+    private static SolidColorBrush YachtBrush(string color) => Theme.Paint(color);
     // Two name plates side by side: the player to move is lit, totals are always visible.
     private void AddYachtVersus(YachtRoom room)
     {
@@ -302,7 +302,7 @@ public partial class MainWindow
             {
                 Text = player is null ? "상대를 기다리는 중…" : room.Status == YachtStatus.Waiting ? player.Ready ? "준비 완료 ✓" : "준비 대기" : $"{player.Total()}점",
                 FontSize = room.Status == YachtStatus.Waiting || player is null ? 12 : 20, FontWeight = FontWeights.Bold, FontFamily = new FontFamily("Consolas, Malgun Gothic"),
-                Foreground = player is null ? YachtBrush("#6F8579") : Brushes.White,
+                Foreground = player is null ? YachtBrush("#6F8579") : Theme.Paint(Colors.White),
             });
             var card = new Border
             {
