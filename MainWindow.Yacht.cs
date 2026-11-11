@@ -261,12 +261,7 @@ public partial class MainWindow
         AddYachtSyncControls();
         AddYachtVersus(room);
         var dice = new List<(Border Holder, int Index)>();
-        if (!playing && !finished)
-        {
-            AddText(room.Players.Count < YachtRules.Players ? "상대가 들어오면 둘 다 준비 완료를 눌러 주세요." : "둘 다 준비하면 방장부터 시작합니다.", 12, "#A8BCAF", 2, 8);
-            AddText(YachtRules.Description, 11, "#91AB9C", 0, 8);
-        }
-        else
+        if (playing || finished)
         {
             if (playing) dice = AddYachtTray(room, myTurn);
             if (room.LastMessage is { } last) AddText(last, 11, "#F4C59D", 0, 6);
