@@ -108,7 +108,7 @@ internal static class YachtUiChecks
             foreach (var w in new[] { host, guest }) { Set(w, "yachtRoomId", id); Set(w, "yachtRoom", fixture.Copy()); Call(w, "ShowYachtRoom"); Layout(w); }
             var fives = Named(host, "YachtPickFives");
             Assert(Find<TextBlock>(fives).Any(t => t.Text == "15★"), "보너스를 채우는 상단 칸은 ★로 미리 표시");
-            Assert(Find<TextBlock>((DependencyObject)host.Content).Any(t => t.Text == "48/63") && Find<TextBlock>((DependencyObject)host.Content).Any(t => t.Text == "15점 남음"),
+            Assert(Find<TextBlock>((DependencyObject)host.Content).Any(t => t.Text == "48/63") && Find<TextBlock>((DependencyObject)host.Content).Any(t => t.Text == "15점"),
                 "상단 소계와 보너스까지 남은 점수 표시");
             Assert(Find<TextBlock>((DependencyObject)host.Content).Any(t => t.Text == "+35"), "보너스를 얻은 상대는 +35 표시");
             var preferences = Get(host, "preferences")!;

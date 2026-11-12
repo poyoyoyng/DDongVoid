@@ -488,7 +488,7 @@ public partial class MainWindow
                 var p = room.Players[seat]; var need = YachtRules.BonusThreshold - p.UpperSum();
                 var status = p.Bonus() > 0 ? Value($"+{YachtRules.BonusScore}", "#A7F3CE", 13)
                     : p.BonusLost() || p.UpperDone() ? Value("실패", "#6F8579", 10.5)
-                    : Value($"{need}점 남음", "#F4C59D", 10.5);
+                    : Value($"{need}점", "#F4C59D", 10.5);
                 status.ToolTip = $"상단 소계 {YachtRules.BonusThreshold}점 이상이면 +{YachtRules.BonusScore}점 · 기준 대비 {p.UpperPace():+0;-0;±0}";
                 Put(status, seat + 1);
             }
