@@ -348,6 +348,8 @@ dialog .form-error { color: #a53745; margin: 0; }
 .guide-example b { font-size: 17px; }
 .guide-bonus { display: grid; gap: 4px; padding: 16px; border: 2px solid var(--g-gold); border-radius: 14px; background: #1f3226; }
 .guide-bonus strong { color: var(--g-gold); font-size: clamp(25px, 3.4vw, 34px); letter-spacing: -.03em; }
+.guide-yacht .guide-bonus b.guide-plain { color: #f5fbf6; }
+.guide-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; }
 .guide-progress { height: 10px; margin-top: 4px; border-radius: 99px; background: var(--g-inner); overflow: hidden; }
 .guide-progress i { display: block; width: 76%; height: 100%; border-radius: inherit; background: #f4c59d; }
 .guide-combos { list-style: none; margin: 0 0 10px; padding: 0; border-radius: 12px; overflow: hidden; }
