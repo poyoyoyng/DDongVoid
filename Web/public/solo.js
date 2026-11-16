@@ -1,33 +1,106 @@
 import { applySoloInput, height, makeSolo, maxTicks, stepSolo, tickRate, width } from './solo-model.js';
+import * as rhythm from './rhythm-model.js';
 
-export function soloMarkup() {
-  const controls = ['←', '→'];
-  return `<section class="panel solo-panel">
+// Phones get a narrower, taller board so the blocks and labels stay readable.
+function rhythmSize() {
+  return matchMedia('(max-width: 600px)').matches ? { width: 400, height: 500 } : { width: 720, height: 540 };
+}
+
+// Each single-player game supplies its clock, controls and drawing; the loop, pause and score saving are shared.
+const modes = {
+  dodge: {
+    label: '똥 피하기 화면', size: () => ({ width, height }), tickRate, maxTicks, make: makeSolo, step: stepSolo,
+    controls: ['←', '→'],
+    help: '← → 키 또는 A D 키로 움직이세요. Space 또는 Esc로 일시정지합니다.',
+    metric: state => '생존 ' + Math.floor(state.tick / tickRate) + '초 · 피한 똥 ' + state.dodged + '개',
+    paint: paintDodge,
+    controller: dodgeController,
+  },
+  rhythm: {
+    label: '키보드 리듬 화면', size: rhythmSize, tickRate: rhythm.tickRate, maxTicks: rhythm.maxTicks,
+    make: rhythm.makeRhythm, step: rhythm.stepRhythm,
+    controls: rhythm.keys,
+    help: '블록이 판정선에 닿을 때 블록에 적힌 S D K L 키를 누르세요. 한글 입력 상태여도 됩니다. Space 또는 Esc로 일시정지합니다.',
+    metric: state => '콤보 ' + state.combo + ' · 라이프 ' + state.life + '% · 속도 ×' + rhythm.speedMultiplier(state.seconds).toFixed(1),
+    paint: paintRhythm,
+    controller: rhythmController,
+  },
+};
+
+// Holding keys or touch buttons steers left and right; only changes of direction are recorded.
+function dodgeController(state, events) {
+  const pressed = new Map();
+  const keyboard = { ArrowLeft: 0, KeyA: 0, ArrowRight: 1, KeyD: 1 };
+  function input(value) {
+    if (!applySoloInput(state, value)) return;
+    const previous = events.at(-1);
+    if (previous?.[0] === state.tick) previous[1] = value;
+    else events.push([state.tick, value]);
+  }
+  const direction = () => {
+    const held = [...pressed.values()];
+    return Number(held.includes(1)) - Number(held.includes(0));
+  };
+  return {
+    keyFor: code => keyboard[code],
+    press(id, value) {
+      if (pressed.has(id)) return;
+      pressed.set(id, value);
+      input(direction());
+    },
+    release(id) {
+      if (pressed.delete(id)) input(direction());
+    },
+    clear() {
+      pressed.clear();
+      input(0);
+    },
+  };
+}
+
+// Each press is judged at once; only presses that hit a block change the score, so only those are recorded.
+function rhythmController(state, events) {
+  const keyboard = { KeyS: 0, KeyD: 1, KeyK: 2, KeyL: 3 };
+  return {
+    keyFor: code => keyboard[code],
+    press(id, key) {
+      if (rhythm.hitRhythm(state, key) !== null) events.push([state.tick, key]);
+    },
+    release() {},
+    clear() {},
+  };
+}
+
+export function soloMarkup(game) {
+  const mode = modes[game];
+  const size = mode.size();
+  return `<section class="panel solo-panel ${game}-solo">
     <div class="solo-hud" aria-live="off">
       <div><span>점수</span> <strong id="solo-score">0</strong></div>
       <div id="solo-metric"></div>
       <button type="button" class="button button-small button-outline" id="solo-pause">일시정지</button>
     </div>
     <div class="canvas-wrap">
-      <canvas id="solo-canvas" width="${width}" height="${height}" aria-label="똥 피하기 화면"></canvas>
+      <canvas id="solo-canvas" width="${size.width}" height="${size.height}" aria-label="${mode.label}"></canvas>
       <div id="solo-cover" class="canvas-cover" hidden></div>
     </div>
-    <div class="touch-controls" aria-label="터치 조작">${controls.map((key, index) =>
+    <div class="touch-controls" aria-label="터치 조작">${mode.controls.map((key, index) =>
       `<button type="button" class="button button-outline" data-game-key="${index}">${key}</button>`).join('')}</div>
-    <p class="muted">← → 키 또는 A D 키로 움직이세요. Space 또는 Esc로 일시정지합니다.</p>
+    <p class="muted">${mode.help}</p>
   </section>`;
 }
 
-export function playSolo(run, save, restart) {
+export function playSolo(game, run, save, restart) {
+  const mode = modes[game];
   const canvas = document.querySelector('#solo-canvas');
   const painter = canvas.getContext('2d');
   const score = document.querySelector('#solo-score');
   const metric = document.querySelector('#solo-metric');
   const cover = document.querySelector('#solo-cover');
   const pauseButton = document.querySelector('#solo-pause');
-  const state = makeSolo(run.seed);
+  const state = mode.make(run.seed);
   const events = [];
-  const pressed = new Map();
+  const controls = mode.controller(state, events);
   const lifecycle = new AbortController();
   const listen = (target, name, callback) => target.addEventListener(name, callback, { signal: lifecycle.signal });
   let lastTime = performance.now();
@@ -37,34 +110,32 @@ export function playSolo(run, save, restart) {
   let stopped = false;
   let pending = false;
 
-  function input(value) {
-    if (!applySoloInput(state, value)) return;
-    const previous = events.at(-1);
-    if (previous?.[0] === state.tick) previous[1] = value;
-    else events.push([state.tick, value]);
+  // Catch the clock up to the moment of the press so input is judged on time, not at the last drawn frame.
+  function advance(now) {
+    if (paused || state.over) return;
+    accumulated += Math.max(0, Math.min(now - lastTime, 100));
+    lastTime = Math.max(lastTime, now);
+    const step = 1000 / mode.tickRate;
+    while (accumulated >= step && !state.over) {
+      mode.step(state);
+      accumulated -= step;
+    }
   }
 
-  function direction() {
-    const held = [...pressed.values()];
-    return Number(held.includes(1)) - Number(held.includes(0));
-  }
-
-  function setPressed(id, value) {
-    if (paused || state.over || pressed.has(id)) return;
-    pressed.set(id, value);
-    input(direction());
+  function setPressed(id, value, now) {
+    if (paused || state.over) return;
+    advance(now);
+    if (!state.over) controls.press(id, value);
   }
 
   function release(id) {
-    if (!pressed.delete(id) || paused || state.over) return;
-    input(direction());
+    if (!paused && !state.over) controls.release(id);
   }
 
   function togglePause(next = !paused) {
     if (state.over || paused === next) return;
     paused = next;
-    pressed.clear();
-    input(0);
+    controls.clear();
     pauseButton.textContent = paused ? '계속하기' : '일시정지';
     cover.hidden = !paused;
     if (paused) {
@@ -75,7 +146,6 @@ export function playSolo(run, save, restart) {
     accumulated = 0;
   }
 
-  const keyboard = { ArrowLeft: 0, KeyA: 0, ArrowRight: 1, KeyD: 1 };
   listen(window, 'keydown', event => {
     if (event.altKey || event.ctrlKey || event.metaKey || event.target.closest?.('input,dialog[open]')) return;
     if (event.code === 'Space' || event.code === 'Escape') {
@@ -84,9 +154,10 @@ export function playSolo(run, save, restart) {
       if (!event.repeat) togglePause();
       return;
     }
-    if (!Object.hasOwn(keyboard, event.code)) return;
+    const key = controls.keyFor(event.code);
+    if (key === undefined) return;
     event.preventDefault();
-    if (!event.repeat) setPressed(event.code, keyboard[event.code]);
+    if (!event.repeat) setPressed(event.code, key, event.timeStamp);
   });
   listen(window, 'keyup', event => release(event.code));
   listen(window, 'blur', () => togglePause(true));
@@ -101,7 +172,7 @@ export function playSolo(run, save, restart) {
     const value = Number(button.dataset.gameKey);
     listen(button, 'pointerdown', event => {
       button.setPointerCapture(event.pointerId);
-      setPressed(event.pointerId, value);
+      setPressed(event.pointerId, value, event.timeStamp);
     });
     listen(button, 'lostpointercapture', event => release(event.pointerId));
     listen(button, 'pointerup', event => release(event.pointerId));
@@ -134,7 +205,7 @@ export function playSolo(run, save, restart) {
   function end() {
     pauseButton.disabled = true;
     cover.hidden = false;
-    cover.innerHTML = `<h2>${state.tick === maxTicks ? '30분 기록 완료' : '게임 종료'}</h2>
+    cover.innerHTML = `<h2>${state.tick === mode.maxTicks ? '30분 기록 완료' : '게임 종료'}</h2>
       <p class="final-score">${state.score.toLocaleString('ko-KR')}점</p>
       <p data-save-status role="status"></p>
       <div class="moves"><button type="button" class="button button-primary" data-restart>한 판 더</button>
@@ -143,18 +214,10 @@ export function playSolo(run, save, restart) {
   }
 
   function update(now) {
-    if (!paused && !state.over) {
-      accumulated += Math.min(now - lastTime, 100);
-      const step = 1000 / tickRate;
-      while (accumulated >= step && !state.over) {
-        stepSolo(state);
-        accumulated -= step;
-      }
-    }
-    lastTime = now;
-    paintDodge(painter, state);
+    advance(now);
+    mode.paint(painter, state);
     score.textContent = state.score.toLocaleString('ko-KR');
-    metric.textContent = '생존 ' + Math.floor(state.tick / tickRate) + '초 · 피한 똥 ' + state.dodged + '개';
+    metric.textContent = mode.metric(state);
     if (state.over) end();
     else frame = requestAnimationFrame(update);
   }
@@ -200,4 +263,75 @@ function paintDodge(ctx, state) {
     ctx.font = hazard.radius * 1.9 + 'px "Segoe UI Emoji", sans-serif';
     ctx.fillText('💩', hazard.x, hazard.y);
   }
+}
+
+const rhythmColors = {
+  lanes: ['#a7f3ce', '#f4c59d'], background: '#101b17', fill: '#14261e', edge: '#2c4234', muted: '#91ab9c', ink: '#122a1e',
+  judgements: ['#a7f3ce', '#9fd3f3', '#e8e3a1', '#f4b69d'],
+};
+
+function text(ctx, value, font, color, x, y, alpha = 1) {
+  ctx.globalAlpha = alpha;
+  ctx.font = font;
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(value, x, y);
+  ctx.globalAlpha = 1;
+}
+
+// Same layout as the Windows app: two lanes, a hit line near the bottom and the life bar under it.
+function paintRhythm(ctx, state) {
+  const { width: w, height: h } = ctx.canvas;
+  const side = 18, gap = 14, block = 46;
+  const laneWidth = (w - side * 2 - gap) / 2;
+  const hitY = h - 84;
+  const laneLeft = lane => side + lane * (laneWidth + gap);
+  const mono = size => `800 ${size}px Consolas, "Malgun Gothic", monospace`;
+  ctx.fillStyle = rhythmColors.background;
+  ctx.fillRect(0, 0, w, h);
+  for (let lane = 0; lane < 2; lane++) {
+    const x = laneLeft(lane);
+    ctx.fillStyle = rhythmColors.fill;
+    ctx.strokeStyle = rhythmColors.edge;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(x, 10, laneWidth, h - 22, 12); ctx.fill(); ctx.stroke();
+    ctx.globalAlpha = state.seconds - state.lastPressTime[lane] < .12 ? .45 : .14;
+    ctx.fillStyle = rhythmColors.lanes[lane];
+    ctx.beginPath(); ctx.roundRect(x + 5, hitY - block / 2, laneWidth - 10, block, 10); ctx.fill();
+    ctx.globalAlpha = .85;
+    ctx.strokeStyle = rhythmColors.lanes[0];
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x + 5, hitY); ctx.lineTo(x + laneWidth - 5, hitY); ctx.stroke();
+    ctx.globalAlpha = 1;
+    text(ctx, lane ? '오른손 K · L' : '왼손 S · D', '700 14px "Malgun Gothic", sans-serif', rhythmColors.muted, x + laneWidth / 2, hitY + block / 2 + 18, .8);
+  }
+  // Combo sits under the blocks so it never hides one.
+  if (state.combo >= 2) text(ctx, state.combo + ' COMBO', mono(28), '#ffffff', w / 2, h * .3, .6);
+  const blockWidth = Math.min(laneWidth - 24, 170);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, 10, w, h - 22); ctx.clip();
+  for (const note of state.notes) {
+    const progress = 1 - (note.time - state.seconds) / note.travel;
+    const y = -block + progress * (hitY + block);
+    const x = laneLeft(note.lane) + (laneWidth - blockWidth) / 2;
+    ctx.fillStyle = rhythmColors.lanes[note.lane];
+    ctx.beginPath(); ctx.roundRect(x, y - block / 2, blockWidth, block, 11); ctx.fill();
+    text(ctx, rhythm.keys[note.key], mono(29), rhythmColors.ink, x + blockWidth / 2, y + 1);
+  }
+  ctx.restore();
+  for (let lane = 0; lane < 2; lane++) {
+    const since = state.seconds - state.lastJudgementTime[lane];
+    const judgement = state.lastJudgement[lane];
+    if (judgement === null || since >= .45) continue;
+    text(ctx, rhythm.judgements[judgement], mono(22), rhythmColors.judgements[judgement],
+      laneLeft(lane) + laneWidth / 2, hitY - 76 - since * 36, 1 - since / .45);
+  }
+  text(ctx, 'SPEED ×' + rhythm.speedMultiplier(state.seconds).toFixed(1), mono(13), rhythmColors.muted, w / 2, 28, .7);
+  if (state.tick < rhythm.tickRate * 2) text(ctx, '블록이 선에 닿을 때 누르세요', '700 18px "Malgun Gothic", sans-serif', '#ffffff', w / 2, h * .42, .8);
+  const lifeWidth = w - side * 2;
+  ctx.fillStyle = rhythmColors.edge;
+  ctx.fillRect(side, h - 8, lifeWidth, 4);
+  ctx.fillStyle = state.life > 30 ? rhythmColors.lanes[0] : rhythmColors.judgements[3];
+  ctx.fillRect(side, h - 8, lifeWidth * state.life / 100, 4);
 }

@@ -1,8 +1,13 @@
 import { DurableObject } from 'cloudflare:workers';
-import { replayScore, tickRate } from '../public/solo-model.js';
+import { replayRhythm, tickRate as rhythmTickRate } from '../public/rhythm-model.js';
+import { replayScore, tickRate as dodgeTickRate } from '../public/solo-model.js';
 import { errorResponse, json, readBody, requireThat } from './http.js';
 
-export const isSoloGame = game => game === 'dodge';
+const soloGames = {
+  dodge: { replay: replayScore, tickRate: dodgeTickRate },
+  rhythm: { replay: replayRhythm, tickRate: rhythmTickRate },
+};
+export const isSoloGame = game => Object.hasOwn(soloGames, game);
 const maxAge = 48 * 60 * 60 * 1000;
 
 export async function startSolo(request, env, account) {
@@ -31,8 +36,9 @@ export class ScoreVerifier extends DurableObject {
       const run = await db.prepare('SELECT * FROM solo_runs WHERE id = ? AND account_id = ?').bind(id, account).first();
       requireThat(run && isSoloGame(run.game) && Date.now() - run.started_at < maxAge, '기록 보관 시간이 지났거나 게임을 찾을 수 없습니다.', 404);
       if (run.finished_score !== null) return json({ score: run.finished_score });
+      const { replay, tickRate } = soloGames[run.game];
       requireThat(Number.isInteger(tick) && tick * 1000 / tickRate <= Date.now() - run.started_at + 1000, '게임 시간이 올바르지 않습니다.');
-      const score = replayScore(run.seed, tick, events);
+      const score = replay(run.seed, tick, events);
       requireThat(score !== null, '플레이 기록을 확인할 수 없습니다.');
       const [, , result] = await db.batch([
         db.prepare('UPDATE solo_runs SET finished_score = ? WHERE id = ? AND finished_score IS NULL').bind(score, id),

@@ -6,7 +6,7 @@ const step = 1 / tickRate;
 const difficulty = 1.15;
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 
-function seededRandom(seed) {
+export function seededRandom(seed) {
   return () => {
     seed = (seed + 0x6D2B79F5) | 0;
     let value = Math.imul(seed ^ seed >>> 15, 1 | seed);

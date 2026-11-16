@@ -3,6 +3,7 @@ import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import WebSocket from 'ws';
+import { hitRhythm, makeRhythm, stepRhythm, tickRate as rhythmTickRate } from '../public/rhythm-model.js';
 import { makeSolo, stepSolo, tickRate } from '../public/solo-model.js';
 
 const url = new URL(process.env.DDONGVOID_TEST_URL ?? 'http://127.0.0.1:8787');
@@ -62,8 +63,8 @@ test('Cloudflare 로컬 실행기에서 가입, WebSocket 대전, 알람, 랭킹
   assert.equal((await request('/me', { cookie: login.cookie })).user, null);
   await request('/login', { data: { name: a.user.name, password: password + 'x' }, status: 401 });
   await request('/rankings?game=slap', { status: 401 });
-  await request('/rankings?game=rhythm', { cookie: a.cookie, status: 400 });
-  await request('/solo/start', { cookie: a.cookie, data: { game: 'rhythm' }, status: 400 });
+  await request('/rankings?game=tetris', { cookie: a.cookie, status: 400 });
+  await request('/solo/start', { cookie: a.cookie, data: { game: 'tetris' }, status: 400 });
   await request('/lobby/chat', { data: { text: '로그인하지 않은 메시지' }, status: 401 });
   const lobbySocket = connect('/lobby', b.cookie);
   context.after(() => lobbySocket.close());
@@ -193,7 +194,22 @@ test('Cloudflare 로컬 실행기에서 가입, WebSocket 대전, 알람, 랭킹
   const { id, seed } = await request('/solo/start', { cookie: a.cookie, data: { game: 'dodge' }, status: 201 });
   const solo = makeSolo(seed);
   while (!solo.over) stepSolo(solo);
-  await new Promise(resolve => setTimeout(resolve, solo.tick * 1000 / tickRate));
+  const beat = await request('/solo/start', { cookie: a.cookie, data: { game: 'rhythm' }, status: 201 });
+  const rhythm = makeRhythm(beat.seed);
+  const presses = [];
+  while (!rhythm.over) {
+    stepRhythm(rhythm);
+    if (rhythm.seconds > 4) continue;
+    for (const note of rhythm.notes.filter(item => item.time <= rhythm.seconds)) {
+      if (hitRhythm(rhythm, note.key) !== null) presses.push([rhythm.tick, note.key]);
+    }
+  }
+  assert.ok(rhythm.score > 0);
+  await new Promise(resolve => setTimeout(resolve, Math.max(solo.tick * 1000 / tickRate, rhythm.tick * 1000 / rhythmTickRate)));
+  await request('/solo/finish', { cookie: a.cookie, data: { id: beat.id, tick: rhythm.tick, events: [[presses[0][0], 4]] }, status: 400 });
+  assert.equal((await request('/solo/finish', { cookie: a.cookie, data: { id: beat.id, tick: rhythm.tick, events: presses } })).score, rhythm.score);
+  const beats = await request('/rankings?game=rhythm', { cookie: a.cookie });
+  assert.equal(beats.rows.find(row => row.name === a.user.name).score, rhythm.score);
   const finish = await request('/solo/finish', { cookie: a.cookie, data: { id, tick: solo.tick, events: [] } });
   assert.equal(finish.score, solo.score);
   const repeat = await request('/solo/finish', { cookie: a.cookie, data: { id, tick: solo.tick, events: [] } });

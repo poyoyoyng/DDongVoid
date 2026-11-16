@@ -213,11 +213,24 @@ function mountChat(path, title, token) {
   });
 }
 
+const soloIntro = {
+  dodge: {
+    art: '← →',
+    help: ['← → 키 또는 A D 키로 좌우 이동합니다. 생존 시간과 피한 똥 개수로 점수를 얻습니다.', '터치 버튼으로도 플레이할 수 있습니다.'],
+  },
+  rhythm: {
+    art: 'S D K L',
+    help: ['왼손은 S·D, 오른손은 K·L. 블록에 적힌 키를 블록이 판정선에 닿는 순간 누릅니다. 한글 입력 상태여도 됩니다.',
+      'PERFECT·GREAT·GOOD 판정과 콤보로 점수를 얻고, MISS 열 번이면 라이프가 바닥나 끝납니다. 갈수록 빨라져요.',
+      '터치 버튼으로도 플레이할 수 있습니다.'],
+  },
+};
+
 function showSoloStart(game) {
+  const intro = soloIntro[game];
   paint(heading(games[game].title, games[game].description) + `
-    <section class="panel solo-start"><div class="game-art art-dodge" aria-hidden="true"><span>← →</span></div>
-      <div><h2>조작 방법</h2><p>← → 키 또는 A D 키로 좌우 이동합니다. 생존 시간과 피한 똥 개수로 점수를 얻습니다.</p>
-      <p>터치 버튼으로도 플레이할 수 있습니다.</p>
+    <section class="panel solo-start"><div class="game-art art-${game}" aria-hidden="true"><span>${intro.art}</span></div>
+      <div><h2>조작 방법</h2>${intro.help.map(line => '<p>' + line + '</p>').join('')}
       <button class="button button-primary" type="button" data-start-solo>게임 시작</button></div>
     </section>`);
 }
@@ -229,8 +242,8 @@ async function beginSolo() {
     const run = await api('/solo/start', { game });
     if (token !== generation) return;
     solo?.stop();
-    paint(heading(games[game].title) + soloMarkup());
-    solo = playSolo(run, data => api('/solo/finish', data), () => {
+    paint(heading(games[game].title) + soloMarkup(game));
+    solo = playSolo(game, run, data => api('/solo/finish', data), () => {
       solo.stop();
       solo = null;
       showSoloStart(game);

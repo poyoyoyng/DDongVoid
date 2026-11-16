@@ -124,6 +124,15 @@ p { line-height: 1.65; }
 .fall-three { top: 54%; right: 12%; font-size: 24px; }
 .dodge-player { position: absolute; left: 37%; bottom: 17%; width: 31%; aspect-ratio: 1.12; border-radius: 38%; background: #c6ffb8; display: flex; justify-content: center; align-items: center; gap: 6px; border: 2px solid #382855; }
 .dodge-player i { width: 3px; height: 4px; border-radius: 2px; background: #382855; }
+.art-rhythm { background: #c4eedb; color: #17402f; }
+.art-lane { position: absolute; top: 9%; bottom: 9%; width: 31%; border-radius: 9px; background: #ffffff8c; border: 1px solid #17402f2e; }
+.art-lane.left { left: 15%; }
+.art-lane.right { right: 15%; }
+.art-lane .key { position: absolute; left: 11%; right: 11%; top: 10%; height: 20%; display: grid; place-items: center; border-radius: 6px; background: #35b67f; color: white; font: 900 clamp(12px, 1.7vw, 17px)/1 Consolas, monospace; font-style: normal; box-shadow: 0 2px #17402f55; }
+.art-lane.right .key { background: #ec9658; }
+.art-lane .key.mid { top: 38%; }
+.art-lane .key.low { top: 52%; }
+.art-hit { position: absolute; left: 11%; right: 11%; bottom: 21%; height: 3px; border-radius: 2px; background: #17402f; }
 .art-slap { background: #ffcea9; }
 .art-fighter { position: absolute; width: 56%; aspect-ratio: 1; top: 29%; background-size: 300% 200%; }
 .art-fighter.mint { left: -4%; }
@@ -402,6 +411,12 @@ canvas { display: block; width: 100%; aspect-ratio: 2; }
 .canvas-cover .final-score { font-size: clamp(18px, 4vw, 33px); font-weight: 800; }
 .touch-controls { display: flex; gap: 7px; margin-top: 10px; }
 .touch-controls button { touch-action: none; min-width: 55px; }
+.rhythm-solo .canvas-wrap, .rhythm-solo .touch-controls { max-width: 640px; margin-inline: auto; }
+.rhythm-solo canvas { aspect-ratio: auto; height: auto; }
+.rhythm-solo .touch-controls { display: grid; grid-template-columns: 1fr 1fr 10px 1fr 1fr; }
+.rhythm-solo .touch-controls button { min-height: 56px; font: 900 21px/1 Consolas, monospace; }
+.rhythm-solo .touch-controls button:nth-child(3) { grid-column: 4; }
+.rhythm-solo .muted { text-align: center; }
 
 dialog { width: min(480px, calc(100% - 32px)); max-height: calc(100% - 32px); border: 3px solid #fff; border-radius: 24px; box-shadow: 0 6px 0 var(--edge), 0 24px 60px #1f2b5c4d; padding: 23px; color: var(--ink); background: var(--panel); }
 dialog::backdrop { background: #22306a99; backdrop-filter: blur(3px); }

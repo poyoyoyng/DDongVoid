@@ -7,6 +7,7 @@ export const escape = value => String(value ?? '').replace(/[&<>"']/g, char => (
 
 const artwork = {
   dodge: '<span class="fall fall-one">●</span><span class="fall fall-two">●</span><span class="fall fall-three">●</span><span class="dodge-player"><i></i><i></i></span>',
+  rhythm: '<span class="art-lane left"><i class="key">S</i><i class="key low">D</i></span><span class="art-lane right"><i class="key">L</i><i class="key mid">K</i></span><span class="art-hit"></span>',
   slap: '<span class="art-fighter mint"></span><span class="art-fighter cat"></span><span class="art-spark">✦</span>',
   ciao: '<span class="ciao-die">?</span><span class="ciao-die other">✕</span><span class="ciao-bridge"></span>',
   onecard: '<span class="art-card first">♣</span><span class="art-card second">♥</span><span class="art-card third">♠</span>',
