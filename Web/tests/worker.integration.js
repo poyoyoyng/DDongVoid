@@ -29,9 +29,11 @@ function connect(path, cookie) {
 }
 
 function nextRevision(socket, timeout = 3000) {
-  return once(socket, 'message', { signal: AbortSignal.timeout(timeout) })
-    .then(([message]) => JSON.parse(message.toString()).revision);
+  return nextPacket(socket, timeout).then(packet => packet.revision);
 }
+
+const nextPacket = (socket, timeout = 3000) => once(socket, 'message', { signal: AbortSignal.timeout(timeout) })
+  .then(([message]) => JSON.parse(message.toString()));
 
 async function eventually(get, predicate) {
   for (let index = 0; index < 20; index++) {
@@ -62,11 +64,22 @@ test('Cloudflare 로컬 실행기에서 가입, WebSocket 대전, 알람, 랭킹
   await request('/rankings?game=slap', { status: 401 });
   await request('/rankings?game=rhythm', { cookie: a.cookie, status: 400 });
   await request('/solo/start', { cookie: a.cookie, data: { game: 'rhythm' }, status: 400 });
+  await request('/lobby/chat', { data: { text: '로그인하지 않은 메시지' }, status: 401 });
+  const lobbySocket = connect('/lobby', b.cookie);
+  context.after(() => lobbySocket.close());
+  assert.ok(Array.isArray((await nextPacket(lobbySocket)).chat));
+  await request('/lobby/chat', { cookie: a.cookie, data: { text: ' '.repeat(10) }, status: 400 });
+  const lobbyReceipt = nextPacket(lobbySocket);
+  const lobbyPost = await request('/lobby/chat', {
+    cookie: a.cookie, data: { text: prefix + ' 로비 채팅' }, status: 201,
+  });
+  assert.deepEqual((await lobbyReceipt).chatMessage, lobbyPost.chatMessage);
 
   async function setup(game) {
     let { room } = await request('/rooms', { cookie: a.cookie, data: { title: prefix + ' 방', game }, status: 201 });
     const path = '/rooms/' + room.id;
     await request(path, { cookie: b.cookie, status: 403 });
+    await request(path + '/chat', { cookie: b.cookie, data: { text: '참가 전 메시지' }, status: 403 });
     await eventually(() => request('/rooms?game=' + game, { cookie: a.cookie }),
       result => result.rooms.some(item => item.id === room.id));
     const act = async (member, input) => {
@@ -112,6 +125,24 @@ test('Cloudflare 로컬 실행기에서 가입, WebSocket 대전, 알람, 랭킹
     result => result.rows.some(row => row.name === a.user.name && row.wins === 1));
 
   const ciao = await setup('ciao');
+  const unexpected = [];
+  for (const socket of [lobbySocket, slap.socket]) {
+    socket.on('message', data => {
+      const { chatMessage } = JSON.parse(data.toString());
+      if (chatMessage) unexpected.push(chatMessage);
+    });
+  }
+  const roomReceipt = nextPacket(ciao.socket);
+  const roomPost = await request(ciao.path + '/chat', {
+    cookie: a.cookie, data: { text: prefix + ' 차오차오 채팅' }, status: 201,
+  });
+  assert.deepEqual((await roomReceipt).chatMessage, roomPost.chatMessage);
+  const reconnect = connect(ciao.path, a.cookie);
+  context.after(() => reconnect.close());
+  const { chat: history } = await nextPacket(reconnect);
+  assert.deepEqual(history, [roomPost.chatMessage]);
+  assert.deepEqual(unexpected, []);
+
   const { room: onecard } = await request('/rooms', {
     cookie: a.cookie, data: { title: prefix + ' 원카드', game: 'onecard' }, status: 201,
   });
@@ -149,9 +180,10 @@ test('Cloudflare 로컬 실행기에서 가입, WebSocket 대전, 알람, 랭킹
   const ranks = await request('/rankings?game=dodge', { cookie: a.cookie });
   assert.equal(ranks.rows.find(row => row.name === a.user.name).score, solo.score);
 
-  for (const socket of [slap.socket, ciao.socket]) {
+  for (const socket of [slap.socket, ciao.socket, reconnect, lobbySocket]) {
     const closed = once(socket, 'close', { signal: AbortSignal.timeout(5000) });
     socket.close();
     await closed;
   }
+  assert.deepEqual(unexpected, []);
 });

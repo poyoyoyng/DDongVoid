@@ -1,4 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
+import { chatHistory, closeLiveSocket, openLiveSocket, postChat } from './chat.js';
 import { applyAction, createRoom, expireRoom, roomView } from './games.js';
 import { errorResponse, json, readBody, requireThat } from './http.js';
 
@@ -41,6 +42,7 @@ export class GameRoom extends DurableObject {
       id: room.id, game: room.game, title: room.title, status: room.status,
       createdAt: room.createdAt, revision: room.revision, players: [],
     } : room);
+    if (room.status === 'deleted') this.ctx.storage.kv.delete('chat');
     if (hasPending) this.ctx.storage.kv.put('pending', pending);
     await this.schedule(room, hasPending);
     this.notify(room);
@@ -131,14 +133,14 @@ export class GameRoom extends DurableObject {
           ? roomView(next, account.id) : null });
       }
       requireThat(room.players.some(player => player.id === account.id), '이 방의 참가자가 아닙니다.', 403);
+      if (path === '/chat') {
+        const members = new Set(room.players.map(player => player.id));
+        const sockets = this.ctx.getWebSockets().filter(socket => members.has(socket.deserializeAttachment()));
+        return postChat(this.ctx, account, body, sockets);
+      }
       if (path === '/socket') {
-        requireThat(request.headers.get('Upgrade')?.toLowerCase() === 'websocket', 'WebSocket 연결이 필요합니다.', 426);
         requireThat(this.ctx.getWebSockets().length < 32, '열려 있는 대전방 연결이 너무 많습니다.', 429);
-        const { 0: client, 1: server } = new WebSocketPair();
-        server.serializeAttachment(account.id);
-        this.ctx.acceptWebSocket(server);
-        server.send(JSON.stringify({ revision: room.revision }));
-        return new Response(null, { status: 101, webSocket: client });
+        return openLiveSocket(this.ctx, request, account.id, { revision: room.revision, chat: chatHistory(this.ctx) });
       }
       return json({ room: roomView(room, account.id) });
     } catch (error) {
@@ -148,9 +150,5 @@ export class GameRoom extends DurableObject {
 
   webSocketMessage(socket) { socket.close(1008, 'Read-only connection'); }
 
-  webSocketClose(socket, code, reason) {
-    // Reserved codes can be reported by the runtime but cannot be sent in a Close frame.
-    if ([1004, 1005, 1006, 1015].includes(code)) socket.close(1000);
-    else socket.close(code, reason);
-  }
+  webSocketClose(socket, code, reason) { closeLiveSocket(socket, code, reason); }
 }

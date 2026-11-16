@@ -60,17 +60,20 @@ export function lobby(rooms, accountId, selectedGame) {
       <div class="section-head"><h2>방 목록</h2><button type="button" class="button button-small button-quiet" data-refresh>새로고침</button></div>
       <div id="lobby-rooms">${roomList(rooms, accountId)}</div>
     </section>
-    <section class="panel">
-      <h2>방 만들기</h2>
-      <form id="new-room" class="stack">
-        <label>게임<select name="game" required>
-          <option value="" disabled ${selectedGame === undefined ? 'selected' : ''}>게임을 선택하세요</option>
-          ${options}
-        </select></label>
-        <label>방 제목<input name="title" maxlength="40" required></label>
-        <button class="button button-primary" type="submit">방 만들기</button>
-      </form>
-    </section>
+    <aside class="lobby-sidebar">
+      <section class="panel">
+        <h2>방 만들기</h2>
+        <form id="new-room" class="stack">
+          <label>게임<select name="game" required>
+            <option value="" disabled ${selectedGame === undefined ? 'selected' : ''}>게임을 선택하세요</option>
+            ${options}
+          </select></label>
+          <label>방 제목<input name="title" maxlength="40" required></label>
+          <button class="button button-primary" type="submit">방 만들기</button>
+        </form>
+      </section>
+      <div id="chat-host"></div>
+    </aside>
   </div>`;
 }
 
@@ -123,7 +126,10 @@ export function roomPage(room, user, ui) {
   const status = waiting ? '대기 중' : playing ? '게임 진행 중' : '경기 종료';
   return heading(room.title, games[room.game].title + ' · ' + status, '#lobby', '공용 대기방') + `
     <div class="room-toolbar"><span id="room-connection" class="connection">${ui.connected ? '실시간 연결됨' : '연결 중…'}</span>
-      <button class="button button-small button-quiet" data-copy-room>초대 링크 복사</button></div>
+      <div class="room-toolbar-actions">
+        <button class="button button-small button-quiet" data-focus-chat>채팅</button>
+        <button class="button button-small button-quiet" data-copy-room>초대 링크 복사</button>
+      </div></div>
     ${waiting ? `<section class="panel"><h2>참가자 ${room.players.length}/${games[room.game].max}</h2>
       ${players(room, user)}<p class="muted">2명 이상 모이고 모두 준비하면 시작합니다.</p></section>` :
       `<section class="panel game-panel">${!playing ? `<div class="game-result">

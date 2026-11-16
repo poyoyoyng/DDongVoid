@@ -1,4 +1,5 @@
 import { cardRank, games } from './rules.js';
+import { connectSocket, createChat } from './chat.js';
 import { escape, heading, home, lobby, rankings, roomList, roomPage, signInPrompt } from './views.js';
 import { playSolo, soloMarkup } from './solo.js';
 
@@ -14,6 +15,7 @@ let accountMode = 'login';
 let toastTimer;
 let room = null;
 let live = null;
+let chat = null;
 let solo = null;
 let ui = null;
 
@@ -137,6 +139,7 @@ async function navigate() {
     live.stop();
     live = null;
   }
+  chat = null;
   solo?.stop();
   solo = null;
   room = null;
@@ -156,7 +159,13 @@ async function navigate() {
       const data = await api('/rankings?game=' + key);
       if (token === generation) paint(rankings(key, data.rows));
     }
-    if (section === 'lobby') await refreshLobby(token);
+    if (section === 'lobby') {
+      await refreshLobby(token);
+      if (token === generation) {
+        chat = mountChat('/lobby', '로비 채팅', token);
+        live = connectSocket('/lobby', { status: chat.setConnected, receive: chat.receive });
+      }
+    }
     if (section === 'room') {
       const data = await api('/rooms/' + key);
       if (token !== generation) return;
@@ -181,6 +190,17 @@ async function refreshLobby(token = generation) {
   const list = app.querySelector('#lobby-rooms');
   if (list) list.innerHTML = roomList(rooms, user.id);
   else paint(lobby(rooms, user.id, page.key));
+}
+
+function mountChat(path, title, token) {
+  return createChat(app.querySelector('#chat-host'), title, user.id, async text => {
+    try {
+      return await api(path + '/chat', { text });
+    } catch (error) {
+      if (error.status === 401 && token === generation) signedOut();
+      throw error;
+    }
+  });
 }
 
 function showSoloStart(game) {
@@ -219,7 +239,13 @@ function renderRoom() {
   if (!room || !user) return;
   const previous = document.activeElement;
   const hold = previous?.dataset.hold;
-  paint(roomPage(room, user.id, ui));
+  let content = app.querySelector('#room-content');
+  if (!content) {
+    paint('<div class="room-layout"><div id="room-content"></div><aside id="chat-host"></aside></div>');
+    content = app.querySelector('#room-content');
+    chat = mountChat('/rooms/' + room.id, '방 채팅', generation);
+  }
+  content.innerHTML = roomPage(room, user.id, ui);
   updateDeadline();
   if (hold !== undefined) app.querySelector('[data-hold="' + hold + '"]')?.focus();
 }
@@ -253,9 +279,6 @@ function updateDeadline() {
 }
 
 function connectRoom(id, token) {
-  let socket;
-  let retry;
-  let delay = 650;
   let requestedRevision = 0;
   let loading = false;
   let stopped = false;
@@ -271,8 +294,10 @@ function connectRoom(id, token) {
 
   function status(connected) {
     ui.connected = connected;
+    chat.setConnected(connected);
     const label = document.querySelector('#room-connection');
     if (label) label.textContent = connected ? '실시간 연결됨' : '재연결 중…';
+    void refresh();
   }
 
   async function refresh(revision = 0) {
@@ -298,40 +323,21 @@ function connectRoom(id, token) {
     }
   }
 
-  function open() {
-    if (!active()) return;
-    const target = new URL('/api' + path + '/socket', location.origin);
-    target.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    socket = new WebSocket(target);
-    socket.addEventListener('open', () => {
-      if (!active()) return;
-      delay = 650;
-      status(true);
-      void refresh();
-    });
-    socket.addEventListener('message', event => {
-      if (!active()) return;
-      const { revision } = JSON.parse(event.data);
+  const socket = connectSocket(path, {
+    status,
+    receive(packet) {
+      chat.receive(packet);
+      const { revision } = packet;
       if (Number.isInteger(revision) && revision > room.revision) void refresh(revision);
-    });
-    socket.addEventListener('close', () => {
-      if (!active()) return;
-      status(false);
-      void refresh();
-      retry = setTimeout(open, delay);
-      delay = Math.min(delay * 2, 12_000);
-    });
-  }
-
-  open();
+    },
+  });
   return {
     refresh,
     stop() {
       stopped = true;
-      clearTimeout(retry);
       clearInterval(clock);
       clearInterval(fallback);
-      if (socket?.readyState < WebSocket.CLOSING) socket.close();
+      socket.stop();
     },
   };
 }
@@ -359,6 +365,7 @@ app.addEventListener('click', async event => {
   if (!button) return;
   if (button.hasAttribute('data-account')) return showAccount();
   if (button.hasAttribute('data-reload')) return navigate();
+  if (button.hasAttribute('data-focus-chat')) return app.querySelector('[data-chat-input]')?.focus();
   if (button.hasAttribute('data-refresh')) {
     try { await refreshLobby(); } catch (error) { message(error.message); }
     return;

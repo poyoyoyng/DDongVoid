@@ -120,6 +120,21 @@ p { line-height: 1.65; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: clamp(16px, 3vw, 29px); }
 .panel h2 { font-size: clamp(20px, 3vw, 27px); }
 .lobby-grid { display: grid; align-items: start; grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr); gap: 16px; }
+.lobby-sidebar { display: grid; gap: 16px; min-width: 0; }
+.room-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 320px); align-items: start; gap: 16px; }
+.room-toolbar-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.chat-panel .section-head { margin-bottom: 12px; }
+.chat-panel [data-chat-status] { font-size: 12px; white-space: nowrap; }
+.chat-log { height: 230px; overflow: auto; overscroll-behavior: contain; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.chat-message { border-radius: 8px; background: var(--panel); padding: 7px 9px; margin-bottom: 7px; }
+.chat-message.mine { background: #f0ecd8; }
+.chat-message > div { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 10px; }
+.chat-message strong { font-size: 13px; overflow-wrap: anywhere; }
+.chat-message time { font-size: 11px; color: var(--muted); }
+.chat-message p { overflow-wrap: anywhere; white-space: pre-wrap; font-size: 14px; }
+.chat-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 10px; }
+.chat-form .button { white-space: nowrap; padding-inline: 10px; }
+.chat-error { margin-top: 6px; color: #92322d; font-size: 13px; }
 .stack { display: grid; gap: 14px; margin-top: 17px; }
 label { display: grid; gap: 6px; font-size: 14px; font-weight: 700; }
 input, select { display: block; width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 11px 12px; background: #fbfbf7; color: var(--ink); }
@@ -224,6 +239,7 @@ dialog .form-error { color: #a53745; margin: 0; }
 @media (max-width: 920px) {
   .shell { width: calc(100% - 48px); }
   .game-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .room-layout { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 610px) {
   .shell { width: calc(100% - 28px); }

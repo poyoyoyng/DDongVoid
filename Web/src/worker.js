@@ -5,8 +5,9 @@ import { isSoloGame, startSolo } from './scores.js';
 export { GameRoom } from './room.js';
 export { ScoreVerifier } from './scores.js';
 export { AccountPasswords } from './passwords.js';
+export { LobbyChat } from './chat.js';
 
-const roomPath = /^\/api\/rooms\/([0-9a-f-]{36})(?:\/(action|socket))?$/;
+const roomPath = /^\/api\/rooms\/([0-9a-f-]{36})(?:\/(action|socket|chat))?$/;
 
 async function rankings(db, game) {
   requireThat(isRoomGame(game) || isSoloGame(game), '게임을 선택해 주세요.');
@@ -25,13 +26,19 @@ async function rankings(db, game) {
   return json({ rows: (await db.prepare(sql).bind(game).all()).results });
 }
 
-function roomRequest(env, id, path, account, request, body) {
+function channelRequest(stub, path, account, request, body) {
   const headers = new Headers({ 'x-player': account.id, 'x-player-name': encodeURIComponent(account.name) });
   if (path === 'socket') headers.set('Upgrade', request.headers.get('Upgrade') ?? 'none');
   if (body) headers.set('Content-Type', 'application/json');
-  return env.ROOMS.getByName(id).fetch('https://room.internal/' + path, {
+  return stub.fetch('https://channel.internal/' + path, {
     method: body ? 'POST' : 'GET', headers, body: body ? JSON.stringify(body) : undefined,
   });
+}
+
+async function sendChat(request, env, account, stub) {
+  const { success } = await env.CHAT_LIMIT.limit({ key: account.id });
+  requireThat(success, '메시지를 너무 빠르게 보냈습니다. 잠시 뒤 다시 보내 주세요.', 429);
+  return channelRequest(stub, 'chat', account, request, await readBody(request));
 }
 
 async function listRooms(db, game, account) {
@@ -59,6 +66,12 @@ async function api(request, env, url) {
   if (method === 'GET' && path === '/api/me') return json({ user: account });
   requireThat(account, '로그인이 필요합니다.', 401);
   if (method === 'GET' && path === '/api/rankings') return rankings(env.DB, url.searchParams.get('game'));
+  if (path === '/api/lobby/socket' && method === 'GET') {
+    return channelRequest(env.LOBBY_CHAT.getByName('lobby'), 'socket', account, request);
+  }
+  if (path === '/api/lobby/chat' && method === 'POST') {
+    return sendChat(request, env, account, env.LOBBY_CHAT.getByName('lobby'));
+  }
   if (path === '/api/rooms') {
     if (method === 'GET') return listRooms(env.DB, url.searchParams.get('game'), account);
     if (method === 'POST') {
@@ -68,15 +81,17 @@ async function api(request, env, url) {
       const { success } = await env.AUTH_LIMIT.limit({ key: 'create:' + account.id });
       requireThat(success, '잠시 뒤에 새 방을 만들어 주세요.', 429);
       const id = crypto.randomUUID();
-      return roomRequest(env, id, 'create', account, request, { id, game, title: title.trim() });
+      return channelRequest(env.ROOMS.getByName(id), 'create', account, request, { id, game, title: title.trim() });
     }
   }
   const room = path.match(roomPath);
   if (room) {
     const [, id, operation] = room;
-    if (!operation && method === 'GET') return roomRequest(env, id, 'view', account, request);
-    if (operation === 'socket' && method === 'GET') return roomRequest(env, id, operation, account, request);
-    if (operation === 'action' && method === 'POST') return roomRequest(env, id, operation, account, request, await readBody(request));
+    const stub = env.ROOMS.getByName(id);
+    if (!operation && method === 'GET') return channelRequest(stub, 'view', account, request);
+    if (operation === 'socket' && method === 'GET') return channelRequest(stub, operation, account, request);
+    if (operation === 'action' && method === 'POST') return channelRequest(stub, operation, account, request, await readBody(request));
+    if (operation === 'chat' && method === 'POST') return sendChat(request, env, account, stub);
   }
   if (method === 'POST' && path === '/api/solo/start') return startSolo(request, env, account);
   if (method === 'POST' && path === '/api/solo/finish') {
