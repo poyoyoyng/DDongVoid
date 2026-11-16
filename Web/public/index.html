@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#14172b">
+  <meta name="description" content="포요용의 미니게임천국에서 싱글 게임과 친구 대전을 즐기고 게임별 랭킹을 확인하세요.">
+  <title>포요용의 미니게임천국</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" type="module"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <a class="brand" href="#home"><span class="brand-mark" aria-hidden="true">✦</span> 포요용의 미니게임천국</a>
+      <nav aria-label="주 메뉴">
+        <a href="#home" id="nav-games">게임</a>
+        <a href="#rankings/dodge" id="nav-rankings">랭킹</a>
+      </nav>
+      <button class="button button-small button-outline" id="account-button" type="button">로그인</button>
+    </div>
+  </header>
+  <main class="shell main" id="app" aria-busy="true">
+    <p class="loading" role="status">게임을 불러오는 중…</p>
+  </main>
+  <footer class="shell footer"><a class="brand" href="#home">포요용의 미니게임천국</a><span>브라우저로 즐기는 미니게임 모음</span></footer>
+  <dialog id="account-dialog" aria-labelledby="account-title"></dialog>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <noscript>이 게임을 실행하려면 브라우저에서 JavaScript를 켜 주세요.</noscript>
+</body>
+</html>

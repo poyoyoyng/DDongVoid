@@ -1,0 +1,39 @@
+# 포요용의 미니게임천국
+
+브라우저에서 똥 피하기, 맞짱, 차오차오, 원카드, 야추를 플레이할 수 있습니다. Windows 앱은 저장소 루트의 `실행.cmd`로 계속 실행합니다. 웹은 자체 계정과 랭킹을 사용하고 Windows 앱은 기존 JSON 저장 폴더를 사용합니다.
+
+## 로컬 실행
+
+저장소 루트에서 Node.js 22 이상과 npm으로 실행합니다.
+
+```powershell
+cd Web
+npm ci
+npm run dev
+```
+
+`http://localhost:8787`에 접속해 로그인 창에서 **회원가입**을 선택하고 닉네임과 4자 이상의 비밀번호를 입력합니다. 예전에 발급받은 접속 키는 로그인 화면의 비밀번호 칸에서 계속 사용할 수 있습니다. 로컬 D1과 대전방 상태는 `Web/.wrangler`에 저장됩니다.
+
+`npm run check`로 게임 규칙을 검증합니다. 개발 서버가 실행 중이면 별도 터미널에서 `npm run check:worker`로 가입, 대전 WebSocket, 차오차오 20초 자동 PASS, 랭킹 저장을 검증할 수 있습니다. 이 통합 테스트는 실행 중인 로컬 DB에 테스트 계정과 경기를 추가합니다.
+
+## Cloudflare 배포
+
+`Web`에서 실행합니다. 첫 배포에만 Wrangler 계정 연결과 D1 생성이 필요합니다. `--location=apac`은 D1 데이터베이스의 아시아 태평양 배치 힌트입니다.
+
+```powershell
+npm exec -- wrangler login
+npm exec -- wrangler d1 create ddongvoid --location=apac --update-config=false
+npm run deploy
+```
+
+이후 업데이트에는 `npm run deploy`를 사용합니다. 이 명령은 정적 자산을 준비하고 D1 마이그레이션을 적용한 뒤 Worker를 배포합니다.
+
+배포 출력의 `workers.dev` 주소에서 접속할 수 있습니다. 커스텀 도메인을 쓸 경우 Worker의 **설정 → 도메인 및 경로**에서 Cloudflare에 등록된 도메인을 연결합니다.
+
+GitHub 자동 배포에는 같은 Worker의 Workers Builds를 사용합니다. 운영 브랜치는 `codex/web-production`, 루트 디렉터리는 `Web`, 빌드 명령은 `npm run check`, 배포 명령은 `npm run deploy`로 설정합니다. 빌드 토큰에는 Workers와 D1 편집 권한을 부여합니다. 운영 데이터베이스는 운영 브랜치에서만 마이그레이션합니다.
+
+## 웹 게임 상태
+
+- Workers가 정적 화면, 로그인과 게임 API를 제공합니다.
+- SQLite 기반 Durable Object가 방마다 게임 상태를 보존하고 WebSocket으로 변경을 알립니다. 이후 참가자가 조회하는 상태에는 자신이 볼 수 있는 정보만 포함됩니다. 브라우저를 닫았다 다시 접속해도 대전을 이어갈 수 있습니다.
+- D1이 계정과 세션, 방 목록, 랭킹을 저장합니다. 완료한 싱글 게임은 서버가 입력 기록을 재생해 점수를 계산합니다. 웹의 싱글 랭킹 한 판은 최대 30분입니다.

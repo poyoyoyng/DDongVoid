@@ -22,3 +22,8 @@ tests/obj-render/
 **/ddongvoid-results.json
 **/.ddongvoid-yacht.lock
 **/.ddongvoid-results.lock
+Web/node_modules/
+Web/.wrangler/
+Web/.dev.vars*
+Web/.env*
+Web/public/assets/slap/

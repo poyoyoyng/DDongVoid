@@ -1,0 +1,16 @@
+{
+  "name": "ddongvoid-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare:assets": "node prepare-assets.js",
+    "dev": "npm run prepare:assets && wrangler d1 migrations apply DB --local && wrangler dev",
+    "check": "node --test",
+    "check:worker": "node --test tests/worker.integration.js",
+    "deploy": "npm run prepare:assets && wrangler d1 migrations apply DB --remote && wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.105.0",
+    "ws": "^8.21.0"
+  }
+}
