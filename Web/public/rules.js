@@ -6,6 +6,10 @@ export const games = {
   yacht: { title: '야추', description: '주사위 다섯 개로 열두 칸의 점수판을 채우세요.', mode: '2인 대전', max: 2 },
 };
 
+export const canTakeSeat = room => room.status === 'playing'
+  ? room.players.some(player => player.vacant)
+  : room.status !== 'deleted' && room.players.length < games[room.game].max;
+
 export const suits = ['♠', '♥', '♦', '♣'];
 export const suitNames = ['스페이드', '하트', '다이아몬드', '클로버'];
 export const zones = ['상단', '중단', '하단'];

@@ -2,13 +2,15 @@ import { DurableObject } from 'cloudflare:workers';
 import { chatHistory, closeLiveSocket, openLiveSocket, postChat } from './chat.js';
 import { applyAction, createRoom, expireRoom, roomView } from './games.js';
 import { errorResponse, json, readBody, requireThat } from './http.js';
+import { isRoomMember } from './room-members.js';
 
 const retryDelay = 5000;
 
 function projection(room) {
   return JSON.stringify({
     status: room.status,
-    players: room.players.map(({ id, name }) => ({ id, name })),
+    players: room.players.map(({ id, name, vacant }) => ({ id, name, ...(vacant && { vacant }) })),
+    spectators: room.spectators ?? [],
   });
 }
 
@@ -29,7 +31,7 @@ export class GameRoom extends DurableObject {
       id: room.id, game: room.game, title: room.title, revision: room.revision,
       createdAt: room.createdAt, ...JSON.parse(summary),
     };
-    if (room.status === 'finished' && previous?.status === 'playing' && room.winners.length) {
+    if (room.status === 'finished' && previous?.status === 'playing' && room.winners.length && !room.substituted) {
       pending.results.push({
         id: room.id, game: room.game, match: room.match,
         outcomes: room.players.map(({ id }) => ({
@@ -45,7 +47,7 @@ export class GameRoom extends DurableObject {
     if (room.status === 'deleted') this.ctx.storage.kv.delete('chat');
     if (hasPending) this.ctx.storage.kv.put('pending', pending);
     await this.schedule(room, hasPending);
-    this.notify(room);
+    this.notify(this.room);
     if (hasPending) this.ctx.waitUntil(this.flush().catch(error => console.error('방 목록과 결과 동기화 재시도', error)));
   }
 
@@ -69,6 +71,11 @@ export class GameRoom extends DurableObject {
         WHERE excluded.revision > rooms.revision
       `).bind(summary.id, summary.game, summary.title, summary.status,
         JSON.stringify(summary.players), summary.revision, summary.createdAt));
+      statements.push(db.prepare(`
+        INSERT INTO room_spectators (room_id, spectators, revision) VALUES (?, ?, ?)
+        ON CONFLICT(room_id) DO UPDATE SET spectators = excluded.spectators, revision = excluded.revision
+        WHERE excluded.revision > room_spectators.revision
+      `).bind(summary.id, JSON.stringify(summary.spectators ?? []), summary.revision));
     }
     for (const result of pending.results.slice(0, 15)) {
       for (const player of result.outcomes) {
@@ -90,7 +97,7 @@ export class GameRoom extends DurableObject {
   notify(room) {
     for (const socket of this.ctx.getWebSockets()) {
       try {
-        if (room.status === 'deleted' || !room.players.some(player => player.id === socket.deserializeAttachment())) {
+        if (room.status === 'deleted' || !isRoomMember(room, socket.deserializeAttachment())) {
           socket.close(1000, 'Room closed');
         } else socket.send(JSON.stringify({ revision: room.revision }));
       } catch { /* A disconnected client reads the latest room when it reconnects. */ }
@@ -129,13 +136,12 @@ export class GameRoom extends DurableObject {
       if (path === '/action') {
         const next = structuredClone(room);
         if (applyAction(next, account, body, now)) await this.store(next, room);
-        return json({ room: next.status !== 'deleted' && next.players.some(player => player.id === account.id)
+        return json({ room: next.status !== 'deleted' && isRoomMember(next, account.id)
           ? roomView(next, account.id) : null });
       }
-      requireThat(room.players.some(player => player.id === account.id), '이 방의 참가자가 아닙니다.', 403);
+      requireThat(isRoomMember(room, account.id), '이 방에 입장하지 않았습니다.', 403);
       if (path === '/chat') {
-        const members = new Set(room.players.map(player => player.id));
-        const sockets = this.ctx.getWebSockets().filter(socket => members.has(socket.deserializeAttachment()));
+        const sockets = this.ctx.getWebSockets().filter(socket => isRoomMember(room, socket.deserializeAttachment()));
         return postChat(this.ctx, account, body, sockets);
       }
       if (path === '/socket') {

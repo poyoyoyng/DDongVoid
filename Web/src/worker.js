@@ -44,12 +44,17 @@ async function sendChat(request, env, account, stub) {
 async function listRooms(db, game, account) {
   requireThat(game === null || isRoomGame(game), '대전 게임을 선택해 주세요.');
   const { results } = await db.prepare(`
-    SELECT id, game, title, status, players FROM rooms
-    WHERE (? IS NULL OR game = ?) AND status <> 'deleted'
-      AND (status = 'waiting' OR EXISTS (SELECT 1 FROM json_each(players) WHERE json_extract(value, '$.id') = ?))
+    SELECT id, game, title, status, players, COALESCE(spectators, '[]') AS spectators
+    FROM rooms LEFT JOIN room_spectators ON rooms.id = room_spectators.room_id
+    WHERE (?1 IS NULL OR game = ?1) AND status <> 'deleted'
+      AND (status IN ('waiting', 'playing')
+        OR EXISTS (SELECT 1 FROM json_each(players) WHERE json_extract(value, '$.id') = ?2)
+        OR EXISTS (SELECT 1 FROM json_each(spectators) WHERE json_extract(value, '$.id') = ?2))
     ORDER BY status = 'waiting' DESC, created_at DESC LIMIT 100
-  `).bind(game, game, account.id).all();
-  return json({ rooms: results.map(room => ({ ...room, players: JSON.parse(room.players) })) });
+  `).bind(game, account.id).all();
+  return json({ rooms: results.map(room => ({
+    ...room, players: JSON.parse(room.players), spectators: JSON.parse(room.spectators),
+  })) });
 }
 
 async function api(request, env, url) {

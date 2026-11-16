@@ -141,6 +141,12 @@ input, select { display: block; width: 100%; border: 1px solid var(--line); bord
 input::placeholder { color: #737383; }
 .room-list, .participants { margin: 0; padding: 0; list-style: none; }
 .room-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 13px; border-top: 1px solid var(--line); }
+.room-list-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; flex-shrink: 0; }
+.room-roster { margin-bottom: 12px; }
+.room-roster-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.room-roster .participants { flex-direction: column; }
+.room-roster .participants li { flex-wrap: wrap; overflow-wrap: anywhere; }
+.seat-pause { padding: 8px 10px; border-radius: 8px; background: var(--paper); font-size: 14px; }
 .room-list strong { overflow-wrap: anywhere; }
 .room-list p { font-size: 13px; color: var(--muted); margin-top: 4px; overflow-wrap: anywhere; }
 .empty, .loading { color: var(--muted); text-align: center; padding: 25px 10px; }
@@ -202,12 +208,52 @@ meter.gauge::-webkit-meter-optimum-value { background: #705bd5; }
 button.card-face:hover:not(:disabled) { border-color: #6753ba; transform: translateY(-2px); }
 .hand { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 9px; }
 .call-bubble { position: absolute; z-index: 1; top: 0; left: 45%; transform: translate(-50%, -32%); border: 2px solid var(--ink); border-radius: 20px; background: var(--accent); padding: 6px 12px; font-weight: 850; white-space: nowrap; }
-.dice-rack { display: flex; flex-wrap: wrap; gap: 7px; }
-.die { min-width: 48px; min-height: 48px; border: 1px solid var(--line); border-radius: 9px; background: #f7f6ff; color: var(--ink); font: 37px/1 "Segoe UI Symbol", sans-serif; }
-.die[aria-pressed="true"] { background: #cbf2d9; border-color: #4e9b6b; }
-.score-sheet { margin-top: 17px; }
-.score-sheet .total { color: #48406f; font-weight: 800; }
-.score-sheet td { min-width: 54px; }
+.yacht-panel { background: #16281f; border-color: #345747; color: #f5fbf6; }
+.yacht-panel .turn-head p { color: #b8d1c2; }
+.yacht-panel .game-result { color: var(--ink); }
+.yacht-versus { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; }
+.yacht-vs { color: #b8d1c2; font-size: 12px; font-weight: 800; }
+.yacht-player { padding: 9px 11px; border: 1px solid #395447; border-radius: 9px; background: #0f1a16; min-width: 0; }
+.yacht-player.seat-0 { --yacht-player-color: #a7f3ce; }
+.yacht-player.seat-1 { --yacht-player-color: #f4c59d; }
+.yacht-player.current { border-color: var(--yacht-player-color); background: #31583f; }
+.yacht-player strong { display: block; color: var(--yacht-player-color); overflow-wrap: anywhere; }
+.yacht-player span { display: block; font-size: 23px; font-weight: 750; }
+.yacht-player .waiting-score { font-size: 13px; color: #b8d1c2; }
+.yacht-tray { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; margin-top: 12px; padding: 12px 10px 8px; border-radius: 10px; background: #0f1a16; }
+.dice-rack { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.die { display: grid; justify-items: center; gap: 3px; padding: 0; border: 0; background: transparent; color: #abc5b6; min-width: 0; }
+.die:disabled { opacity: 1; cursor: default; }
+.die-face { display: grid; place-items: center; width: 100%; max-width: 76px; aspect-ratio: 1; border: 2px solid #c9c2b0; border-radius: 20%; background: #fbf7ec; box-shadow: 0 3px 0 #797465; }
+.die-face:has(.die-unknown) { background: #22302a; border-color: #456052; box-shadow: 0 3px 0 #17231d; }
+.die-unknown { font-size: clamp(16px, 4vw, 32px); font-weight: 800; }
+.die[aria-pressed="true"] .die-face { border-color: #a7f3ce; outline: 1px solid #a7f3ce; transform: translateY(-3px); box-shadow: 0 3px 0 #4f9073; }
+.die-tag { min-height: 15px; color: #a7f3ce; font-size: 11px; font-weight: 800; }
+.yacht-pips { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); width: 76%; height: 76%; place-items: center; }
+.yacht-pips i { width: 72%; aspect-ratio: 1; border-radius: 50%; }
+.yacht-pips .pip { background: #1e2b25; }
+.yacht-pips.single-pip .pip { background: #c0392b; }
+.tumbling { animation: yacht-tumble 440ms ease-out; }
+@keyframes yacht-tumble {
+  0%, 100% { transform: none; }
+  18% { transform: translateY(-7px) rotate(-19deg); }
+  39% { transform: translateY(1px) rotate(16deg); }
+  61% { transform: translateY(-4px) rotate(-12deg); }
+  79% { transform: rotate(7deg); }
+}
+.yacht-roll { display: grid; gap: 4px; justify-items: center; white-space: nowrap; font-size: 12px; color: #b8d1c2; }
+.yacht-roll .button { padding-inline: 10px; }
+.yacht-last { margin: 10px 0 0; color: #f4c59d; font-size: 14px; }
+.yacht-sheet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 10px; margin-top: 12px; }
+.score-sheet { table-layout: fixed; border-radius: 8px; overflow: hidden; background: #0f1a16; }
+.score-sheet td, .score-sheet th { padding: 6px; border-color: #2d4337; font-size: 13px; text-align: center; }
+.score-sheet tr > :first-child { text-align: left; width: 46%; }
+.score-sheet thead { color: #b8d1c2; }
+.score-sheet thead th:nth-child(2) { color: #a7f3ce; }
+.score-sheet thead th:nth-child(3) { color: #f4c59d; }
+.score-sheet tbody tr:nth-child(odd) { background: #17271f; }
+.score-sheet .total { color: #a7f3ce; font-weight: 800; }
+.score-sheet .button { min-height: 26px; padding: 3px 5px; color: var(--ink); }
 
 .solo-start { display: grid; grid-template-columns: minmax(110px, 24%) 1fr; align-items: center; gap: clamp(15px, 4vw, 32px); }
 .solo-start .game-art { font-size: clamp(21px, 4vw, 43px); font-weight: 900; padding: 12px; text-align: center; min-height: 190px; }
@@ -276,6 +322,10 @@ dialog .form-error { color: #a53745; margin: 0; }
   .topbar-inner { grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; padding-top: 9px; }
   .topbar nav { grid-column: 1 / -1; grid-row: 2; }
   .topbar nav a { padding-block: 10px; }
+  .room-roster-group { grid-template-columns: minmax(0, 1fr); }
+  .yacht-sheet { grid-template-columns: minmax(0, 1fr); }
+  .yacht-tray { grid-template-columns: minmax(0, 1fr); }
+  .yacht-roll { display: flex; justify-content: center; align-items: center; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }

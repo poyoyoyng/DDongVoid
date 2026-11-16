@@ -49,12 +49,12 @@ test('Cloudflare 로컬 실행기에서 가입, WebSocket 대전, 알람, 랭킹
   const password = randomUUID().slice(0, 4);
   const members = [];
   await request('/join', { data: { name: prefix + '-short', password: '123' }, status: 400 });
-  for (const name of [prefix + '-a', prefix + '-b']) {
+  for (const name of [prefix + '-a', prefix + '-b', prefix + '-c']) {
     const registered = await request('/join', { data: { name, password }, status: 201 });
     assert.deepEqual(Object.keys(registered).sort(), ['cookie', 'user']);
     members.push(registered);
   }
-  const [a, b] = members;
+  const [a, b, c] = members;
   await request('/join', { data: { name: a.user.name.toUpperCase(), password }, status: 409 });
   const login = await request('/login', { data: { name: a.user.name, password } });
   assert.equal(login.user.id, a.user.id);
@@ -84,7 +84,7 @@ test('Cloudflare 로컬 실행기에서 가입, WebSocket 대전, 알람, 랭킹
       result => result.rooms.some(item => item.id === room.id));
     const act = async (member, input) => {
       const result = await request(path + '/action', { cookie: member.cookie,
-        data: { turn: room.turn, revision: room.revision, match: room.match, ...input } });
+        data: { turn: room.turn, revision: room.revision, match: room.match, seatEpoch: room.seatEpoch, ...input } });
       room = result.room;
       return room;
     };
@@ -162,7 +162,27 @@ test('Cloudflare 로컬 실행기에서 가입, WebSocket 대전, 알람, 랭킹
   const rolled = await ciao.act(a, { action: 'roll' });
   assert.equal(typeof rolled.die, 'number');
   assert.equal((await request(ciao.path, { cookie: b.cookie })).room.die, undefined);
-  const declaration = await ciao.act(a, { action: 'declare', number: 3 });
+  const liveRooms = await request('/rooms', { cookie: c.cookie });
+  assert.equal(liveRooms.rooms.find(room => room.id === rolled.id).status, 'playing');
+  const watching = await ciao.act(c, { action: 'watch' });
+  assert.deepEqual(watching.spectators, [c.user]);
+  assert.equal(watching.die, undefined);
+  const audienceSocket = connect(ciao.path, c.cookie);
+  context.after(() => audienceSocket.close());
+  assert.equal(await nextRevision(audienceSocket), watching.revision);
+  await eventually(() => request('/rooms', { cookie: c.cookie }),
+    result => result.rooms.find(room => room.id === rolled.id)?.spectators.some(person => person.id === c.user.id));
+  const vacantNotice = nextRevision(audienceSocket);
+  const vacant = await ciao.act(a, { action: 'spectate' });
+  assert.equal(await vacantNotice, vacant.revision);
+  assert.equal(vacant.paused, true);
+  assert.equal(vacant.players[0].vacant, true);
+  const replaced = await ciao.act(c, { action: 'join' });
+  assert.deepEqual(replaced.spectators, [a.user]);
+  assert.equal(replaced.paused, false);
+  assert.equal(replaced.die, rolled.die);
+  assert.equal((await request(ciao.path, { cookie: a.cookie })).room.die, undefined);
+  const declaration = await ciao.act(c, { action: 'declare', number: 3 });
   let revision;
   do { revision = await nextRevision(ciao.socket, 26_000); } while (revision <= declaration.revision);
   const expired = await request(ciao.path, { cookie: b.cookie });
@@ -180,7 +200,7 @@ test('Cloudflare 로컬 실행기에서 가입, WebSocket 대전, 알람, 랭킹
   const ranks = await request('/rankings?game=dodge', { cookie: a.cookie });
   assert.equal(ranks.rows.find(row => row.name === a.user.name).score, solo.score);
 
-  for (const socket of [slap.socket, ciao.socket, reconnect, lobbySocket]) {
+  for (const socket of [slap.socket, ciao.socket, reconnect, lobbySocket, audienceSocket]) {
     const closed = once(socket, 'close', { signal: AbortSignal.timeout(5000) });
     socket.close();
     await closed;

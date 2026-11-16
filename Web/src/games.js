@@ -1,5 +1,6 @@
 import { cardAttack, cardName, cardRank, cardSuit, games, legalCard, powerCosts, sum, yachtCategories, yachtScore, yachtTotal } from '../public/rules.js';
 import { randomInt, requireThat } from './http.js';
+import { applyMemberAction, isMemberAction } from './room-members.js';
 
 const roomGames = new Set(['slap', 'ciao', 'onecard', 'yacht']);
 export const isRoomGame = game => roomGames.has(game);
@@ -14,7 +15,7 @@ function newPlayer(account) {
 export function createRoom(id, game, title, account, now) {
   return {
     id, game, title, createdAt: now, status: 'waiting', revision: 1,
-    players: [newPlayer(account)], match: 0, winners: [],
+    players: [newPlayer(account)], spectators: [], hostId: account.id, match: 0, winners: [],
   };
 }
 
@@ -24,25 +25,12 @@ function complete(room, winners, reason) {
   room.endReason = reason;
 }
 
-function bye(room, id) {
-  requireThat(room.status !== 'playing', '진행 중인 방은 목록으로 돌아가도 참가 상태가 유지됩니다.');
-  room.players = room.players.filter(player => player.id !== id);
-  if (!room.players.length) {
-    room.status = 'deleted';
-    return;
-  }
-  room.status = 'waiting';
-  room.players.forEach(player => { player.ready = false; });
-}
-
 export function applyAction(room, account, input, now, roll = randomInt) {
   const id = account.id;
   const player = room.players.find(candidate => candidate.id === id);
   const action = input.action;
-  if (action === 'join') {
-    if (player) return false;
-    requireThat(room.status === 'waiting' && room.players.length < games[room.game].max, '지금은 이 방에 참가할 수 없습니다.', 409);
-    room.players.push(newPlayer(account));
+  if (isMemberAction(action)) {
+    if (!applyMemberAction(room, account, input, player, now)) return false;
   } else {
     requireThat(player, '이 방의 참가자가 아닙니다.', 403);
     if (action === 'ready') {
@@ -51,16 +39,11 @@ export function applyAction(room, account, input, now, roll = randomInt) {
       if (player.ready === input.ready) return false;
       player.ready = input.ready;
       if (room.players.length >= 2 && room.players.every(candidate => candidate.ready)) start(room, roll);
-    } else if (action === 'leave') {
-      bye(room, id);
-    } else if (action === 'delete') {
-      requireThat(room.game !== 'slap' && room.players[0].id === id, '방장만 이 방을 삭제할 수 있습니다.', 403);
-      room.status = 'deleted';
-      room.players = [];
-      room.deadline = null;
     } else {
       requireThat(room.status === 'playing', '게임이 진행 중이 아닙니다.', 409);
+      requireThat(!room.players.some(player => player.vacant), '빈 자리에 참가자가 들어오면 경기를 이어갑니다.', 409);
       requireThat(input.match === room.match, stale, 409);
+      requireThat(!room.seatEpoch || input.seatEpoch === room.seatEpoch, stale, 409);
       if (room.game === 'slap') slapAction(room, player, input);
       if (room.game === 'ciao') ciaoAction(room, player, input, now, roll);
       if (room.game === 'onecard') oneCardAction(room, player, input, now, roll);
@@ -79,6 +62,9 @@ function start(room, roll) {
   room.winners = [];
   room.last = null;
   room.endReason = null;
+  room.substituted = false;
+  room.seatEpoch = 0;
+  delete room.deadlineRemaining;
   room.players = room.players.map(({ id, name }) => ({ id, name, ready: false }));
   switch (room.game) {
     case 'slap':
@@ -358,6 +344,7 @@ function yachtAction(room, player, input, roll) {
     room.held = held.map(value => room.rollsUsed > 0 && value);
     room.dice = room.dice.map((die, index) => room.held[index] ? die : roll(6) + 1);
     room.rollsUsed++;
+    room.rollCount = (room.rollCount ?? 0) + 1;
     room.last = player.name + ' · ' + room.rollsUsed + '번째 굴림';
     return;
   }
@@ -381,6 +368,11 @@ function yachtAction(room, player, input, roll) {
 
 export function roomView(room, id) {
   const view = structuredClone(room);
+  view.spectators ??= [];
+  view.hostId ??= room.players[0]?.id;
+  view.paused = room.players.some(player => player.vacant);
+  delete view.deadlineRemaining;
+  for (const player of view.players) delete player.previousPlayerId;
   if (view.game === 'slap') {
     for (const player of view.players) {
       player.submitted = Boolean(player.choice);

@@ -1,6 +1,6 @@
 import { cardRank, games } from './rules.js';
 import { connectSocket, createChat } from './chat.js';
-import { escape, heading, home, lobby, rankings, roomList, roomPage, signInPrompt } from './views.js';
+import { escape, heading, home, lobby, rankings, roomList, roomPage, signInPrompt, yachtFace } from './views.js';
 import { playSolo, soloMarkup } from './solo.js';
 
 const app = document.querySelector('#app');
@@ -177,7 +177,10 @@ async function navigate() {
     if (error.status === 401) return signedOut();
     if (section === 'room' && error.status === 403) {
       return paint(heading('대전방', '초대받은 방에 참가할 수 있습니다.') +
-        `<div class="panel empty"><button type="button" class="button button-primary" data-join="${key}">방 참가</button></div>`);
+        `<div class="panel empty room-list-actions">
+          <button type="button" class="button button-primary" data-join="${key}">방 참가</button>
+          <button type="button" class="button button-outline" data-watch="${key}">관전</button>
+        </div>`);
     }
     paint(heading(title) + '<div class="panel empty"><p>' + escape(error.message) +
       '</p><button type="button" class="button button-outline" data-reload>다시 불러오기</button></div>');
@@ -252,7 +255,9 @@ function renderRoom() {
 
 function acceptRoom(next) {
   if (!next || room && next.revision <= room.revision) return;
-  if (!room || room.match !== next.match || room.index !== next.index || room.rollsUsed !== next.rollsUsed) {
+  const rolled = next.game === 'yacht' && room && next.rollCount > (room.rollCount ?? 0) && next.rollsUsed > 0;
+  if (!room || room.match !== next.match || room.seatEpoch !== next.seatEpoch ||
+      room.index !== next.index || room.rollsUsed !== next.rollsUsed) {
     ui.held = next.held ? [...next.held] : Array(5).fill(false);
   }
   if (next.game === 'onecard') {
@@ -271,6 +276,27 @@ function acceptRoom(next) {
   }
   room = next;
   renderRoom();
+  if (rolled) animateYachtRoll();
+}
+
+function animateYachtRoll() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const faces = Array.from(app.querySelectorAll('[data-roll-face]'));
+  if (!faces.length) return;
+  const results = faces.map(face => face.innerHTML);
+  let frame = 0;
+  faces.forEach(face => face.classList.add('tumbling'));
+  const timer = setInterval(() => {
+    if (!faces[0].isConnected || ++frame >= 8) {
+      clearInterval(timer);
+      faces.forEach((face, index) => {
+        face.innerHTML = results[index];
+        face.classList.remove('tumbling');
+      });
+    } else {
+      for (const face of faces) face.innerHTML = yachtFace(1 + Math.floor(Math.random() * 6));
+    }
+  }, 55);
 }
 
 function updateDeadline() {
@@ -348,6 +374,7 @@ async function sendAction(data) {
   try {
     const result = await api('/rooms/' + current.id + '/action', {
       ...data, revision: current.revision, turn: current.turn, match: current.match,
+      seatEpoch: current.seatEpoch,
     });
     if (token !== generation) return;
     if (result.room) acceptRoom(result.room);
@@ -370,13 +397,19 @@ app.addEventListener('click', async event => {
     try { await refreshLobby(); } catch (error) { message(error.message); }
     return;
   }
-  if (button.dataset.join) {
+  const entryRoom = button.dataset.join ?? button.dataset.watch;
+  if (entryRoom) {
+    const token = generation;
     button.disabled = true;
     try {
-      const { room: joined } = await api('/rooms/' + button.dataset.join + '/action', { action: 'join' });
+      const { room: joined } = await api('/rooms/' + entryRoom + '/action', {
+        action: button.dataset.watch ? 'watch' : 'join',
+      });
+      if (token !== generation) return;
       if (location.hash === '#room/' + joined.id) await navigate();
       else location.hash = '#room/' + joined.id;
     } catch (error) {
+      if (token !== generation) return;
       if (error.status === 401) return signedOut();
       message(error.message);
       button.disabled = false;

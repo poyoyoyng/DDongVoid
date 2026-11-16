@@ -3,6 +3,7 @@ import test from 'node:test';
 import { applyAction, createRoom, expireRoom, roomView } from '../src/games.js';
 import { legalCard, yachtScore, yachtTotal } from '../public/rules.js';
 import { applySoloInput, makeSolo, replayScore, stepSolo } from '../public/solo-model.js';
+import { roomPage } from '../public/views.js';
 
 const players = ['민트', '고양이', '보라'].map((name, index) => ({ id: String(index), name }));
 const now = 500_000;
@@ -10,7 +11,7 @@ const now = 500_000;
 function match(game, count = 2) {
   const room = createRoom('room', game, '테스트', players[0], now);
   const play = (index, input, roll = () => 3) => applyAction(
-    room, players[index], { turn: room.turn, revision: room.revision, match: room.match, ...input }, now, roll);
+    room, players[index], { turn: room.turn, revision: room.revision, match: room.match, seatEpoch: room.seatEpoch, ...input }, now, roll);
   for (let index = 1; index < count; index++) play(index, { action: 'join' });
   for (let index = 0; index < count; index++) play(index, { action: 'ready', ready: true });
   assert.equal(room.status, 'playing');
@@ -102,4 +103,80 @@ test('싱글 게임 기록은 브라우저 입력 재생 결과와 일치해야 
   assert.equal(replayScore(1234, dodge.tick, events), dodge.score);
   assert.equal(replayScore(1234, dodge.tick + 1, events), null);
   assert.equal(replayScore(1234, dodge.tick, [[0, 4]]), null);
+});
+
+test('네 대전 게임에서 관전자와 참가자가 경기 중 같은 자리를 이어받는다', () => {
+  for (const game of ['slap', 'ciao', 'onecard', 'yacht']) {
+    const { room, play } = match(game);
+    if (game === 'slap') play(0, { action: 'choose', move: 'charge' });
+    if (game === 'ciao') play(0, { action: 'roll' });
+    if (game === 'yacht') play(0, { action: 'roll', held: Array(5).fill(false) });
+    if (game === 'onecard') room.uncalled = ['0'];
+    const originalSeat = structuredClone(room.players[0]);
+    const phase = { index: room.index, turn: room.turn, die: room.die, dice: room.dice };
+
+    play(2, { action: 'watch' });
+    const publicView = roomView(room, '2');
+    assert.equal(publicView.players[0].hand, undefined);
+    assert.equal(publicView.players[0].choice, undefined);
+    assert.equal(publicView.die, undefined);
+    assert.match(roomPage(publicView, '2', { held: Array(5).fill(false), card: null }), /관전자 1명/);
+    assert.throws(() => play(2, { action: 'ready', ready: true }), /참가자/);
+
+    assert.throws(() => play(2, { action: 'join' }), /빈 참가 자리/);
+    play(0, { action: 'spectate' });
+    assert.equal(roomView(room, '0').paused, true);
+    assert.equal(roomView(room, '2').players[0].previousPlayerId, undefined);
+    assert.throws(() => play(1, { action: 'roll' }), /빈 자리에 참가자가/);
+    play(2, { action: 'join' });
+
+    assert.deepEqual(room.players[0], { ...originalSeat, ...players[2] });
+    assert.deepEqual(room.spectators, [players[0]]);
+    assert.deepEqual({ index: room.index, turn: room.turn, die: room.die, dice: room.dice }, phase);
+    assert.equal(room.hostId, '0');
+    assert.equal(room.substituted, true);
+    assert.equal(roomView(room, '2').paused, false);
+    assert.equal(roomView(room, '0').players[0].hand, undefined);
+    assert.deepEqual(roomView(room, '2').players[0].hand, originalSeat.hand);
+    if (game === 'onecard') assert.deepEqual(room.uncalled, ['2']);
+    if (game === 'ciao') {
+      assert.equal(roomView(room, '0').die, undefined);
+      assert.equal(roomView(room, '2').die, phase.die);
+    }
+    if (game === 'yacht') {
+      const page = roomPage(roomView(room, '2'), '2', { held: Array(5).fill(false), card: null });
+      assert.equal(room.rollCount, 1);
+      assert.equal((page.match(/data-roll-face/g) ?? []).length, 5);
+      assert.match(page, /yacht-versus/);
+      assert.match(page, /상단 소계/);
+      assert.match(page, /하단<\/th>/);
+    }
+  }
+});
+
+test('차오차오 응답 시간은 빈자리에서 멈추고 채워지면 남은 시간부터 이어진다', () => {
+  const { room, play } = match('ciao');
+  play(0, { action: 'roll' });
+  play(0, { action: 'declare', number: 3 });
+  applyAction(room, players[1], { action: 'spectate' }, now + 8000);
+  assert.equal(room.deadline, null);
+  assert.equal(expireRoom(room, now + 25000), false);
+  applyAction(room, players[1], { action: 'join' }, now + 25000);
+  assert.equal(room.deadline, now + 37000);
+  assert.equal(room.substituted, false);
+  assert.equal(expireRoom(room, now + 37000), true);
+});
+
+test('관전자는 대기 중 빈 자리에 앉거나 관전석으로 돌아갈 수 있다', () => {
+  const room = createRoom('room', 'yacht', '테스트', players[0], now);
+  applyAction(room, players[1], { action: 'watch' }, now);
+  applyAction(room, players[0], { action: 'spectate' }, now);
+  assert.deepEqual(room.players, []);
+  assert.equal(room.status, 'waiting');
+  applyAction(room, players[1], { action: 'join' }, now);
+  assert.deepEqual(room.players.map(player => player.id), ['1']);
+  applyAction(room, players[0], { action: 'leave' }, now);
+  assert.equal(room.hostId, '1');
+  applyAction(room, players[1], { action: 'leave' }, now);
+  assert.equal(room.status, 'deleted');
 });
