@@ -62,8 +62,8 @@ export function hitRhythm(state, key) {
 
 function judge(state, judgement, lane) {
   state.counts[judgement]++;
-  // Whole points avoid floating drift: ten misses from full always end the run.
-  state.life += [2, 1, 0, -10][judgement];
+  // Whole points avoid floating drift: four misses from full always end the run.
+  state.life += [2, 1, 0, -25][judgement];
   if (judgement === MISS) state.combo = 0;
   else {
     state.score += [300, 200, 100][judgement] + Math.min(state.combo, 100) * 2;

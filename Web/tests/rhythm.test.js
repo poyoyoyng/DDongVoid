@@ -16,10 +16,10 @@ function play(seed, until) {
   return { state, events };
 }
 
-test('blocks start two seconds in and ten misses end the run', () => {
+test('blocks start two seconds in and four misses end the run', () => {
   const { state, events } = play(7, -1);
   assert.equal(events.length, 0);
-  assert.equal(state.counts[3], 10);
+  assert.equal(state.counts[3], 4);
   assert.equal(state.life, 0);
   assert.equal(state.score, 0);
   assert.ok(state.tick > 2 * tickRate);
@@ -49,7 +49,7 @@ test('a press just before the GOOD window takes the block as a MISS', () => {
   const note = state.notes.find(item => item.time - state.seconds <= .2);
   assert.equal(hitRhythm(state, note.key), 3);
   assert.ok(!state.notes.includes(note));
-  assert.equal(state.life, 90);
+  assert.equal(state.life, 75);
   assert.equal(state.score, 0);
 });
 
