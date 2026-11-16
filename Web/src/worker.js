@@ -1,4 +1,4 @@
-import { authenticate, findAccount } from './auth.js';
+import { authenticate, currentUser, findAccount } from './auth.js';
 import { isRoomGame } from './games.js';
 import { errorResponse, json, readBody, requireThat } from './http.js';
 import { isSoloGame, startSolo } from './scores.js';
@@ -67,8 +67,8 @@ async function api(request, env, url) {
   if (method === 'POST' && ['/api/login', '/api/join', '/api/logout'].includes(path)) {
     return authenticate(request, env, path.slice(5));
   }
+  if (method === 'GET' && path === '/api/me') return currentUser(request, env.DB);
   const account = await findAccount(request, env.DB);
-  if (method === 'GET' && path === '/api/me') return json({ user: account });
   requireThat(account, '로그인이 필요합니다.', 401);
   if (method === 'GET' && path === '/api/rankings') return rankings(env.DB, url.searchParams.get('game'));
   if (path === '/api/lobby/socket' && method === 'GET') {

@@ -2,7 +2,9 @@ import { json, readBody, requireThat } from './http.js';
 
 const minPasswordLength = 4;
 const maxPasswordLength = 128;
-const week = 7 * 24 * 60 * 60;
+// A device stays signed in for 30 days after its last visit.
+const day = 24 * 60 * 60;
+const sessionAge = 30 * day;
 const keys = /^[A-Fa-f0-9]{64}$/;
 const publicAccount = ({ id, name }) => ({ id, name });
 const bytesToHex = bytes => [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('');
@@ -29,11 +31,32 @@ function cookie(request, value, age) {
   return cookieName(request) + '=' + value + '; Path=/; HttpOnly; SameSite=Lax; Max-Age=' + age + secure;
 }
 
-async function sessionHash(request) {
+function sessionToken(request) {
   const name = cookieName(request) + '=';
   const token = request.headers.get('Cookie')?.split(';').map(part => part.trim())
     .find(part => part.startsWith(name))?.slice(name.length);
-  return token && keys.test(token) ? hash(token) : null;
+  return token && keys.test(token) ? token : null;
+}
+
+async function sessionHash(request) {
+  const token = sessionToken(request);
+  return token ? hash(token) : null;
+}
+
+// Every page load asks who is signed in; that visit also pushes the expiry back, at most once a day.
+export async function currentUser(request, db) {
+  const token = sessionToken(request);
+  if (!token) return json({ user: null });
+  const tokenHash = await hash(token);
+  const now = Date.now();
+  const session = await db.prepare(`
+    SELECT a.id, a.name, s.expires_at FROM sessions s JOIN accounts a ON a.id = s.account_id
+    WHERE s.token_hash = ? AND s.expires_at > ?
+  `).bind(tokenHash, now).first();
+  if (!session) return json({ user: null });
+  if (session.expires_at > now + (sessionAge - day) * 1000) return json({ user: publicAccount(session) });
+  await db.prepare('UPDATE sessions SET expires_at = ? WHERE token_hash = ?').bind(now + sessionAge * 1000, tokenHash).run();
+  return json({ user: publicAccount(session) }, 200, { 'Set-Cookie': cookie(request, token, sessionAge) });
 }
 
 export async function findAccount(request, db) {
@@ -63,7 +86,7 @@ async function issueSession(request, db, account, registration = null) {
   operations.push(
     db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(now),
     db.prepare('INSERT INTO sessions SELECT ?, id, ? FROM accounts WHERE id = ?')
-      .bind(tokenHash, now + week * 1000, account.id),
+      .bind(tokenHash, now + sessionAge * 1000, account.id),
   );
   if (previous) {
     operations.push(db.prepare('DELETE FROM sessions WHERE token_hash = ? AND EXISTS (SELECT 1 FROM sessions WHERE token_hash = ?)')
@@ -72,7 +95,7 @@ async function issueSession(request, db, account, registration = null) {
   const results = await db.batch(operations);
   if (registration) requireThat(results[0].meta.changes === 1, '이미 사용 중인 닉네임입니다.', 409);
   return json({ user: publicAccount(account) }, registration ? 201 : 200,
-    { 'Set-Cookie': cookie(request, token, week) });
+    { 'Set-Cookie': cookie(request, token, sessionAge) });
 }
 
 export async function authenticate(request, env, action) {
