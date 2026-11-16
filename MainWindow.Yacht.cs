@@ -56,7 +56,7 @@ public partial class MainWindow
     private void ShowYachtLobby()
     {
         if (!RequireLogin()) return;
-        DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom(); DetachYachtRoom();
+        DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom(); DetachYachtRoom(); DetachOmokRoom();
         DrawYachtLobby(); StartYachtTimer(); _ = PollYachtAsync();
     }
     private void DrawYachtLobby()

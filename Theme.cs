@@ -31,6 +31,9 @@ public static class Theme
         [0xEEE8AA] = 0x9C6A00, [0xFFD378] = 0xC08A00, [0xFFD064] = 0xE0A400,
         // Dice faces are physical objects and look the same in both themes.
         [0xFBF7EC] = 0xFBF7EC, [0xC9C2B0] = 0xC9C2B0, [0xC0392B] = 0xC0392B, [0x1E2B25] = 0x1E2B25,
+        // So are the omok board and its stones.
+        [0xDCB36A] = 0xDCB36A, [0xB88A3E] = 0xB88A3E, [0x5B4220] = 0x5B4220, [0x1A1A1A] = 0x1A1A1A, [0xF7F7F2] = 0xF7F7F2,
+        [0x8A8A80] = 0x8A8A80, [0xE5484D] = 0xE5484D,
     };
     // Translucent colors whose meaning changes with alpha.
     private static readonly Dictionary<uint, uint> LightArgb = new()
