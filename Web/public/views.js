@@ -61,6 +61,7 @@ export function lobby(rooms, accountId, selectedGame) {
     .filter(([, game]) => game.max > 1)
     .map(([id, game]) => `<option value="${id}" ${selectedGame === id ? 'selected' : ''}>${game.title}</option>`).join('');
   return heading('공용 대기방') + `
+  <p class="lobby-presence" id="lobby-presence" hidden></p>
   <div class="lobby-grid">
     <section class="panel">
       <div class="section-head"><h2>방 목록</h2><button type="button" class="button button-small button-quiet" data-refresh>새로고침</button></div>
@@ -82,6 +83,9 @@ export function lobby(rooms, accountId, selectedGame) {
     </aside>
   </div>`;
 }
+
+export const presenceText = ({ lobby, rooms, playing }) =>
+  `지금 접속 중 · 로비 ${lobby}명 · 대전방 ${rooms}명 (게임 중 ${playing}명)`;
 
 export function roomList(rooms, accountId) {
   if (!rooms.length) return '<p class="empty">아직 열린 방이 없습니다.</p>';

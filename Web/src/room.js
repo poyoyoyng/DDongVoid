@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { chatHistory, closeLiveSocket, openLiveSocket, postChat } from './chat.js';
+import { chatHistory, closeLiveSocket, openLiveSocket, openSockets, postChat } from './chat.js';
 import { applyAction, createRoom, expireRoom, roomView } from './games.js';
 import { errorResponse, json, readBody, requireThat } from './http.js';
 import { extendsStreak, ratingChanges, startRating, streakBonus } from './ratings.js';
@@ -49,6 +49,7 @@ export class GameRoom extends DurableObject {
     if (hasPending) this.ctx.storage.kv.put('pending', pending);
     await this.schedule(room, hasPending);
     this.notify(this.room);
+    this.ctx.waitUntil(this.reportPresence());
     if (hasPending) this.ctx.waitUntil(this.flush().catch(error => console.error('방 목록과 결과 동기화 재시도', error)));
   }
 
@@ -128,6 +129,48 @@ export class GameRoom extends DurableObject {
     }
   }
 
+  livePresence(leaving) {
+    const room = this.room;
+    const members = new Set();
+    const playing = new Set();
+    if (room && room.status !== 'deleted') {
+      for (const socket of openSockets(this.ctx, leaving)) {
+        const id = socket.deserializeAttachment();
+        if (!isRoomMember(room, id)) continue;
+        members.add(id);
+        if (room.status === 'playing' && room.players.some(player => !player.vacant && player.id === id)) playing.add(id);
+      }
+    }
+    return { members: [...members].sort(), playing: [...playing].sort() };
+  }
+
+  // The lobby asks directly when its copy is old; the answer counts as reported.
+  checkPresence() {
+    const presence = this.livePresence();
+    this.ctx.storage.kv.put('presence', JSON.stringify(presence));
+    return presence;
+  }
+
+  // The lobby counts who has a room open right now; it hears only when that changes, in order.
+  reportPresence(leaving) {
+    const report = () => this.sendPresence(leaving);
+    this.reporting = (this.reporting ?? Promise.resolve()).then(report, report);
+    return this.reporting;
+  }
+
+  async sendPresence(leaving) {
+    const room = this.room;
+    const presence = this.livePresence(leaving);
+    const summary = JSON.stringify(presence);
+    if (!room || summary === (this.ctx.storage.kv.get('presence') ?? '{"members":[],"playing":[]}')) return;
+    try {
+      await this.env.LOBBY_CHAT.getByName('lobby').reportRoom(room.id, presence);
+      this.ctx.storage.kv.put('presence', summary);
+    } catch (error) {
+      console.error('접속 인원 보고 실패', error);
+    }
+  }
+
   async alarm() {
     const previous = this.room;
     const room = structuredClone(previous);
@@ -170,7 +213,9 @@ export class GameRoom extends DurableObject {
       }
       if (path === '/socket') {
         requireThat(this.ctx.getWebSockets().length < 32, '열려 있는 대전방 연결이 너무 많습니다.', 429);
-        return openLiveSocket(this.ctx, request, account.id, { revision: room.revision, chat: chatHistory(this.ctx) });
+        const response = openLiveSocket(this.ctx, request, account.id, { revision: room.revision, chat: chatHistory(this.ctx) });
+        this.ctx.waitUntil(this.reportPresence());
+        return response;
       }
       return json({ room: roomView(room, account.id) });
     } catch (error) {
@@ -180,5 +225,8 @@ export class GameRoom extends DurableObject {
 
   webSocketMessage(socket) { socket.close(1008, 'Read-only connection'); }
 
-  webSocketClose(socket, code, reason) { closeLiveSocket(socket, code, reason); }
+  webSocketClose(socket, code, reason) {
+    closeLiveSocket(socket, code, reason);
+    return this.reportPresence(socket);
+  }
 }

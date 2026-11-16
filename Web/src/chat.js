@@ -36,6 +36,23 @@ export function closeLiveSocket(socket, code, reason) {
   else socket.close(code, reason);
 }
 
+// Rooms report only when their live members change, so an old report is checked with the room itself.
+const presenceCheck = 10 * 60 * 1000;
+
+export const openSockets = (ctx, leaving) =>
+  ctx.getWebSockets().filter(socket => socket !== leaving && socket.readyState === WebSocket.OPEN);
+
+function setRoomPresence(rooms, id, presence, at) {
+  if (presence?.members.length) rooms[id] = { members: presence.members, playing: presence.playing, at };
+  else delete rooms[id];
+}
+
+export function countPresence(lobbyIds, rooms) {
+  const members = new Set(Object.values(rooms).flatMap(room => room.members));
+  const playing = new Set(Object.values(rooms).flatMap(room => room.playing));
+  return { lobby: new Set(lobbyIds).size, rooms: members.size, playing: playing.size };
+}
+
 export class LobbyChat extends DurableObject {
   async fetch(request) {
     try {
@@ -45,12 +62,52 @@ export class LobbyChat extends DurableObject {
         const name = decodeURIComponent(request.headers.get('x-player-name') ?? '');
         return postChat(this.ctx, { id, name }, await readBody(request));
       }
-      return openLiveSocket(this.ctx, request, id, { chat: chatHistory(this.ctx) });
+      const sockets = openSockets(this.ctx);
+      const presence = countPresence([...sockets.map(socket => socket.deserializeAttachment()), id], await this.rooms());
+      const response = openLiveSocket(this.ctx, request, id, { chat: chatHistory(this.ctx), presence });
+      this.send(sockets, { presence });
+      return response;
     } catch (error) {
       return errorResponse(error);
     }
   }
 
+  async reportRoom(id, presence) {
+    const rooms = this.ctx.storage.kv.get('rooms') ?? {};
+    setRoomPresence(rooms, id, presence, Date.now());
+    this.ctx.storage.kv.put('rooms', rooms);
+    await this.broadcastPresence();
+  }
+
+  async rooms() {
+    const now = Date.now();
+    const stale = Object.entries(this.ctx.storage.kv.get('rooms') ?? {}).filter(([, room]) => now - room.at > presenceCheck);
+    const checked = await Promise.all(stale.map(([id, room]) => this.env.ROOMS.getByName(id).checkPresence()
+      .then(presence => [id, room.at, presence], () => [id, room.at, null])));
+    const rooms = this.ctx.storage.kv.get('rooms') ?? {};
+    // A report that arrived while the rooms were being checked is newer than the check.
+    for (const [id, at, presence] of checked) if (rooms[id]?.at === at) setRoomPresence(rooms, id, presence, now);
+    if (checked.length) this.ctx.storage.kv.put('rooms', rooms);
+    return rooms;
+  }
+
+  async broadcastPresence(leaving) {
+    const rooms = await this.rooms();
+    const sockets = openSockets(this.ctx, leaving);
+    this.send(sockets, { presence: countPresence(sockets.map(socket => socket.deserializeAttachment()), rooms) });
+  }
+
+  send(sockets, packet) {
+    const data = JSON.stringify(packet);
+    for (const socket of sockets) {
+      try { socket.send(data); } catch { /* A client reads the counts on reconnect. */ }
+    }
+  }
+
   webSocketMessage(socket) { socket.close(1008, 'Read-only connection'); }
-  webSocketClose(socket, code, reason) { closeLiveSocket(socket, code, reason); }
+
+  webSocketClose(socket, code, reason) {
+    closeLiveSocket(socket, code, reason);
+    return this.broadcastPresence(socket);
+  }
 }

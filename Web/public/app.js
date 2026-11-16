@@ -1,6 +1,6 @@
 import { cardRank, games } from './rules.js';
 import { connectSocket, createChat } from './chat.js';
-import { escape, heading, home, lobby, rankings, roomList, roomPage, signInPrompt, yachtFace } from './views.js';
+import { escape, heading, home, lobby, presenceText, rankings, roomList, roomPage, signInPrompt, yachtFace } from './views.js';
 import { guide } from './guide.js';
 import { playSolo, soloMarkup } from './solo.js';
 
@@ -170,7 +170,14 @@ async function navigate() {
       await refreshLobby(token);
       if (token === generation) {
         chat = mountChat('/lobby', '로비 채팅', token);
-        live = connectSocket('/lobby', { status: chat.setConnected, receive: chat.receive });
+        live = connectSocket('/lobby', { status: chat.setConnected, receive: packet => {
+          chat.receive(packet);
+          const presence = app.querySelector('#lobby-presence');
+          if (packet.presence && presence) {
+            presence.textContent = presenceText(packet.presence);
+            presence.hidden = false;
+          }
+        } });
       }
     }
     if (section === 'room') {
