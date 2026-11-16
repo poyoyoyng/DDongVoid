@@ -1,4 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img">
-  <rect width="64" height="64" rx="16" fill="#edff94"/>
-  <path d="M32 8c2.5 16 8 21.5 24 24-16 2.5-21.5 8-24 24-2.5-16-8-21.5-24-24 16-2.5 21.5-8 24-24Z" fill="#14172b"/>
+  <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5fb8ff"/><stop offset="1" stop-color="#bfe6ff"/></linearGradient></defs>
+  <rect width="64" height="64" rx="16" fill="url(#sky)"/>
+  <ellipse cx="32" cy="12" rx="13" ry="4" fill="none" stroke="#ffd84d" stroke-width="3.5"/>
+  <path d="M32 18c2 11 6 15 17 17-11 2-15 6-17 17-2-11-6-15-17-17 11-2 15-6 17-17Z" fill="#ffd84d" stroke="#1f2b5c" stroke-width="2.5" stroke-linejoin="round"/>
+  <g fill="#fff"><circle cx="15" cy="52" r="7"/><circle cx="24" cy="49" r="8"/><circle cx="48" cy="54" r="6"/><circle cx="55" cy="51" r="6"/><rect x="8" y="52" width="56" height="12"/></g>
 </svg>

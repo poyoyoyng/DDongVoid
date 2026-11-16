@@ -25,15 +25,18 @@ export function home() {
     </a>`).join('');
   return `<section class="hero">
       <div class="hero-copy">
-        <h1>포요용의<br>미니게임천국<span aria-hidden="true">.</span></h1>
+        <span class="hero-badge">☁ 구름 위의 오락실</span>
+        <h1>포요용의<br>미니게임<span>천국</span></h1>
         <p>혼자 최고 기록에 도전하거나<br>친구를 초대해 한 판 겨뤄 보세요.</p>
         <a href="#lobby" class="button button-primary">대기방 입장 <span aria-hidden="true">↗</span></a>
       </div>
       <div class="hero-art" aria-hidden="true">
-        <span class="hero-orbit"></span><span class="hero-orbit orbit-small"></span>
-        <span class="hero-star star-top">✦</span><span class="hero-star star-bottom">✦</span>
+        <span class="hero-sun"></span><span class="hero-rainbow"></span>
+        <span class="hero-cloud cloud-back"></span>
         <span class="hero-card hero-card-back">◆</span><span class="hero-card hero-card-front">♠</span>
-        <span class="hero-die">⚄</span><span class="hero-dot"></span>
+        <span class="hero-die">⚄</span>
+        <span class="hero-cloud cloud-front"></span>
+        <span class="hero-star star-top">✦</span><span class="hero-star star-bottom">✦</span>
       </div>
     </section>
     <section class="arcade" aria-labelledby="games-title">
