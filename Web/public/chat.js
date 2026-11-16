@@ -1,8 +1,39 @@
 const clock = new Intl.DateTimeFormat('ko-KR', { hour: 'numeric', minute: '2-digit' });
 
-export function createChat(host, title, accountId, send) {
+function memberGroup(title, names, playing) {
+  const group = document.createElement('section');
+  const heading = document.createElement('h3');
+  heading.textContent = `${title} ${names.length}명`;
+  group.append(heading);
+  if (!names.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = '아무도 없습니다.';
+    group.append(empty);
+    return group;
+  }
+  const list = document.createElement('ul');
+  for (const name of names) {
+    const item = document.createElement('li');
+    item.textContent = name;
+    if (playing?.has(name)) {
+      const badge = document.createElement('small');
+      badge.textContent = '게임 중';
+      item.append(badge);
+    }
+    list.append(item);
+  }
+  group.append(list);
+  return group;
+}
+
+export function createChat(host, title, accountId, send, { members = false } = {}) {
+  const membersButton = members ? `<button type="button" class="button button-small button-quiet" data-members-toggle
+    aria-expanded="false" aria-controls="chat-members">참가자 <span data-members-count></span></button>` : '';
   host.innerHTML = `<section class="panel chat-panel" aria-labelledby="chat-title">
-    <div class="section-head"><h2 id="chat-title"></h2><span class="muted" data-chat-status>연결 중…</span></div>
+    <div class="section-head"><h2 id="chat-title"></h2>
+      <div class="chat-tools">${membersButton}<span class="muted" data-chat-status>연결 중…</span></div></div>
+    ${members ? '<div class="chat-members" id="chat-members" hidden><p class="muted">불러오는 중…</p></div>' : ''}
     <div class="chat-log" role="log" aria-labelledby="chat-title" tabindex="0">
       <p class="muted">아직 메시지가 없습니다.</p>
     </div>
@@ -19,6 +50,12 @@ export function createChat(host, title, accountId, send) {
   const input = form.elements.text;
   const button = form.querySelector('button');
   const error = host.querySelector('.chat-error');
+  const membersToggle = host.querySelector('[data-members-toggle]');
+  const membersPanel = host.querySelector('#chat-members');
+  membersToggle?.addEventListener('click', () => {
+    membersPanel.hidden = !membersPanel.hidden;
+    membersToggle.setAttribute('aria-expanded', String(!membersPanel.hidden));
+  });
 
   function append(entry) {
     const items = Array.from(log.querySelectorAll('.chat-message'));
@@ -67,6 +104,11 @@ export function createChat(host, title, accountId, send) {
     receive(packet) {
       for (const entry of packet.chat ?? []) append(entry);
       if (packet.chatMessage) append(packet.chatMessage);
+    },
+    setMembers({ lobby, rooms, playing }) {
+      if (!membersPanel) return;
+      host.querySelector('[data-members-count]').textContent = new Set([...lobby, ...rooms]).size;
+      membersPanel.replaceChildren(memberGroup('로비', lobby), memberGroup('대전방', rooms, new Set(playing)));
     },
     setConnected(connected) {
       status.textContent = connected ? '연결됨' : '재연결 중…';

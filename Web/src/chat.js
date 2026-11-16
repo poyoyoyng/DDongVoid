@@ -21,10 +21,10 @@ export function postChat(ctx, account, input, sockets = ctx.getWebSockets()) {
   return json({ chatMessage }, 201);
 }
 
-export function openLiveSocket(ctx, request, accountId, packet) {
+export function openLiveSocket(ctx, request, attachment, packet) {
   requireThat(request.headers.get('Upgrade')?.toLowerCase() === 'websocket', 'WebSocket 연결이 필요합니다.', 426);
   const { 0: client, 1: server } = new WebSocketPair();
-  server.serializeAttachment(accountId);
+  server.serializeAttachment(attachment);
   ctx.acceptWebSocket(server);
   server.send(JSON.stringify(packet));
   return new Response(null, { status: 101, webSocket: client });
@@ -42,15 +42,25 @@ const presenceCheck = 10 * 60 * 1000;
 export const openSockets = (ctx, leaving) =>
   ctx.getWebSockets().filter(socket => socket !== leaving && socket.readyState === WebSocket.OPEN);
 
+// Room members are kept as { id, name }; the older id-only copy under 'rooms' is no longer read.
+const roomsKey = 'roomMembers';
+
 function setRoomPresence(rooms, id, presence, at) {
   if (presence?.members.length) rooms[id] = { members: presence.members, playing: presence.playing, at };
   else delete rooms[id];
 }
 
-export function countPresence(lobbyIds, rooms) {
-  const members = new Set(Object.values(rooms).flatMap(room => room.members));
+const sortedNames = members =>
+  [...new Map(members.map(member => [member.id, member.name])).values()].sort((a, b) => a.localeCompare(b, 'ko'));
+
+export function listPresence(lobby, rooms) {
+  const members = Object.values(rooms).flatMap(room => room.members);
   const playing = new Set(Object.values(rooms).flatMap(room => room.playing));
-  return { lobby: new Set(lobbyIds).size, rooms: members.size, playing: playing.size };
+  return {
+    lobby: sortedNames(lobby),
+    rooms: sortedNames(members),
+    playing: sortedNames(members.filter(member => playing.has(member.id))),
+  };
 }
 
 export class LobbyChat extends DurableObject {
@@ -58,13 +68,11 @@ export class LobbyChat extends DurableObject {
     try {
       const id = request.headers.get('x-player');
       requireThat(id, '로그인이 필요합니다.', 401);
-      if (request.method === 'POST') {
-        const name = decodeURIComponent(request.headers.get('x-player-name') ?? '');
-        return postChat(this.ctx, { id, name }, await readBody(request));
-      }
+      const name = decodeURIComponent(request.headers.get('x-player-name') ?? '');
+      if (request.method === 'POST') return postChat(this.ctx, { id, name }, await readBody(request));
       const sockets = openSockets(this.ctx);
-      const presence = countPresence([...sockets.map(socket => socket.deserializeAttachment()), id], await this.rooms());
-      const response = openLiveSocket(this.ctx, request, id, { chat: chatHistory(this.ctx), presence });
+      const presence = listPresence([...sockets.map(socket => socket.deserializeAttachment()), { id, name }], await this.rooms());
+      const response = openLiveSocket(this.ctx, request, { id, name }, { chat: chatHistory(this.ctx), presence });
       this.send(sockets, { presence });
       return response;
     } catch (error) {
@@ -73,28 +81,28 @@ export class LobbyChat extends DurableObject {
   }
 
   async reportRoom(id, presence) {
-    const rooms = this.ctx.storage.kv.get('rooms') ?? {};
+    const rooms = this.ctx.storage.kv.get(roomsKey) ?? {};
     setRoomPresence(rooms, id, presence, Date.now());
-    this.ctx.storage.kv.put('rooms', rooms);
+    this.ctx.storage.kv.put(roomsKey, rooms);
     await this.broadcastPresence();
   }
 
   async rooms() {
     const now = Date.now();
-    const stale = Object.entries(this.ctx.storage.kv.get('rooms') ?? {}).filter(([, room]) => now - room.at > presenceCheck);
+    const stale = Object.entries(this.ctx.storage.kv.get(roomsKey) ?? {}).filter(([, room]) => now - room.at > presenceCheck);
     const checked = await Promise.all(stale.map(([id, room]) => this.env.ROOMS.getByName(id).checkPresence()
       .then(presence => [id, room.at, presence], () => [id, room.at, null])));
-    const rooms = this.ctx.storage.kv.get('rooms') ?? {};
+    const rooms = this.ctx.storage.kv.get(roomsKey) ?? {};
     // A report that arrived while the rooms were being checked is newer than the check.
     for (const [id, at, presence] of checked) if (rooms[id]?.at === at) setRoomPresence(rooms, id, presence, now);
-    if (checked.length) this.ctx.storage.kv.put('rooms', rooms);
+    if (checked.length) this.ctx.storage.kv.put(roomsKey, rooms);
     return rooms;
   }
 
   async broadcastPresence(leaving) {
     const rooms = await this.rooms();
     const sockets = openSockets(this.ctx, leaving);
-    this.send(sockets, { presence: countPresence(sockets.map(socket => socket.deserializeAttachment()), rooms) });
+    this.send(sockets, { presence: listPresence(sockets.map(socket => socket.deserializeAttachment()), rooms) });
   }
 
   send(sockets, packet) {

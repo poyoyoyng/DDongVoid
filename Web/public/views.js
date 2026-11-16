@@ -85,7 +85,7 @@ export function lobby(rooms, accountId, selectedGame) {
 }
 
 export const presenceText = ({ lobby, rooms, playing }) =>
-  `지금 접속 중 · 로비 ${lobby}명 · 대전방 ${rooms}명 (게임 중 ${playing}명)`;
+  `지금 접속 중 · 로비 ${lobby.length}명 · 대전방 ${rooms.length}명 (게임 중 ${playing.length}명)`;
 
 export function roomList(rooms, accountId) {
   if (!rooms.length) return '<p class="empty">아직 열린 방이 없습니다.</p>';

@@ -70,7 +70,8 @@ test('Cloudflare 로컬 실행기에서 가입, WebSocket 대전, 알람, 랭킹
   context.after(() => lobbySocket.close());
   const lobbyStart = await nextPacket(lobbySocket);
   assert.ok(Array.isArray(lobbyStart.chat));
-  assert.ok(lobbyStart.presence.lobby >= 1);
+  assert.ok(lobbyStart.presence.lobby.includes(b.user.name));
+  assert.ok(!lobbyStart.presence.rooms.includes(b.user.name));
   let presence = lobbyStart.presence;
   lobbySocket.on('message', data => { presence = JSON.parse(data.toString()).presence ?? presence; });
   await request('/lobby/chat', { cookie: a.cookie, data: { text: ' '.repeat(10) }, status: 400 });
@@ -113,10 +114,10 @@ test('Cloudflare 로컬 실행기에서 가입, WebSocket 대전, 알람, 랭킹
     return { path, act, socket, current: () => room };
   }
 
-  const before = presence;
   const slap = await setup('slap');
-  // Only b keeps the slap room open, so the lobby sees one more member in a game.
-  await eventually(() => presence, current => current.rooms > before.rooms && current.playing > before.playing);
+  // Only b keeps the slap room open, so the lobby lists b in a game and a nowhere.
+  await eventually(() => presence, current => current.playing.includes(b.user.name) && current.rooms.includes(b.user.name));
+  assert.ok(!presence.rooms.includes(a.user.name) && !presence.lobby.includes(a.user.name));
   for (let turn = 0; turn < 11; turn++) {
     const attacker = members[turn % 2];
     const defender = members[1 - turn % 2];
@@ -130,7 +131,7 @@ test('Cloudflare 로컬 실행기에서 가입, WebSocket 대전, 알람, 랭킹
   }
   assert.deepEqual(slap.current().winners, [a.user.id]);
   // A finished room still open is counted in rooms, but no longer in a game.
-  await eventually(() => presence, current => current.rooms > before.rooms && current.playing === before.playing);
+  await eventually(() => presence, current => current.rooms.includes(b.user.name) && !current.playing.includes(b.user.name));
   await eventually(() => request('/rankings?game=slap', { cookie: a.cookie }),
     result => result.rows.some(row => row.name === a.user.name && row.wins === 1 && row.mmr === 1016) &&
       result.rows.some(row => row.name === b.user.name && row.losses === 1 && row.mmr === 984));

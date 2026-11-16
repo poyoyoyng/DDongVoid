@@ -169,13 +169,14 @@ async function navigate() {
     if (section === 'lobby') {
       await refreshLobby(token);
       if (token === generation) {
-        chat = mountChat('/lobby', '로비 채팅', token);
+        chat = mountChat('/lobby', '로비 채팅', token, { members: true });
         live = connectSocket('/lobby', { status: chat.setConnected, receive: packet => {
           chat.receive(packet);
           const presence = app.querySelector('#lobby-presence');
           if (packet.presence && presence) {
             presence.textContent = presenceText(packet.presence);
             presence.hidden = false;
+            chat.setMembers(packet.presence);
           }
         } });
       }
@@ -209,7 +210,7 @@ async function refreshLobby(token = generation) {
   else paint(lobby(rooms, user.id, page.key));
 }
 
-function mountChat(path, title, token) {
+function mountChat(path, title, token, options) {
   return createChat(app.querySelector('#chat-host'), title, user.id, async text => {
     try {
       return await api(path + '/chat', { text });
@@ -217,7 +218,7 @@ function mountChat(path, title, token) {
       if (error.status === 401 && token === generation) signedOut();
       throw error;
     }
-  });
+  }, options);
 }
 
 const soloIntro = {

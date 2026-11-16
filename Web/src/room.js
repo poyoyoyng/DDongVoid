@@ -131,17 +131,22 @@ export class GameRoom extends DurableObject {
 
   livePresence(leaving) {
     const room = this.room;
-    const members = new Set();
+    const members = new Map();
     const playing = new Set();
     if (room && room.status !== 'deleted') {
       for (const socket of openSockets(this.ctx, leaving)) {
         const id = socket.deserializeAttachment();
-        if (!isRoomMember(room, id)) continue;
-        members.add(id);
-        if (room.status === 'playing' && room.players.some(player => !player.vacant && player.id === id)) playing.add(id);
+        const player = room.players.find(entry => !entry.vacant && entry.id === id);
+        const member = player ?? (room.spectators ?? []).find(entry => entry.id === id);
+        if (!member) continue;
+        members.set(id, member.name);
+        if (player && room.status === 'playing') playing.add(id);
       }
     }
-    return { members: [...members].sort(), playing: [...playing].sort() };
+    return {
+      members: [...members].sort(([a], [b]) => a.localeCompare(b)).map(([id, name]) => ({ id, name })),
+      playing: [...playing].sort(),
+    };
   }
 
   // The lobby asks directly when its copy is old; the answer counts as reported.
