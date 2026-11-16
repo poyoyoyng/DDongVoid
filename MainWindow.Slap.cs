@@ -37,7 +37,7 @@ public partial class MainWindow
     private void ShowSlapLobby()
     {
         if (!RequireLogin()) return;
-        DetachOneCardRoom(); DetachYachtRoom(); DetachCiaoRoom();
+        DetachOneCardRoom(); DetachYachtRoom(); DetachCiaoRoom(); DetachOmokRoom();
         DetachSlapRoom();
         slapDrawn = null; DrawSlapLobby(); StartSlapTimer(); _ = PollSlapAsync();
     }

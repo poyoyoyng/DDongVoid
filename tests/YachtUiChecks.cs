@@ -60,8 +60,9 @@ internal static class YachtUiChecks
         {
             Call(host, "ShowGameList"); Layout(host);
             var list = Find<System.Windows.Controls.Primitives.UniformGrid>((DependencyObject)host.Content).Single(p => p.Name == "GameList");
-            Assert(list.Children.Cast<Button>().Select(b => ((TextBlock)b.Content).Text).Last() == "야추", "게임 목록에 야추 표시");
-            Press(list.Children.Cast<Button>().Last());
+            var yachtItem = list.Children.Cast<Button>().SingleOrDefault(b => ((TextBlock)b.Content).Text == "야추");
+            Assert(yachtItem is not null, "게임 목록에 야추 표시");
+            Press(yachtItem!);
             Assert(Equals(Get(host, "panel"), "yacht-lobby"), "게임 목록에서 야추 클릭으로 로비 진입");
             Layout(host); Click(host, "방 만들기"); Layout(host);
             Find<TextBox>((DependencyObject)host.Content).Single(t => t.Name == "YachtRoomTitle").Text = "둘이서 야추";
