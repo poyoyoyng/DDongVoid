@@ -9,11 +9,13 @@ export const laneOf = key => key >> 1;
 export const judgements = ['PERFECT', 'GREAT', 'GOOD', 'MISS'];
 const [PERFECT, GREAT, GOOD, MISS] = judgements.keys();
 const windows = [.05, .1, .16];
-const minGap = .12;
 
-export const noteInterval = seconds => Math.max(.25, .75 / (1 + seconds / 40));
-// Fall time shrinks steadily: 2x speed at 60s, 3x at 120s, capped near 3.3x.
-export const travelTime = seconds => Math.max(.55, 1.8 / (1 + seconds / 60));
+// Blocks fall 20% faster and come 20% more often than the Windows app.
+const pace = 1.2;
+const minGap = .12 / pace;
+export const noteInterval = seconds => Math.max(.25, .75 / (1 + seconds / 40)) / pace;
+// Fall time shrinks steadily: 1.2x speed at the start, 2.4x at 60s, 3.6x at 120s, capped near 3.9x.
+export const travelTime = seconds => Math.max(.55, 1.8 / (1 + seconds / 60)) / pace;
 export const speedMultiplier = seconds => 1.8 / travelTime(seconds);
 // Share of beats that drop one note in each lane at the same moment.
 const bothHandsChance = seconds => Math.min(.45, .2 + seconds / 300);
