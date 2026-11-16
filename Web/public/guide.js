@@ -22,7 +22,7 @@ function article(game, { eyebrow, title, intro, art, stats, sections, foot }) {
     <ul class="guide-stats">${stats.map(([value, text]) => `<li><b>${value}</b>${text}</li>`).join('')}</ul>
     ${sections.map(([heading, body], index) => section(index + 1, heading, body)).join('')}
     <footer class="guide-foot"><p>${foot}</p>
-      <a class="button button-primary" href="#lobby/${game}">${games[game].title} 방 만들러 가기 <span aria-hidden="true">↗</span></a></footer>
+      <a class="button button-primary" href="#${games[game].max === 1 ? 'play' : 'lobby'}/${game}">${games[game].title} ${games[game].max === 1 ? '하러 가기' : '방 만들러 가기'} <span aria-hidden="true">↗</span></a></footer>
   </article>`;
 }
 
@@ -188,7 +188,199 @@ function oneCardGuide() {
   });
 }
 
-const guides = { yacht: yachtGuide, slap: slapGuide, onecard: oneCardGuide };
+const key = (label, tone = '') => `<span class="guide-key ${tone}">${label}</span>`;
+const poop = '<span class="guide-emoji" aria-hidden="true">💩</span>';
+
+function dodgeGuide() {
+  const steps = [
+    ['시작하기', '로그인한 뒤 시작 버튼을 누르면 바로 시작해요.', chip('시작', 'mint big')],
+    ['좌우로 움직이기', '누르고 있는 동안 계속 움직여요.<br>휴대폰은 화면 아래 버튼을 눌러요.',
+      `${key('←')}${key('→')}<p>또는</p>${key('A')}${key('D')}`],
+    ['떨어지는 똥 피하기', '위에서 떨어지는 똥에 닿으면<br>그 자리에서 바로 끝나요.', `${poop}${poop}<b class="guide-swap">↓</b><p>닿으면 GAME OVER</p>`],
+    ['기록 저장', '끝나면 점수가 자동으로 저장돼요.<br>랭킹에는 내 최고 점수가 올라가요.', chip('최고 점수 갱신!', 'gold')],
+  ];
+  const points = [
+    ['버틴 시간', '1초 버틸 때마다', chip('생존 1초'), '+10'],
+    ['피한 똥', '똥이 화면 아래로 지나가면', poop, '+25'],
+  ];
+  return article('dodge', {
+    eyebrow: '똥 피하기 게임 룰', title: '똥 피하기 쉽게 배우기',
+    intro: '좌우로 움직여 떨어지는 똥을 피해요. 오래 버티고 많이 피할수록 점수가 올라가요.',
+    art: poop + poop,
+    stats: [['1명', '혼자 하는 게임'], ['← →', '좌우 이동'], ['한 번', '닿으면 끝'], ['최대 4배', '빨라지는 속도']],
+    sections: [
+      ['이렇게 해요', stepList(steps,
+        '목숨은 하나뿐이에요. 똥에 한 번만 닿아도 끝나요. Space나 Esc로 잠시 멈출 수 있어요.')],
+      ['점수 계산', `<ul class="guide-combos">${points.map(([name, text, visual, score]) => `
+        <li><strong>${name}</strong><span>${text}</span>${visual}<b>${score}</b></li>`).join('')}</ul>
+        <div class="guide-upper">
+          <div><h4>예시</h4><p>60초를 버티면서 똥 80개를 피했다면</p>
+            <div class="guide-example"><b>600 + 2,000 = 2,600점</b></div>
+            <p class="guide-small">60초 × 10 + 80개 × 25</p></div>
+          <div class="guide-bonus"><p>시간보다 큰 점수</p><strong>똥 1개 = 2.5초</strong>
+            <p>피한 똥이 쌓일수록 점수가 빠르게 올라가요.</p></div>
+        </div>`],
+      ['점점 어려워져요', `<ul class="guide-combos">${[['시작', '보통 속도', '×1'], ['1분', '떨어지는 속도 2배', '×2'], ['2분', '떨어지는 속도 3배', '×3'], ['3분 이후', '가장 빠른 속도', '×4']]
+        .map(([time, text, speed]) => `<li><strong>${time}</strong><span>${text}</span><span></span><b>${speed}</b></li>`).join('')}</ul>
+        <p class="guide-small">· 시간이 지날수록 똥도 더 자주 떨어져요 · 한 판은 최대 30분까지예요</p>`],
+      ['이기는 꿀팁', tipList([
+        ['멈추는 것도 기술', '← →를 같이 누르면 그 자리에 멈춰요. 똥 사이 빈틈에서 기다려 보세요.'],
+        ['벽에 붙지 않기', '벽 쪽에 있으면 한쪽으로만 피할 수 있어요. 가운데 근처가 안전해요.'],
+        ['멀리 보기', '바로 위보다 조금 위에서 오는 똥을 보고 미리 자리를 잡아요.'],
+      ])],
+    ],
+    foot: '로그인하면 바로 시작할 수 있어요 · 랭킹에는 사람마다 가장 높은 점수 하나만 올라가요.',
+  });
+}
+
+function rhythmGuide() {
+  const steps = [
+    ['키 자리 익히기', '왼쪽 줄은 왼손 S · D,<br>오른쪽 줄은 오른손 K · L이에요.',
+      `${key('S', 'left')}${key('D', 'left')}<b class="guide-swap">|</b>${key('K', 'right')}${key('L', 'right')}`],
+    ['블록 보기', '블록마다 눌러야 할 키가 적혀 있어요.<br>양쪽에 동시에 떨어지기도 해요.', `${key('D', 'left')}${key('K', 'right')}<p>← 동시에 누르기</p>`],
+    ['선에 닿을 때 누르기', '블록이 판정선에 닿는 순간 그 키를 눌러요.<br>정확할수록 높은 판정이 나와요.', chip('PERFECT', 'mint') + chip('GREAT') + chip('GOOD', 'gold')],
+    ['콤보 잇기', '놓치지 않고 이어서 맞히면 콤보가 쌓이고<br>점수도 더 많이 받아요.', chip('42 COMBO', 'mint big')],
+  ];
+  const judgements = [
+    ['PERFECT', '±0.05초 안에 누름', chip('라이프 +2', 'mint'), '300'],
+    ['GREAT', '±0.1초 안에 누름', chip('라이프 +1'), '200'],
+    ['GOOD', '±0.16초 안에 누름', chip('라이프 그대로'), '100'],
+    ['MISS', '블록을 놓치거나 0.16초보다 일찍 누름', chip('라이프 −25', 'peach'), '0'],
+  ];
+  return article('rhythm', {
+    eyebrow: '키보드 리듬 게임 룰', title: '키보드 리듬 쉽게 배우기',
+    intro: '내려오는 블록이 판정선에 닿을 때 블록에 적힌 키를 눌러요. MISS 4번이면 끝나요.',
+    art: key('S', 'left big') + key('K', 'right big'),
+    stats: [['1명', '혼자 하는 게임'], ['4키', 'S · D · K · L'], ['MISS 4번', '라이프 0이면 끝'], ['×1.2 → ×3.9', '빨라지는 속도']],
+    sections: [
+      ['이렇게 해요', stepList(steps,
+        '블록을 놓칠 때마다 라이프가 25씩 줄어요. 블록이 없을 때 누르는 건 감점이 없어요. 한글 입력 상태여도 돼요.')],
+      ['판정과 점수', `<ul class="guide-combos">${judgements.map(([name, text, visual, score]) => `
+        <li><strong>${name}</strong><span>${text}</span>${visual}<b>${score}</b></li>`).join('')}</ul>
+        <div class="guide-upper">
+          <div><h4>라이프 100</h4><p>MISS가 나면 25씩 줄고, PERFECT와 GREAT로 다시 채울 수 있어요.</p>
+            <div class="guide-example"><span class="hp-bar guide-hp">${Array.from({ length: 6 }, (_, index) => `<i${index < 4 ? ' class="on"' : ''}></i>`).join('')}</span><b>라이프 70%</b></div></div>
+          <div class="guide-bonus"><p>콤보를 이어가면</p><strong>콤보 × 2점 추가!</strong>
+            <p>맞힐 때마다 이어온 콤보 수 × 2점을 더 받아요.</p><p class="guide-small">보너스는 최대 200점 (콤보 100부터)</p></div>
+        </div>`],
+      ['점점 빨라져요', `<ul class="guide-combos">${[['시작', '블록이 내려오는 속도', '×1.2'], ['1분', '연타와 양손 블록이 늘어나요', '×2.4'], ['2분', '훨씬 빽빽해져요', '×3.6'], ['그 이후', '가장 빠른 속도', '×3.9']]
+        .map(([time, text, speed]) => `<li><strong>${time}</strong><span>${text}</span><span></span><b>${speed}</b></li>`).join('')}</ul>
+        <p class="guide-small">· 게임 화면 위쪽 SPEED에서 지금 속도를 볼 수 있어요 · 한 판은 최대 30분까지예요</p>`],
+      ['이기는 꿀팁', tipList([
+        ['손가락 고정', '왼손 검지·중지를 D·S에, 오른손 검지·중지를 K·L에 올려 두면 키를 찾지 않아도 돼요.'],
+        ['선을 보고 누르기', '블록이 아니라 판정선을 보고 있다가 닿는 순간 누르면 PERFECT가 잘 나와요.'],
+        ['라이프 회복', 'MISS가 나도 PERFECT 열세 번이면 MISS 하나만큼 라이프를 되찾아요. 포기하지 마세요!'],
+      ])],
+    ],
+    foot: '로그인하면 바로 시작할 수 있어요 · Space나 Esc로 잠시 멈출 수 있어요.',
+  });
+}
+
+const ciaoDie = (face, tone = '') => `<span class="guide-ciao-die ${tone}">${face}</span>`;
+const ciaoTrack = pawns => `<div class="ciao-track guide-track">${[0, 1, 2, 3, 4, 9, 8, 7, 6, 5].map(step => `<div><span>${
+  step === 0 ? 'S →' : step === 9 ? 'G' : step === 4 ? '4 ↓' : step < 4 ? step + ' →' : '← ' + step}</span><span class="pawns">${
+  pawns.filter(([, position]) => position === step).map(([seat]) => `<i class="pawn seat-${seat} active"></i>`).join('')}</span></div>`).join('')}</div>`;
+
+function ciaoGuide() {
+  const steps = [
+    ['몰래 주사위 굴리기', '주사위 눈은 나만 볼 수 있어요.<br>1 · 2 · 3 · 4 · X · X 중 하나가 나와요.',
+      [1, 2, 3, 4, 'X', 'X'].map(face => ciaoDie(face)).join('')],
+    ['숫자 선언하기', '1~4 중 하나를 말해요. 거짓말해도 돼요!<br>X가 나오면 무조건 블러핑해야 해요.',
+      `${ciaoDie('X')}<b class="guide-swap">→</b>${chip('“3이 나왔어요”', 'gold')}`],
+    ['다른 사람은 PASS 또는 의심', '20초 안에 골라요. 시간이 지나면 PASS예요.<br>의심은 가장 먼저 누른 한 명만 판정해요.',
+      chip('PASS') + chip('의심', 'mint')],
+    ['말 이동', '모두 PASS하면 선언한 사람이<br>선언한 칸 수만큼 말을 옮겨요.', `${chip('선언 3')}<b class="guide-swap">→</b>${ciaoTrack([[0, 3]])}`],
+  ];
+  const doubts = [
+    ['진짜였다', '의심한 사람의 말이 떨어지고, 선언한 사람이 이동', chip('의심 실패', 'peach'), '선언자'],
+    ['거짓말이었다', '선언한 사람의 말이 떨어지고, 의심한 사람이 이동', chip('의심 성공', 'mint'), '의심자'],
+  ];
+  return article('ciao', {
+    eyebrow: '차오차오 게임 룰', title: '차오차오 쉽게 배우기',
+    intro: '몰래 굴린 주사위 눈을 선언하고 말을 옮겨요. 거짓말과 의심으로 말을 떨어뜨리며 먼저 3개를 도착시키면 이겨요.',
+    art: ciaoDie('?', 'big') + ciaoDie('X', 'big light'),
+    stats: [['2~4명', '돌아가며 진행'], ['말 7개', '한 번에 1개씩 출발'], ['9칸', '출발에서 도착까지'], ['3개 도착', '즉시 승리']],
+    sections: [
+      ['내 차례는 이렇게 해요', stepList(steps,
+        '의심이 틀리면 <b>내 말이 떨어져요</b>. 이동 중인 말이 없고 도착한 말만 있을 때 의심이 틀리면, 도착한 말 중 점수가 가장 낮은 말이 떨어져요.')],
+      ['의심하면 이렇게 돼요', `<ul class="guide-combos">${doubts.map(([name, text, visual, mover]) => `
+        <li><strong>${name}</strong><span>${text}</span>${visual}<b>${mover}</b></li>`).join('')}</ul>
+        <p class="guide-small">· 오른쪽은 선언한 칸 수만큼 말을 옮기는 사람이에요 · 의심한 사람은 선언한 숫자만큼 대신 이동해요</p>
+        <div class="guide-upper">
+          <div><h4>말이 떨어지면</h4><p>이동판의 말이 사라지고, 남은 말 하나가 출발점(S)에서 새로 출발해요.</p>
+            <div class="guide-example">${ciaoTrack([[1, 0]])}</div><p class="guide-small">6칸까지 갔어도 떨어지면 S부터 다시!</p></div>
+          <div class="guide-bonus"><p>남은 말을 모두 잃으면</p><strong>더는 이동 못 해요</strong>
+            <p>이동판에 말이 없으면 내 차례는 건너뛰어요.</p><p class="guide-small">도착한 말이 있으면 의심은 계속할 수 있어요.</p></div>
+        </div>`],
+      ['도착대와 점수', `<div class="guide-upper">
+          <div><h4>9칸을 가면 도착</h4><p>S에서 출발해 G를 넘어가면 도착대에 올라가요. 도착하면 다음 말이 S에서 출발해요.</p>
+            <div class="guide-example">${ciaoTrack([[0, 8], [1, 2]])}</div></div>
+          <div class="guide-bonus"><p>도착대 8자리 · 늦게 올수록</p><strong>1점 → 8점</strong>
+            <p>도착하는 순서대로 1점, 2점 … 8점 자리에 놓여요.</p>
+            <p class="guide-small">도착했던 말이 떨어진 자리는 다시 쓰지 않아요.</p></div>
+        </div>
+        <ul class="guide-combos">${[['말 3개 도착', '그 자리에서 바로 승리!', '승리'], ['도착대 8자리 다 참', '도착한 말 점수 합계가 가장 높은 사람 승리', '합계'],
+          ['이동할 말이 아무도 없음', '도착한 말 점수 합계로 승부', '합계']]
+          .map(([name, text, result]) => `<li><strong>${name}</strong><span>${text}</span><span></span><b>${result}</b></li>`).join('')}</ul>
+        <p class="guide-small">· 혼자만 말이 남으면 남은 말을 자동으로 도착시켜 정산해요 · 합계가 같으면 공동 승리예요</p>`],
+      ['이기는 꿀팁', tipList([
+        ['작은 숫자는 덜 의심받아요', '1이나 2를 말하면 적게 가지만 거짓말이어도 잘 안 들켜요.'],
+        ['멀리 간 말을 노려요', '상대 말이 G 바로 앞이면 의심해서 떨어뜨릴 가치가 커요.'],
+        ['늦은 도착이 큰 점수', '도착대는 뒤로 갈수록 점수가 높아요. 3개를 못 채울 것 같으면 점수 합계를 노려요.'],
+      ])],
+    ],
+    foot: '응답 시간은 20초예요 · 시간 안에 고르지 않으면 자동으로 PASS 처리돼요.',
+  });
+}
+
+// Rows of a small board: b/w stones, B/W stones in the winning line, x a point Black may not take.
+const goban = rows => `<span class="guide-goban" style="--size: ${rows[0].length}">${[...rows.join('')].map(point => `<span class="omok-cell${point === 'x' ? ' ban' : ''}">${
+  'bBwW'.includes(point) ? `<i class="stone ${'bB'.includes(point) ? 'black' : 'white'}${'BW'.includes(point) ? ' win' : ''}"></i>` : ''}</span>`).join('')}</span>`;
+const stone = color => `<span class="stone-icon ${color}"></span>`;
+
+function omokGuide() {
+  const steps = [
+    ['흑과 백 정하기', '흑이 먼저 둬요. 첫 판은 방을 만든 P1이 흑,<br>다음 판부터는 판마다 흑과 백을 바꿔요.', `${stone('black')}${chip('먼저 둠')}<b class="guide-swap">⇄</b>${stone('white')}`],
+    ['빈 곳에 돌 놓기', '15 × 15 판의 빈 교차점을 눌러요.<br>마지막에 둔 돌에는 빨간 점이 찍혀요.', goban(['.....', '..b..', '.wbw.', '.....'])],
+    ['다섯 개 잇기', '가로, 세로, 대각선 어느 쪽이든<br>내 돌 다섯 개를 한 줄로 이으면 승리!', goban(['B....', '.B...', '..B..', '...B.', '....B'])],
+    ['기권과 무승부', '기권하면 이번 판은 패배로 기록돼요.<br>판이 가득 차면 무승부예요.', chip('기권하기', 'peach')],
+  ];
+  const fouls = [
+    ['3-3 (삼삼)', '한 수로 열린 3이 두 개 생김', goban(['.......', '...b...', '.bbx...', '...b...', '.......'])],
+    ['4-4 (사사)', '한 수로 4가 두 개 생김', goban(['...b...', '...b...', 'bbbx...', '...b...', '.......'])],
+    ['장목', '여섯 개 이상 이어짐', goban(['.......', 'bbbxbb.', '.......'])],
+  ];
+  return article('omok', {
+    eyebrow: '오목 게임 룰', title: '렌주룰 오목 쉽게 배우기',
+    intro: '흑과 백이 번갈아 돌을 놓아요. 다섯 개를 먼저 한 줄로 이으면 이겨요. 먼저 두는 흑에게는 금수가 있어요.',
+    art: stone('black') + stone('white') + stone('black'),
+    stats: [['2명', '1 : 1 대전'], ['15 × 15', '오목판 크기'], ['흑 먼저', '판마다 색 교대'], ['금수 3가지', '흑만 적용']],
+    sections: [
+      ['한 판은 이렇게 해요', stepList(steps,
+        '흑은 <b>금수 자리</b>에 둘 수 없어요. 내 차례가 흑이면 금수 자리에 <b>× 표시</b>가 나와요.')],
+      ['흑의 금수 (렌주룰)', `<ul class="guide-combos guide-fouls">${fouls.map(([name, text, board]) => `
+        <li><strong>${name}</strong><span>${text}</span>${board}<b>× 금지</b></li>`).join('')}</ul>
+        <div class="guide-upper">
+          <div><h4>4-3은 괜찮아요</h4><p>4 하나와 열린 3 하나가 동시에 생기는 수는 흑도 둘 수 있어요. 흑의 가장 강한 공격이에요.</p>
+            <div class="guide-example">${goban(['...b...', '...b...', '.bbB...', '...b...'])}</div>
+            <p class="guide-small">테두리 돌 하나로 세로 4와 가로 3이 함께 생겨요.</p></div>
+          <div class="guide-bonus"><p>금수 자리라도</p><strong>오목이 되면 OK!</strong>
+            <p>그 수로 정확히 다섯 개가 이어지면 흑의 승리예요.</p><p class="guide-small">× 표시는 오목이 안 되는 금수 자리에만 나와요.</p></div>
+        </div>`],
+      ['흑과 백의 승리 조건', `<ul class="guide-combos">${[['흑', '정확히 다섯 개만 승리 · 여섯 개 이상은 금수', stone('black'), '5개'], ['백', '다섯 개 이상이면 모두 승리 · 금수 없음', stone('white'), '5개 이상']]
+        .map(([name, text, visual, result]) => `<li><strong>${name}</strong><span>${text}</span>${visual}<b>${result}</b></li>`).join('')}</ul>
+        <p class="guide-small">· 먼저 두는 흑이 유리해서 렌주룰은 흑에게만 제한을 둬요</p>`],
+      ['이기는 꿀팁', tipList([
+        ['흑은 4-3을 노리기', '4와 열린 3을 동시에 만들면 백이 둘 다 막을 수 없어요.'],
+        ['백은 금수로 몰기', '흑이 막아야 할 자리를 금수로 만들면 흑은 그 자리에 둘 수 없어요.'],
+        ['열린 3은 바로 막기', '양쪽이 비어 있는 3을 두면 다음 수에 막을 수 없는 4가 돼요.'],
+      ])],
+    ],
+    foot: '게임 선택 → 오목 → 방 만들기 · 상대가 참가하고 둘 다 준비 완료를 누르면 시작해요.',
+  });
+}
+
+const guides = { dodge: dodgeGuide, rhythm: rhythmGuide, slap: slapGuide, ciao: ciaoGuide, onecard: oneCardGuide, yacht: yachtGuide, omok: omokGuide };
 
 export function guide(game) {
   const tabs = Object.entries(games).map(([id, item]) =>

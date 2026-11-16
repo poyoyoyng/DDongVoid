@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { applyAction, createRoom, expireRoom, roomView } from '../src/games.js';
-import { legalCard, yachtScore, yachtTotal } from '../public/rules.js';
+import { games, legalCard, yachtScore, yachtTotal } from '../public/rules.js';
 import { applySoloInput, makeSolo, replayScore, stepSolo } from '../public/solo-model.js';
 import { roomPage } from '../public/views.js';
 
@@ -188,4 +188,13 @@ test('포요용은 입장하지 않은 방도 삭제할 수 있고 다른 사람
   applyAction(room, { id: 'admin', name: '포요용' }, { action: 'delete' }, now);
   assert.equal(room.status, 'deleted');
   assert.deepEqual(room.players, []);
+});
+
+test('모든 게임에 게임설명이 있다', async () => {
+  const { guide } = await import('../public/guide.js');
+  for (const game of Object.keys(games)) {
+    const page = guide(game);
+    assert.ok(!page.includes('설명을 준비하고 있어요'), game + ' 설명 누락');
+    assert.ok(page.includes(`href="#${games[game].max === 1 ? 'play' : 'lobby'}/${game}"`), game + ' 바로가기 오류');
+  }
 });
