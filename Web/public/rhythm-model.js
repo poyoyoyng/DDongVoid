@@ -9,6 +9,8 @@ export const laneOf = key => key >> 1;
 export const judgements = ['PERFECT', 'GREAT', 'GOOD', 'MISS'];
 const [PERFECT, GREAT, GOOD, MISS] = judgements.keys();
 const windows = [.05, .1, .16];
+// A press this early still takes the block, as a MISS, so mashing keys cannot farm GOOD.
+const earlyMissWindow = .25;
 
 // Blocks fall 20% faster and come 20% more often than the Windows app.
 const pace = 1.2;
@@ -42,18 +44,18 @@ export function stepRhythm(state) {
   if (state.tick >= maxTicks) state.over = true;
 }
 
-// Judgement for pressing `key` (0-3) now, or null when no block of that key is in reach; early taps are not punished.
+// Judgement for pressing `key` (0-3) now, or null when no block of that key is in reach; a press before the GOOD window is a MISS.
 export function hitRhythm(state, key) {
   if (state.over || !Number.isInteger(key) || key < 0 || key >= keys.length) return null;
   state.lastPressTime[laneOf(key)] = state.seconds;
   let note = null;
   for (const item of state.notes) {
-    if (item.key === key && Math.abs(item.time - state.seconds) <= windows[GOOD] && (!note || item.time < note.time)) note = item;
+    if (item.key === key && item.time - state.seconds <= earlyMissWindow && (!note || item.time < note.time)) note = item;
   }
   if (!note) return null;
   state.notes.splice(state.notes.indexOf(note), 1);
   const delta = Math.abs(note.time - state.seconds);
-  const judgement = delta <= windows[PERFECT] ? PERFECT : delta <= windows[GREAT] ? GREAT : GOOD;
+  const judgement = delta <= windows[PERFECT] ? PERFECT : delta <= windows[GREAT] ? GREAT : delta <= windows[GOOD] ? GOOD : MISS;
   judge(state, judgement, note.lane);
   return judgement;
 }
@@ -112,7 +114,8 @@ function spawnPattern(state) {
   }
 }
 
-// Events are [tick, key] for presses that hit a block; presses that hit nothing do not change the score.
+// Events are [tick, key] for presses that took a block, early MISSes included; presses that hit nothing do not change the score.
+// An early MISS can end the run, so the last event may fall on `endTick` itself.
 export function replayRhythm(seed, endTick, events) {
   if (!Number.isInteger(endTick) || endTick < 1 || endTick > maxTicks || !Array.isArray(events) || events.length > 50_000) return null;
   const state = makeRhythm(seed);
@@ -120,7 +123,7 @@ export function replayRhythm(seed, endTick, events) {
   for (const event of events) {
     if (!Array.isArray(event) || event.length !== 2) return null;
     const [tick, key] = event;
-    if (!Number.isInteger(tick) || tick < previous || tick >= endTick || !Number.isInteger(key) || key < 0 || key >= keys.length) return null;
+    if (!Number.isInteger(tick) || tick < previous || tick > endTick || !Number.isInteger(key) || key < 0 || key >= keys.length) return null;
     while (state.tick < tick && !state.over) stepRhythm(state);
     if (state.over || hitRhythm(state, key) === null) return null;
     previous = tick;

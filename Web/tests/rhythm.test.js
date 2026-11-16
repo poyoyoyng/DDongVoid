@@ -43,12 +43,35 @@ test('the server replay matches the browser run', () => {
   assert.equal(replayRhythm(1234, state.tick, [[events[0][0], 4]]), null);
 });
 
+test('a press just before the GOOD window takes the block as a MISS', () => {
+  const state = makeRhythm(99);
+  while (!state.notes.some(note => note.time - state.seconds <= .2)) stepRhythm(state);
+  const note = state.notes.find(item => item.time - state.seconds <= .2);
+  assert.equal(hitRhythm(state, note.key), 3);
+  assert.ok(!state.notes.includes(note));
+  assert.equal(state.life, 90);
+  assert.equal(state.score, 0);
+});
+
+test('mashing every key misses most blocks and ends the run', () => {
+  const state = makeRhythm(7);
+  const events = [];
+  while (!state.over) {
+    stepRhythm(state);
+    if (state.tick % 10) continue;
+    for (let key = 0; key < 4; key++) if (hitRhythm(state, key) !== null) events.push([state.tick, key]);
+  }
+  assert.ok(state.counts[3] > state.counts[0] + state.counts[1] + state.counts[2]);
+  assert.ok(state.seconds < 30);
+  assert.equal(replayRhythm(7, state.tick, events), state.score);
+});
+
 test('a key only hits blocks of the same letter', () => {
   const state = makeRhythm(99);
   while (!state.notes.some(note => note.time <= state.seconds)) stepRhythm(state);
   const note = state.notes.find(item => item.time <= state.seconds);
   const other = note.key ^ 1;
-  if (!state.notes.some(item => item.key === other && Math.abs(item.time - state.seconds) <= .16)) {
+  if (!state.notes.some(item => item.key === other && item.time - state.seconds <= .25)) {
     assert.equal(hitRhythm(state, other), null);
   }
   assert.equal(hitRhythm(state, note.key), 0);
