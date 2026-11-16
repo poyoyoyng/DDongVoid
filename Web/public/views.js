@@ -27,7 +27,7 @@ export function home() {
       <div class="hero-copy">
         <h1>포요용의<br>미니게임천국<span aria-hidden="true">.</span></h1>
         <p>혼자 최고 기록에 도전하거나<br>친구를 초대해 한 판 겨뤄 보세요.</p>
-        <a href="#lobby/onecard" class="button button-primary">대전방 열기 <span aria-hidden="true">↗</span></a>
+        <a href="#lobby" class="button button-primary">대기방 입장 <span aria-hidden="true">↗</span></a>
       </div>
       <div class="hero-art" aria-hidden="true">
         <span class="hero-orbit"></span><span class="hero-orbit orbit-small"></span>
@@ -50,28 +50,41 @@ export const signInPrompt = `<div class="panel empty"><h2>로그인이 필요합
   <p>닉네임과 비밀번호로 가입하거나 로그인하세요.</p>
   <button class="button button-primary" data-account>로그인</button></div>`;
 
-export function lobby(game, rooms, accountId) {
-  return heading(games[game].title, games[game].description) + `
+export function lobby(rooms, accountId, selectedGame) {
+  const options = Object.entries(games)
+    .filter(([, game]) => game.max > 1)
+    .map(([id, game]) => `<option value="${id}" ${selectedGame === id ? 'selected' : ''}>${game.title}</option>`).join('');
+  return heading('공용 대기방') + `
   <div class="lobby-grid">
     <section class="panel">
-      <div class="section-head"><h2>대전방</h2><button type="button" class="button button-small button-quiet" data-refresh>새로고침</button></div>
-      ${rooms.length ? `<ul class="room-list">${rooms.map(room => {
-        const member = room.players.some(player => player.id === accountId);
-        const label = { waiting: '대기 중', playing: '진행 중', finished: '종료' }[room.status];
-        return `<li><div><strong>${escape(room.title)}</strong>
-          <p>${label} · ${room.players.length}/${games[game].max}명 · ${room.players.map(player => escape(player.name)).join(', ')}</p></div>
-          ${member ? `<a class="button button-small button-outline" href="#room/${room.id}">입장</a>`
-          : `<button class="button button-small button-outline" data-join="${room.id}" ${room.players.length >= games[game].max ? 'disabled' : ''}>참가</button>`}</li>`;
-      }).join('')}</ul>` : '<p class="empty">아직 열린 방이 없습니다.</p>'}
+      <div class="section-head"><h2>방 목록</h2><button type="button" class="button button-small button-quiet" data-refresh>새로고침</button></div>
+      <div id="lobby-rooms">${roomList(rooms, accountId)}</div>
     </section>
     <section class="panel">
       <h2>방 만들기</h2>
       <form id="new-room" class="stack">
-        <label>방 제목<input name="title" maxlength="40" placeholder="${games[game].title} 방" required></label>
+        <label>게임<select name="game" required>
+          <option value="" disabled ${selectedGame === undefined ? 'selected' : ''}>게임을 선택하세요</option>
+          ${options}
+        </select></label>
+        <label>방 제목<input name="title" maxlength="40" required></label>
         <button class="button button-primary" type="submit">방 만들기</button>
       </form>
     </section>
   </div>`;
+}
+
+export function roomList(rooms, accountId) {
+  if (!rooms.length) return '<p class="empty">아직 열린 방이 없습니다.</p>';
+  return `<ul class="room-list">${rooms.map(room => {
+    const game = games[room.game];
+    const member = room.players.some(player => player.id === accountId);
+    const label = { waiting: '대기 중', playing: '진행 중', finished: '종료' }[room.status];
+    return `<li><div><strong>${escape(room.title)}</strong>
+      <p>${game.title} · ${label} · ${room.players.length}/${game.max}명 · ${room.players.map(player => escape(player.name)).join(', ')}</p></div>
+      ${member ? `<a class="button button-small button-outline" href="#room/${room.id}">입장</a>`
+      : `<button class="button button-small button-outline" data-join="${room.id}" ${room.players.length >= game.max ? 'disabled' : ''}>참가</button>`}</li>`;
+  }).join('')}</ul>`;
 }
 
 export function rankings(game, rows) {
@@ -108,7 +121,7 @@ export function roomPage(room, user, ui) {
   const gameView = { slap: slapView, ciao: ciaoView, onecard: cardView, yacht: yachtView }[room.game];
   const winnerNames = room.winners.map(id => escape(room.players.find(player => player.id === id)?.name)).join(', ');
   const status = waiting ? '대기 중' : playing ? '게임 진행 중' : '경기 종료';
-  return heading(room.title, games[room.game].title + ' · ' + status, '#lobby/' + room.game, '대전방 목록') + `
+  return heading(room.title, games[room.game].title + ' · ' + status, '#lobby', '공용 대기방') + `
     <div class="room-toolbar"><span id="room-connection" class="connection">${ui.connected ? '실시간 연결됨' : '연결 중…'}</span>
       <button class="button button-small button-quiet" data-copy-room>초대 링크 복사</button></div>
     ${waiting ? `<section class="panel"><h2>참가자 ${room.players.length}/${games[room.game].max}</h2>

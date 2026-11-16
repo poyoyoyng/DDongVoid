@@ -35,12 +35,13 @@ function roomRequest(env, id, path, account, request, body) {
 }
 
 async function listRooms(db, game, account) {
-  requireThat(isRoomGame(game), '대전 게임을 선택해 주세요.');
+  requireThat(game === null || isRoomGame(game), '대전 게임을 선택해 주세요.');
   const { results } = await db.prepare(`
-    SELECT id, title, status, players FROM rooms WHERE game = ? AND status <> 'deleted'
+    SELECT id, game, title, status, players FROM rooms
+    WHERE (? IS NULL OR game = ?) AND status <> 'deleted'
       AND (status = 'waiting' OR EXISTS (SELECT 1 FROM json_each(players) WHERE json_extract(value, '$.id') = ?))
     ORDER BY status = 'waiting' DESC, created_at DESC LIMIT 100
-  `).bind(game, account.id).all();
+  `).bind(game, game, account.id).all();
   return json({ rooms: results.map(room => ({ ...room, players: JSON.parse(room.players) })) });
 }
 

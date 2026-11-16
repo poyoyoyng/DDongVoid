@@ -1,5 +1,5 @@
 import { cardRank, games } from './rules.js';
-import { escape, heading, home, lobby, rankings, roomPage, signInPrompt } from './views.js';
+import { escape, heading, home, lobby, rankings, roomList, roomPage, signInPrompt } from './views.js';
 import { playSolo, soloMarkup } from './solo.js';
 
 const app = document.querySelector('#app');
@@ -113,8 +113,9 @@ accountButton.addEventListener('click', () => showAccount());
 function parsePage() {
   const [section, key] = location.hash.slice(1).split('/');
   if (section === 'room' && roomIdPattern.test(key)) return { section, key };
+  if (section === 'lobby') return { section, key: Object.hasOwn(games, key) && games[key].max > 1 ? key : undefined };
   if (Object.hasOwn(games, key)) {
-    if (section === 'rankings' || section === 'lobby' && games[key].max > 1 || section === 'play' && games[key].max === 1) return { section, key };
+    if (section === 'rankings' || section === 'play' && games[key].max === 1) return { section, key };
   }
   return { section: 'home' };
 }
@@ -142,10 +143,12 @@ async function navigate() {
   ui = { connected: false, held: Array(5).fill(false), card: null, call: false };
   page = parsePage();
   const { section, key } = page;
-  document.querySelector('#nav-games').setAttribute('aria-current', section === 'rankings' ? 'false' : 'page');
+  const title = section === 'rankings' ? '랭킹' : section === 'lobby' ? '공용 대기방' : games[key]?.title ?? '대전방';
+  document.querySelector('#nav-games').setAttribute('aria-current', section === 'home' || section === 'play' ? 'page' : 'false');
+  document.querySelector('#nav-lobby')?.setAttribute('aria-current', section === 'lobby' || section === 'room' ? 'page' : 'false');
   document.querySelector('#nav-rankings').setAttribute('aria-current', section === 'rankings' ? 'page' : 'false');
   if (section === 'home') return paint(home());
-  if (!user) return paint(heading(section === 'rankings' ? '랭킹' : games[key]?.title ?? '대전방') + signInPrompt);
+  if (!user) return paint(heading(title) + signInPrompt);
   if (section === 'play') return showSoloStart(key);
   paint('<p class="loading" role="status">불러오는 중…</p>');
   try {
@@ -153,7 +156,7 @@ async function navigate() {
       const data = await api('/rankings?game=' + key);
       if (token === generation) paint(rankings(key, data.rows));
     }
-    if (section === 'lobby') await refreshLobby(token, key);
+    if (section === 'lobby') await refreshLobby(token);
     if (section === 'room') {
       const data = await api('/rooms/' + key);
       if (token !== generation) return;
@@ -167,15 +170,17 @@ async function navigate() {
       return paint(heading('대전방', '초대받은 방에 참가할 수 있습니다.') +
         `<div class="panel empty"><button type="button" class="button button-primary" data-join="${key}">방 참가</button></div>`);
     }
-    paint(heading(games[key]?.title ?? '대전방') + '<div class="panel empty"><p>' + escape(error.message) +
+    paint(heading(title) + '<div class="panel empty"><p>' + escape(error.message) +
       '</p><button type="button" class="button button-outline" data-reload>다시 불러오기</button></div>');
   }
 }
 
-async function refreshLobby(token = generation, game = page.key) {
-  const { rooms } = await api('/rooms?game=' + game);
+async function refreshLobby(token = generation) {
+  const { rooms } = await api('/rooms');
   if (token !== generation) return;
-  paint(lobby(game, rooms, user.id));
+  const list = app.querySelector('#lobby-rooms');
+  if (list) list.innerHTML = roomList(rooms, user.id);
+  else paint(lobby(rooms, user.id, page.key));
 }
 
 function showSoloStart(game) {
@@ -286,7 +291,7 @@ function connectRoom(id, token) {
       if (error.status === 401) return signedOut();
       if (error.status === 403 || error.status === 404) {
         message(error.message);
-        location.hash = '#lobby/' + room.game;
+        location.hash = '#lobby';
       }
     } finally {
       loading = false;
@@ -340,7 +345,7 @@ async function sendAction(data) {
     });
     if (token !== generation) return;
     if (result.room) acceptRoom(result.room);
-    else location.hash = '#lobby/' + current.game;
+    else location.hash = '#lobby';
   } catch (error) {
     if (token !== generation) return;
     if (error.status === 401) return signedOut();
@@ -413,9 +418,10 @@ app.addEventListener('submit', async event => {
   button.disabled = true;
   const token = generation;
   try {
-    const result = await api('/rooms', { game: page.key, title: new FormData(form).get('title') });
+    const result = await api('/rooms', Object.fromEntries(new FormData(form)));
     if (token === generation) location.hash = '#room/' + result.room.id;
   } catch (error) {
+    if (token !== generation) return;
     if (error.status === 401) return signedOut();
     message(error.message);
     button.disabled = false;

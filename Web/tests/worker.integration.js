@@ -112,6 +112,22 @@ test('Cloudflare 로컬 실행기에서 가입, WebSocket 대전, 알람, 랭킹
     result => result.rows.some(row => row.name === a.user.name && row.wins === 1));
 
   const ciao = await setup('ciao');
+  const { room: onecard } = await request('/rooms', {
+    cookie: a.cookie, data: { title: prefix + ' 원카드', game: 'onecard' }, status: 201,
+  });
+  const { room: yacht } = await request('/rooms', {
+    cookie: b.cookie, data: { title: prefix + ' 야추', game: 'yacht' }, status: 201,
+  });
+  const expectedRooms = [slap.current(), ciao.current(), onecard, yacht];
+  const { rooms: allRooms } = await eventually(() => request('/rooms', { cookie: b.cookie }),
+    result => expectedRooms.every(room => result.rooms.some(item => item.id === room.id)));
+  for (const room of expectedRooms) {
+    assert.equal(allRooms.find(item => item.id === room.id).game, room.game);
+  }
+  const { rooms: onecardRooms } = await request('/rooms?game=onecard', { cookie: b.cookie });
+  assert.ok(onecardRooms.some(room => room.id === onecard.id));
+  assert.ok(onecardRooms.every(room => room.game === 'onecard'));
+
   const rolled = await ciao.act(a, { action: 'roll' });
   assert.equal(typeof rolled.die, 'number');
   assert.equal((await request(ciao.path, { cookie: b.cookie })).room.die, undefined);
