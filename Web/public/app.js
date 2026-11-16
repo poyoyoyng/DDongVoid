@@ -1,6 +1,7 @@
 import { cardRank, games } from './rules.js';
 import { connectSocket, createChat } from './chat.js';
 import { escape, heading, home, lobby, rankings, roomList, roomPage, signInPrompt, yachtFace } from './views.js';
+import { guide } from './guide.js';
 import { playSolo, soloMarkup } from './solo.js';
 
 const app = document.querySelector('#app');
@@ -117,8 +118,9 @@ function parsePage() {
   if (section === 'room' && roomIdPattern.test(key)) return { section, key };
   if (section === 'lobby') return { section, key: Object.hasOwn(games, key) && games[key].max > 1 ? key : undefined };
   if (Object.hasOwn(games, key)) {
-    if (section === 'rankings' || section === 'play' && games[key].max === 1) return { section, key };
+    if (section === 'rankings' || section === 'guide' || section === 'play' && games[key].max === 1) return { section, key };
   }
+  if (section === 'guide') return { section, key: 'yacht' };
   return { section: 'home' };
 }
 
@@ -146,11 +148,13 @@ async function navigate() {
   ui = { connected: false, held: Array(5).fill(false), card: null, call: false };
   page = parsePage();
   const { section, key } = page;
-  const title = section === 'rankings' ? '랭킹' : section === 'lobby' ? '공용 대기방' : games[key]?.title ?? '대전방';
+  const title = section === 'rankings' ? '랭킹' : section === 'guide' ? '게임설명' : section === 'lobby' ? '공용 대기방' : games[key]?.title ?? '대전방';
   document.querySelector('#nav-games').setAttribute('aria-current', section === 'home' || section === 'play' ? 'page' : 'false');
+  document.querySelector('#nav-guide').setAttribute('aria-current', section === 'guide' ? 'page' : 'false');
   document.querySelector('#nav-lobby')?.setAttribute('aria-current', section === 'lobby' || section === 'room' ? 'page' : 'false');
   document.querySelector('#nav-rankings').setAttribute('aria-current', section === 'rankings' ? 'page' : 'false');
   if (section === 'home') return paint(home());
+  if (section === 'guide') return paint(guide(key));
   if (!user) return paint(heading(title) + signInPrompt);
   if (section === 'play') return showSoloStart(key);
   paint('<p class="loading" role="status">불러오는 중…</p>');
