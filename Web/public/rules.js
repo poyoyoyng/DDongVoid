@@ -8,6 +8,9 @@ export const games = {
   omok: { title: '오목', description: '렌주룰로 다섯 개를 먼저 한 줄로 이으세요.', mode: '2인 대전', max: 2 },
 };
 
+// The account with this nickname can delete any room from the lobby.
+export const isAdmin = account => account?.name === '포요용';
+
 export const canTakeSeat = room => room.status === 'playing'
   ? room.players.some(player => player.vacant)
   : room.status !== 'deleted' && room.players.length < games[room.game].max;

@@ -1,4 +1,4 @@
-import { canTakeSeat } from '../public/rules.js';
+import { canTakeSeat, isAdmin } from '../public/rules.js';
 import { requireThat } from './http.js';
 
 const memberActions = new Set(['join', 'watch', 'spectate', 'leave', 'delete']);
@@ -73,6 +73,12 @@ export function applyMemberAction(room, account, input, player, now) {
   } else if (input.action === 'watch') {
     if (player || spectator) return false;
     room.spectators.push({ id, name });
+  } else if (input.action === 'delete') {
+    requireThat(isAdmin(account) || (room.game !== 'slap' && room.hostId === id), '방장만 이 방을 삭제할 수 있습니다.', 403);
+    room.status = 'deleted';
+    room.players = [];
+    room.spectators = [];
+    room.deadline = null;
   } else {
     requireThat(player || spectator, '이 방에 입장하지 않았습니다.', 403);
     if (input.action === 'spectate') {
@@ -84,16 +90,10 @@ export function applyMemberAction(room, account, input, player, now) {
         room.players = room.players.filter(entry => entry.id !== id);
         resetReady(room);
       }
-    } else if (input.action === 'leave') {
+    } else {
       requireThat(!player || room.status !== 'playing', '경기 중에는 관전석으로 이동한 뒤 방을 나갈 수 있습니다.');
       removeMember(room, id);
       if (player && room.status !== 'deleted') resetReady(room);
-    } else {
-      requireThat(room.game !== 'slap' && room.hostId === id, '방장만 이 방을 삭제할 수 있습니다.', 403);
-      room.status = 'deleted';
-      room.players = [];
-      room.spectators = [];
-      room.deadline = null;
     }
   }
   return true;

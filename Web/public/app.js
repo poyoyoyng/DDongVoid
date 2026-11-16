@@ -206,8 +206,8 @@ async function refreshLobby(token = generation) {
   const { rooms } = await api('/rooms');
   if (token !== generation) return;
   const list = app.querySelector('#lobby-rooms');
-  if (list) list.innerHTML = roomList(rooms, user.id);
-  else paint(lobby(rooms, user.id, page.key));
+  if (list) list.innerHTML = roomList(rooms, user);
+  else paint(lobby(rooms, user, page.key));
 }
 
 function mountChat(path, title, token, options) {
@@ -465,6 +465,21 @@ app.addEventListener('click', async event => {
   }
   if (button.hasAttribute('data-refresh')) {
     try { await refreshLobby(); } catch (error) { message(error.message); }
+    return;
+  }
+  if (button.dataset.deleteRoom) {
+    if (!window.confirm('이 방을 삭제할까요? 안에 있는 사람들은 모두 나가게 됩니다.')) return;
+    const token = generation;
+    button.disabled = true;
+    try {
+      await api('/rooms/' + button.dataset.deleteRoom + '/action', { action: 'delete' });
+      if (token === generation) await refreshLobby(token);
+    } catch (error) {
+      if (token !== generation) return;
+      if (error.status === 401) return signedOut();
+      message(error.message);
+      button.disabled = false;
+    }
     return;
   }
   const entryRoom = button.dataset.join ?? button.dataset.watch;

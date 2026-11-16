@@ -180,3 +180,12 @@ test('관전자는 대기 중 빈 자리에 앉거나 관전석으로 돌아갈 
   applyAction(room, players[1], { action: 'leave' }, now);
   assert.equal(room.status, 'deleted');
 });
+
+test('포요용은 입장하지 않은 방도 삭제할 수 있고 다른 사람은 방장만 삭제할 수 있다', () => {
+  const room = createRoom('room', 'slap', '테스트', players[0], now);
+  applyAction(room, players[1], { action: 'join' }, now);
+  assert.throws(() => applyAction(room, players[2], { action: 'delete' }, now), /방장만/);
+  applyAction(room, { id: 'admin', name: '포요용' }, { action: 'delete' }, now);
+  assert.equal(room.status, 'deleted');
+  assert.deepEqual(room.players, []);
+});

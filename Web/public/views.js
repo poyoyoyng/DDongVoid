@@ -1,4 +1,4 @@
-import { canTakeSeat, cardName, cardRank, cardSuit, games, legalCard, powerCosts, powerNames, sum, suits, suitNames, yachtBonus, yachtCategories, yachtScore, yachtTotal, zones } from './rules.js';
+import { canTakeSeat, cardName, isAdmin, cardRank, cardSuit, games, legalCard, powerCosts, powerNames, sum, suits, suitNames, yachtBonus, yachtCategories, yachtScore, yachtTotal, zones } from './rules.js';
 import { BLACK, forbiddenReason, pointName, size as omokSize, winningLine } from './omok.js';
 
 export const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({
@@ -56,7 +56,7 @@ export const signInPrompt = `<div class="panel empty"><h2>로그인이 필요합
   <p>닉네임과 비밀번호로 가입하거나 로그인하세요.</p>
   <button class="button button-primary" data-account>로그인</button></div>`;
 
-export function lobby(rooms, accountId, selectedGame) {
+export function lobby(rooms, account, selectedGame) {
   const options = Object.entries(games)
     .filter(([, game]) => game.max > 1)
     .map(([id, game]) => `<option value="${id}" ${selectedGame === id ? 'selected' : ''}>${game.title}</option>`).join('');
@@ -65,7 +65,7 @@ export function lobby(rooms, accountId, selectedGame) {
   <div class="lobby-grid">
     <section class="panel">
       <div class="section-head"><h2>방 목록</h2><button type="button" class="button button-small button-quiet" data-refresh>새로고침</button></div>
-      <div id="lobby-rooms">${roomList(rooms, accountId)}</div>
+      <div id="lobby-rooms">${roomList(rooms, account)}</div>
     </section>
     <aside class="lobby-sidebar">
       <section class="panel">
@@ -87,8 +87,11 @@ export function lobby(rooms, accountId, selectedGame) {
 export const presenceText = ({ lobby, rooms, playing }) =>
   `지금 접속 중 · 로비 ${lobby.length}명 · 대전방 ${rooms.length}명 (게임 중 ${playing.length}명)`;
 
-export function roomList(rooms, accountId) {
+export function roomList(rooms, account) {
   if (!rooms.length) return '<p class="empty">아직 열린 방이 없습니다.</p>';
+  const accountId = account.id;
+  const remove = room => isAdmin(account)
+    ? `<button class="button button-small button-outline danger" data-delete-room="${room.id}">삭제</button>` : '';
   return `<ul class="room-list">${rooms.map(room => {
     const game = games[room.game];
     const spectators = room.spectators ?? [];
@@ -99,11 +102,12 @@ export function roomList(rooms, accountId) {
     return `<li><div><strong>${escape(room.title)}</strong>
       <p>${game.title} · ${label} · 참가 ${players.length}/${room.status === 'playing' ? room.players.length : game.max}명 · 관전 ${spectators.length}명</p>
       <p>${players.map(player => escape(player.name)).join(', ')}</p></div>
-      ${member ? `<a class="button button-small button-outline" href="#room/${room.id}">입장</a>`
-      : `<div class="room-list-actions">
-        ${canJoin ? `<button class="button button-small button-outline" data-join="${room.id}">참가</button>` : ''}
-        <button class="button button-small button-outline" data-watch="${room.id}">관전</button>
-      </div>`}</li>`;
+      <div class="room-list-actions">
+        ${member ? `<a class="button button-small button-outline" href="#room/${room.id}">입장</a>`
+        : `${canJoin ? `<button class="button button-small button-outline" data-join="${room.id}">참가</button>` : ''}
+        <button class="button button-small button-outline" data-watch="${room.id}">관전</button>`}
+        ${remove(room)}
+      </div></li>`;
   }).join('')}</ul>`;
 }
 
