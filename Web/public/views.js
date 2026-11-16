@@ -110,7 +110,7 @@ export function rankings(game, rows) {
       <h2>${games[game].title}</h2>
       <table><thead><tr><th scope="col">순위</th><th scope="col">닉네임</th>${solo ?
         '<th scope="col">최고 점수</th>' : '<th scope="col">점수</th><th scope="col">승</th><th scope="col">무</th><th scope="col">패</th>'}</tr></thead>
-      <tbody>${rows.length ? rows.map(row => `<tr><td>${row.rank}</td><th scope="row">${escape(row.name)}</th>${solo ?
+      <tbody>${rows.length ? rows.map(row => `<tr><td>${row.rank}</td><th scope="row">${escape(row.name)}${row.streak >= 2 ? ` <span class="streak">${row.streak}연승</span>` : ''}</th>${solo ?
         '<td>' + row.score.toLocaleString('ko-KR') + '</td>' : `<td class="mmr">${row.mmr}</td><td>${row.wins}</td><td>${row.draws}</td><td>${row.losses}</td>`}</tr>`).join('')
         : `<tr><td colspan="${solo ? 3 : 6}" class="empty">아직 기록이 없습니다.</td></tr>`}</tbody></table>
     </section>`;

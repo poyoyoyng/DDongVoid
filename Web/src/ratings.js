@@ -1,6 +1,10 @@
 export const startRating = 1000;
 const kFactor = 32;
 
+// Only a sole win extends a streak. From the second straight win each win earns 2 more points, up to +10.
+export const extendsStreak = outcome => outcome === 'W';
+export const streakBonus = streak => Math.min(10, Math.max(0, streak - 1) * 2);
+
 // Elo for one finished match. Each winner beats each loser and ties with the other winners;
 // losers are not ranked against each other. With more players every pairing counts for less,
 // so a four-player win moves a rating about as much as a two-player win.

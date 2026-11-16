@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { chatHistory, closeLiveSocket, openLiveSocket, postChat } from './chat.js';
 import { applyAction, createRoom, expireRoom, roomView } from './games.js';
 import { errorResponse, json, readBody, requireThat } from './http.js';
-import { ratingChanges, startRating } from './ratings.js';
+import { extendsStreak, ratingChanges, startRating, streakBonus } from './ratings.js';
 import { isRoomMember } from './room-members.js';
 
 const retryDelay = 5000;
@@ -82,20 +82,25 @@ export class GameRoom extends DurableObject {
     const ids = [...new Set(results.flatMap(result => result.outcomes.map(player => player.id)))];
     const ratings = new Map();
     if (ids.length) {
-      const { results: rows } = await db.prepare(`SELECT game, account_id, rating FROM ratings WHERE account_id IN (${ids.map(() => '?').join(', ')})`)
+      const { results: rows } = await db.prepare(`SELECT game, account_id, rating, streak FROM ratings WHERE account_id IN (${ids.map(() => '?').join(', ')})`)
         .bind(...ids).all();
-      for (const row of rows) ratings.set(row.game + ':' + row.account_id, row.rating);
+      for (const row of rows) ratings.set(row.game + ':' + row.account_id, { rating: row.rating, streak: row.streak });
     }
     for (const result of results) {
-      const current = new Map(result.outcomes.map(player => [player.id, ratings.get(result.game + ':' + player.id) ?? startRating]));
+      const entry = id => ratings.get(result.game + ':' + id) ?? { rating: startRating, streak: 0 };
+      const current = new Map(result.outcomes.map(player => [player.id, entry(player.id).rating]));
+      const outcomes = new Map(result.outcomes.map(player => [player.id, player.outcome]));
       // Rating changes run before the match is recorded, so a retried batch finds the match and skips them.
-      for (const { id, change } of ratingChanges(result.outcomes, current)) {
-        ratings.set(result.game + ':' + id, current.get(id) + change);
+      for (const { id, change: elo } of ratingChanges(result.outcomes, current)) {
+        const won = extendsStreak(outcomes.get(id));
+        const streak = won ? entry(id).streak + 1 : 0;
+        const change = elo + streakBonus(streak);
+        ratings.set(result.game + ':' + id, { rating: current.get(id) + change, streak });
         statements.push(db.prepare(`
-          INSERT INTO ratings (game, account_id, rating)
-          SELECT ?1, ?2, ?3 + ?4 WHERE NOT EXISTS (SELECT 1 FROM match_results WHERE room_id = ?5 AND match_no = ?6)
-          ON CONFLICT (game, account_id) DO UPDATE SET rating = ratings.rating + ?4
-        `).bind(result.game, id, startRating, change, result.id, result.match));
+          INSERT INTO ratings (game, account_id, rating, streak)
+          SELECT ?1, ?2, ?3 + ?4, ?7 WHERE NOT EXISTS (SELECT 1 FROM match_results WHERE room_id = ?5 AND match_no = ?6)
+          ON CONFLICT (game, account_id) DO UPDATE SET rating = ratings.rating + ?4, streak = CASE WHEN ?7 THEN ratings.streak + 1 ELSE 0 END
+        `).bind(result.game, id, startRating, change, result.id, result.match, won ? 1 : 0));
       }
       for (const player of result.outcomes) {
         statements.push(db.prepare('INSERT OR IGNORE INTO match_results VALUES (?, ?, ?, ?, ?)')

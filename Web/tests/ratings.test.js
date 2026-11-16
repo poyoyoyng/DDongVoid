@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ratingChanges } from '../src/ratings.js';
+import { extendsStreak, ratingChanges, streakBonus } from '../src/ratings.js';
 
 const changes = (outcomes, ratings = {}) => Object.fromEntries(
   ratingChanges(outcomes.map(([id, outcome]) => ({ id, outcome })), new Map(Object.entries(ratings)))
@@ -22,4 +22,9 @@ test('a draw pulls the ratings together', () => {
 
 test('a four-player win counts each loser for a third', () => {
   assert.deepEqual(changes([['a', 'W'], ['b', 'L'], ['c', 'L'], ['d', 'L']]), { a: 16, b: -5, c: -5, d: -5 });
+});
+
+test('streak bonus starts at the second straight win and stops at ten', () => {
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 9].map(streakBonus), [0, 0, 2, 4, 6, 8, 10, 10]);
+  assert.deepEqual(['W', 'D', 'L'].map(extendsStreak), [true, false, false]);
 });

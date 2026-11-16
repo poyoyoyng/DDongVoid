@@ -24,12 +24,12 @@ async function rankings(db, game) {
       SELECT account_id, SUM(outcome = 'W') AS wins, SUM(outcome = 'D') AS draws, SUM(outcome = 'L') AS losses
       FROM match_results WHERE game = ?1 GROUP BY account_id
     ), board AS (
-      SELECT name, CAST(ROUND(COALESCE(ratings.rating, ${startRating})) AS INTEGER) AS mmr,
+      SELECT name, CAST(ROUND(COALESCE(ratings.rating, ${startRating})) AS INTEGER) AS mmr, COALESCE(ratings.streak, 0) AS streak,
         COALESCE(wins, 0) AS wins, COALESCE(draws, 0) AS draws, COALESCE(losses, 0) AS losses
       FROM accounts LEFT JOIN totals ON totals.account_id = accounts.id
         LEFT JOIN ratings ON ratings.account_id = accounts.id AND ratings.game = ?1
     )
-    SELECT name, mmr, wins, draws, losses, RANK() OVER (ORDER BY mmr DESC, wins DESC, draws DESC, losses ASC) AS rank
+    SELECT name, mmr, streak, wins, draws, losses, RANK() OVER (ORDER BY mmr DESC, wins DESC, draws DESC, losses ASC) AS rank
     FROM board ORDER BY rank, name LIMIT 1000
   `;
   return json({ rows: (await db.prepare(sql).bind(game).all()).results });

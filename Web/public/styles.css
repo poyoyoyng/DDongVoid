@@ -194,6 +194,7 @@ thead { color: var(--muted); font-size: 13px; }
 tbody tr:last-child > * { border-bottom: 0; }
 .rankings h2 { margin-bottom: 13px; }
 .rankings td:first-child, .rankings td.mmr { font-weight: 800; }
+.rankings .streak { margin-left: 6px; padding: 2px 8px; border-radius: 999px; background: #ffe7c2; color: #b4530f; font-size: 12px; font-weight: 800; white-space: nowrap; }
 
 .room-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-bottom: 12px; }
 .room-top .back { margin: 0; }
