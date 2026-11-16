@@ -11,17 +11,23 @@ const roomPath = /^\/api\/rooms\/([0-9a-f-]{36})(?:\/(action|socket|chat))?$/;
 
 async function rankings(db, game) {
   requireThat(isRoomGame(game) || isSoloGame(game), '게임을 선택해 주세요.');
+  // Every account is listed; members without a record show zeros.
   const sql = isSoloGame(game) ? `
-    SELECT name, score, RANK() OVER (ORDER BY score DESC) AS rank
-    FROM solo_bests JOIN accounts ON account_id = accounts.id
-    WHERE game = ? ORDER BY rank, name LIMIT 100
+    WITH board AS (
+      SELECT name, COALESCE(score, 0) AS score
+      FROM accounts LEFT JOIN solo_bests ON solo_bests.account_id = accounts.id AND solo_bests.game = ?
+    )
+    SELECT name, score, RANK() OVER (ORDER BY score DESC) AS rank FROM board ORDER BY rank, name LIMIT 1000
   ` : `
     WITH totals AS (
       SELECT account_id, SUM(outcome = 'W') AS wins, SUM(outcome = 'D') AS draws, SUM(outcome = 'L') AS losses
       FROM match_results WHERE game = ? GROUP BY account_id
+    ), board AS (
+      SELECT name, COALESCE(wins, 0) AS wins, COALESCE(draws, 0) AS draws, COALESCE(losses, 0) AS losses
+      FROM accounts LEFT JOIN totals ON totals.account_id = accounts.id
     )
     SELECT name, wins, draws, losses, RANK() OVER (ORDER BY wins DESC, draws DESC, losses ASC) AS rank
-    FROM totals JOIN accounts ON account_id = accounts.id ORDER BY rank, name LIMIT 100
+    FROM board ORDER BY rank, name LIMIT 1000
   `;
   return json({ rows: (await db.prepare(sql).bind(game).all()).results });
 }
