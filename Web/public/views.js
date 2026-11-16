@@ -358,9 +358,9 @@ function ciaoView(room, me) {
 }
 
 const rankNames = { 1: 'A', 11: 'J', 12: 'Q', 13: 'K' };
-const redCard = card => card === 53 || card < 52 && [1, 2].includes(cardSuit(card));
+export const redCard = card => card === 53 || card < 52 && [1, 2].includes(cardSuit(card));
 
-function cardFace(card) {
+export function cardFace(card) {
   if (card === null) return '<b>—</b>';
   if (card >= 52) return `<b>★</b><small class="joker${card === 53 ? ' rainbow' : ''}">${[...'JOKER'].map(letter => `<i>${letter}</i>`).join('')}</small>`;
   return `<b>${rankNames[cardRank(card)] ?? cardRank(card)}</b><span>${suits[cardSuit(card)]}</span>`;

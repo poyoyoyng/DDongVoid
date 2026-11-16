@@ -381,64 +381,80 @@ dialog .form-error { color: #a53745; margin: 0; }
 .icon-button { display: grid; place-items: center; width: 33px; height: 33px; background: #eef3fb; border: 0; border-radius: 50%; color: var(--ink); font-size: 21px; }
 .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px); padding: 11px 18px; border-radius: 999px; background: var(--dark); color: white; z-index: 3; font-size: 14px; font-weight: 650; box-shadow: 0 4px 0 #141d47, 0 10px 24px #1f2b5c4d; }
 
-.guide-yacht { --g-inner: #0f1a16; --g-card: #1b2f25; --g-line: #2d4337; --g-muted: #b8d1c2; --g-mint: #a7f3ce; --g-gold: #f5cf62; display: grid; gap: 16px; background: #16281f; border-color: #345747; color: #f5fbf6; box-shadow: 0 5px 0 #0c1712, 0 18px 36px -20px #0c171299; }
-.guide-yacht p { color: var(--g-muted); font-size: 14px; line-height: 1.55; }
-.guide-yacht b { color: #f5fbf6; }
-.guide-yacht h4 { margin: 0 0 4px; font-size: 17px; letter-spacing: -.02em; }
-.guide-yacht .guide-small { font-size: 12.5px; }
+.guide-game { --app-mint: #a7f3ce; --app-gold: #ffd064; --g-inner: #0f1a16; --g-card: #1b2f25; --g-line: #2d4337; --g-muted: #b8d1c2; --g-mint: #a7f3ce; --g-gold: #f5cf62; display: grid; gap: 16px; background: #16281f; border-color: #345747; color: #f5fbf6; box-shadow: 0 5px 0 #0c1712, 0 18px 36px -20px #0c171299; }
+.guide-game p { color: var(--g-muted); font-size: 14px; line-height: 1.55; }
+.guide-game b { color: #f5fbf6; }
+.guide-game h4 { margin: 0 0 4px; font-size: 17px; letter-spacing: -.02em; }
+.guide-game .guide-small { font-size: 12.5px; }
 .guide-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-.guide-yacht .guide-eyebrow { color: var(--g-mint); font-size: 13px; font-weight: 800; }
+.guide-game .guide-eyebrow { color: var(--g-mint); font-size: 13px; font-weight: 800; }
 .guide-head h2 { font-size: clamp(26px, 4.6vw, 44px); margin: 2px 0 8px; }
-.guide-hero-dice { flex: none; transform: rotate(-7deg); margin-top: 6px; }
-.guide-hero-dice .guide-die { width: clamp(28px, 4vw, 44px); }
+.guide-hero-art { display: flex; flex: none; align-items: flex-end; gap: 4px; margin-top: 6px; transform: rotate(-7deg); }
+.guide-hero-art .guide-die { width: clamp(28px, 4vw, 44px); }
 .guide-stats { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .guide-stats li { display: grid; justify-items: center; gap: 2px; padding: 14px 8px; border: 1px solid var(--g-line); border-radius: 14px; background: var(--g-card); color: var(--g-muted); font-size: 13px; text-align: center; }
-.guide-yacht .guide-stats b { color: var(--g-mint); font-size: clamp(19px, 2.6vw, 26px); }
+.guide-game .guide-stats b { color: var(--g-mint); font-size: clamp(19px, 2.6vw, 26px); }
 .guide-section { border: 1px solid var(--g-line); border-radius: 18px; background: var(--g-card); padding: clamp(14px, 2.6vw, 24px); }
 .guide-section h3 { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; font-size: clamp(19px, 2.6vw, 25px); }
 .guide-number { display: grid; flex: none; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--g-mint); color: #16281f; font-size: 15px; letter-spacing: 0; }
 .guide-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .guide-steps li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); align-items: center; gap: 16px; }
 .guide-demo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; min-height: 64px; padding: 10px 14px; border-radius: 12px; background: var(--g-inner); }
-.guide-yacht .guide-demo p { font-size: 13px; }
+.guide-game .guide-demo p { font-size: 13px; }
 .guide-dice { display: inline-flex; gap: 5px; }
 .die-face.guide-die { flex: none; width: 36px; max-width: none; }
 .die-face.guide-die.held { border-color: var(--g-mint); outline: 2px solid var(--g-mint); }
 .die-face.guide-die.dim { background: #56625b; border-color: #66736b; box-shadow: 0 3px 0 #2b342f; }
-.guide-yacht .guide-green { color: var(--g-mint); }
+.guide-game .guide-green { color: var(--g-mint); }
 .guide-score { display: inline-flex; gap: 12px; padding: 8px 14px; border: 2px solid #c9b25a; border-radius: 10px; background: #3b4527; font-weight: 800; }
-.guide-yacht .guide-score b { color: var(--g-gold); }
-.guide-yacht .guide-warning { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: #3a2a1c; color: #f1dcc6; }
-.guide-yacht .guide-warning b { color: #ffb36b; }
+.guide-game .guide-score b { color: var(--g-gold); }
+.guide-game .guide-warning { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: #3a2a1c; color: #f1dcc6; }
+.guide-game .guide-warning b { color: #ffb36b; }
 .guide-upper { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 16px; }
 .guide-example { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0 6px; }
-.guide-yacht .guide-example b, .guide-yacht .guide-bonus b { color: var(--g-gold); }
+.guide-game .guide-example b, .guide-game .guide-bonus b { color: var(--g-gold); }
 .guide-example b { font-size: 17px; }
 .guide-bonus { display: grid; gap: 4px; padding: 16px; border: 2px solid var(--g-gold); border-radius: 14px; background: #1f3226; }
 .guide-bonus strong { color: var(--g-gold); font-size: clamp(25px, 3.4vw, 34px); letter-spacing: -.03em; }
-.guide-yacht .guide-bonus b.guide-plain { color: #f5fbf6; }
+.guide-game .guide-bonus b.guide-plain { color: #f5fbf6; }
 .guide-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; }
 .guide-progress { height: 10px; margin-top: 4px; border-radius: 99px; background: var(--g-inner); overflow: hidden; }
 .guide-progress i { display: block; width: 76%; height: 100%; border-radius: inherit; background: #f4c59d; }
 .guide-combos { list-style: none; margin: 0 0 10px; padding: 0; border-radius: 12px; overflow: hidden; }
-.guide-combos li { display: grid; grid-template-columns: 140px minmax(0, 1fr) auto 44px; align-items: center; gap: 12px; padding: 10px 14px; background: var(--g-inner); }
+.guide-combos li { display: grid; grid-template-columns: 140px minmax(0, 1fr) auto minmax(44px, auto); align-items: center; gap: 12px; padding: 10px 14px; background: var(--g-inner); }
 .guide-combos li:nth-child(even) { background: #14231c; }
-.guide-combos li > span { color: var(--g-muted); font-size: 14px; }
-.guide-yacht .guide-combos > li > b { color: var(--g-gold); font-size: 18px; text-align: right; }
+.guide-combos li > span:nth-child(2) { color: var(--g-muted); font-size: 14px; }
+.guide-game .guide-combos > li > b { color: var(--g-gold); font-size: 18px; text-align: right; white-space: nowrap; }
 .guide-tips { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .guide-tips li { position: relative; padding-left: 30px; }
 .guide-tips li::before { content: '✓'; position: absolute; top: -1px; left: 2px; color: var(--g-mint); font-size: 18px; font-weight: 900; }
 .guide-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.guide-sprite { display: inline-block; width: clamp(64px, 9vw, 110px); }
+.guide-hero-art .guide-card { width: clamp(40px, 5vw, 56px); }
+.guide-chip { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 8px; background: #27332f; color: #e9f1ed; font-size: 13px; font-weight: 750; white-space: nowrap; }
+.guide-chip.mint { background: var(--g-mint); color: #10291e; }
+.guide-chip.peach { background: #392a1f; color: #f4c59d; }
+.guide-chip.gold { background: #3b4527; color: var(--g-gold); }
+.guide-chip.big { padding: 10px 24px; font-size: 18px; }
+.guide-game .guide-swap { color: var(--g-muted); font-size: 18px; }
+.guide-game .guide-hit { color: #f4b69d; }
+.guide-lines { display: grid; gap: 6px; }
+.guide-lines p { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.guide-hp { width: 120px; }
+.guide-hand { display: inline-flex; gap: 4px; }
+.guide-card { flex: none; }
+.guide-card.dim { filter: brightness(.5); }
+.guide-game .card-face b, .guide-game .card-face span { color: inherit; }
 @media (max-width: 610px) {
-  .guide-hero-dice { display: none; }
+  .guide-hero-art { display: none; }
   .guide-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .guide-steps li, .guide-upper { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .guide-steps li { padding-bottom: 6px; }
   .guide-combos li { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name score" "desc desc" "dice dice"; gap: 6px 10px; }
   .guide-combos strong { grid-area: name; }
-  .guide-combos li > span { grid-area: desc; }
-  .guide-combos li > .guide-dice { grid-area: dice; }
-  .guide-yacht .guide-combos > li > b { grid-area: score; }
+  .guide-combos li > span:nth-child(2) { grid-area: desc; }
+  .guide-combos li > :nth-child(3) { grid-area: dice; justify-self: start; }
+  .guide-game .guide-combos > li > b { grid-area: score; }
   .die-face.guide-die { width: 32px; }
 }
 
