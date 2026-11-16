@@ -122,7 +122,8 @@ test('Cloudflare 로컬 실행기에서 가입, WebSocket 대전, 알람, 랭킹
   }
   assert.deepEqual(slap.current().winners, [a.user.id]);
   await eventually(() => request('/rankings?game=slap', { cookie: a.cookie }),
-    result => result.rows.some(row => row.name === a.user.name && row.wins === 1));
+    result => result.rows.some(row => row.name === a.user.name && row.wins === 1 && row.mmr === 1016) &&
+      result.rows.some(row => row.name === b.user.name && row.losses === 1 && row.mmr === 984));
 
   const ciao = await setup('ciao');
   const unexpected = [];

@@ -1,6 +1,7 @@
 import { authenticate, currentUser, findAccount } from './auth.js';
 import { isRoomGame } from './games.js';
 import { errorResponse, json, readBody, requireThat } from './http.js';
+import { startRating } from './ratings.js';
 import { isSoloGame, startSolo } from './scores.js';
 export { GameRoom } from './room.js';
 export { ScoreVerifier } from './scores.js';
@@ -21,12 +22,14 @@ async function rankings(db, game) {
   ` : `
     WITH totals AS (
       SELECT account_id, SUM(outcome = 'W') AS wins, SUM(outcome = 'D') AS draws, SUM(outcome = 'L') AS losses
-      FROM match_results WHERE game = ? GROUP BY account_id
+      FROM match_results WHERE game = ?1 GROUP BY account_id
     ), board AS (
-      SELECT name, COALESCE(wins, 0) AS wins, COALESCE(draws, 0) AS draws, COALESCE(losses, 0) AS losses
+      SELECT name, CAST(ROUND(COALESCE(ratings.rating, ${startRating})) AS INTEGER) AS mmr,
+        COALESCE(wins, 0) AS wins, COALESCE(draws, 0) AS draws, COALESCE(losses, 0) AS losses
       FROM accounts LEFT JOIN totals ON totals.account_id = accounts.id
+        LEFT JOIN ratings ON ratings.account_id = accounts.id AND ratings.game = ?1
     )
-    SELECT name, wins, draws, losses, RANK() OVER (ORDER BY wins DESC, draws DESC, losses ASC) AS rank
+    SELECT name, mmr, wins, draws, losses, RANK() OVER (ORDER BY mmr DESC, wins DESC, draws DESC, losses ASC) AS rank
     FROM board ORDER BY rank, name LIMIT 1000
   `;
   return json({ rows: (await db.prepare(sql).bind(game).all()).results });

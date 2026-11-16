@@ -104,15 +104,15 @@ export function rankings(game, rows) {
   const solo = games[game].max === 1;
   const tabs = Object.entries(games).map(([id, item]) =>
     `<a class="${id === game ? 'selected' : ''}" href="#rankings/${id}" ${id === game ? 'aria-current="page"' : ''}>${item.title}</a>`).join('');
-  return heading('랭킹', '게임별 최고 점수와 대전 성적을 확인하세요.') + `
+  return heading('랭킹', solo ? '게임별 최고 점수를 확인하세요.' : '대전 게임은 점수 순입니다. 모두 1000점에서 시작해 이기면 오르고 지면 내려가요.') + `
     <div class="tabs" aria-label="랭킹 게임">${tabs}</div>
     <section class="panel rankings">
       <h2>${games[game].title}</h2>
       <table><thead><tr><th scope="col">순위</th><th scope="col">닉네임</th>${solo ?
-        '<th scope="col">최고 점수</th>' : '<th scope="col">승</th><th scope="col">무</th><th scope="col">패</th>'}</tr></thead>
+        '<th scope="col">최고 점수</th>' : '<th scope="col">점수</th><th scope="col">승</th><th scope="col">무</th><th scope="col">패</th>'}</tr></thead>
       <tbody>${rows.length ? rows.map(row => `<tr><td>${row.rank}</td><th scope="row">${escape(row.name)}</th>${solo ?
-        '<td>' + row.score.toLocaleString('ko-KR') + '</td>' : `<td>${row.wins}</td><td>${row.draws}</td><td>${row.losses}</td>`}</tr>`).join('')
-        : `<tr><td colspan="${solo ? 3 : 5}" class="empty">아직 기록이 없습니다.</td></tr>`}</tbody></table>
+        '<td>' + row.score.toLocaleString('ko-KR') + '</td>' : `<td class="mmr">${row.mmr}</td><td>${row.wins}</td><td>${row.draws}</td><td>${row.losses}</td>`}</tr>`).join('')
+        : `<tr><td colspan="${solo ? 3 : 6}" class="empty">아직 기록이 없습니다.</td></tr>`}</tbody></table>
     </section>`;
 }
 

@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { chatHistory, closeLiveSocket, openLiveSocket, postChat } from './chat.js';
 import { applyAction, createRoom, expireRoom, roomView } from './games.js';
 import { errorResponse, json, readBody, requireThat } from './http.js';
+import { ratingChanges, startRating } from './ratings.js';
 import { isRoomMember } from './room-members.js';
 
 const retryDelay = 5000;
@@ -77,7 +78,25 @@ export class GameRoom extends DurableObject {
         WHERE excluded.revision > room_spectators.revision
       `).bind(summary.id, JSON.stringify(summary.spectators ?? []), summary.revision));
     }
-    for (const result of pending.results.slice(0, 15)) {
+    const results = pending.results.slice(0, 15);
+    const ids = [...new Set(results.flatMap(result => result.outcomes.map(player => player.id)))];
+    const ratings = new Map();
+    if (ids.length) {
+      const { results: rows } = await db.prepare(`SELECT game, account_id, rating FROM ratings WHERE account_id IN (${ids.map(() => '?').join(', ')})`)
+        .bind(...ids).all();
+      for (const row of rows) ratings.set(row.game + ':' + row.account_id, row.rating);
+    }
+    for (const result of results) {
+      const current = new Map(result.outcomes.map(player => [player.id, ratings.get(result.game + ':' + player.id) ?? startRating]));
+      // Rating changes run before the match is recorded, so a retried batch finds the match and skips them.
+      for (const { id, change } of ratingChanges(result.outcomes, current)) {
+        ratings.set(result.game + ':' + id, current.get(id) + change);
+        statements.push(db.prepare(`
+          INSERT INTO ratings (game, account_id, rating)
+          SELECT ?1, ?2, ?3 + ?4 WHERE NOT EXISTS (SELECT 1 FROM match_results WHERE room_id = ?5 AND match_no = ?6)
+          ON CONFLICT (game, account_id) DO UPDATE SET rating = ratings.rating + ?4
+        `).bind(result.game, id, startRating, change, result.id, result.match));
+      }
       for (const player of result.outcomes) {
         statements.push(db.prepare('INSERT OR IGNORE INTO match_results VALUES (?, ?, ?, ?, ?)')
           .bind(result.id, result.match, result.game, player.id, player.outcome));
