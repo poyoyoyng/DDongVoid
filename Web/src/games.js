@@ -1,8 +1,9 @@
 import { cardAttack, cardName, cardRank, cardSuit, games, legalCard, powerCosts, sum, yachtCategories, yachtScore, yachtTotal } from '../public/rules.js';
+import { BLACK, WHITE, forbiddenReason, size as omokSize, winningLine } from '../public/omok.js';
 import { randomInt, requireThat } from './http.js';
 import { applyMemberAction, isMemberAction } from './room-members.js';
 
-const roomGames = new Set(['slap', 'ciao', 'onecard', 'yacht']);
+const roomGames = new Set(['slap', 'ciao', 'onecard', 'yacht', 'omok']);
 export const isRoomGame = game => roomGames.has(game);
 const current = room => room.players[room.index];
 const integerIn = (value, first, last) => Number.isInteger(value) && value >= first && value <= last;
@@ -48,6 +49,7 @@ export function applyAction(room, account, input, now, roll = randomInt) {
       if (room.game === 'ciao') ciaoAction(room, player, input, now, roll);
       if (room.game === 'onecard') oneCardAction(room, player, input, now, roll);
       if (room.game === 'yacht') yachtAction(room, player, input, roll);
+      if (room.game === 'omok') omokAction(room, player, input);
     }
   }
   room.revision++;
@@ -76,6 +78,13 @@ function start(room, roll) {
       break;
     case 'onecard':
       startCards(room, roll);
+      break;
+    case 'omok':
+      // Colors swap every match: seat 1 (P1) takes black in odd matches, seat 2 in even ones. Black moves first.
+      room.blackSeat = (room.match + 1) % 2;
+      room.index = room.blackSeat;
+      room.board = Array(omokSize * omokSize).fill(0);
+      room.lastMove = null;
       break;
     case 'yacht':
       resetDice(room);
@@ -325,6 +334,31 @@ function oneCardAction(room, player, input, now, random) {
   if (player.hand.length === 1) room.uncalled.push(id);
   if (rank === 12) room.direction *= -1;
   advanceCards(room, rank === 13 ? 0 : rank === 11 ? 2 : 1);
+}
+
+function omokAction(room, player, input) {
+  requireThat(input.turn === room.turn, stale, 409);
+  if (input.action === 'resign') {
+    const winner = room.players.find(candidate => candidate !== player);
+    return complete(room, [winner.id], player.name + ' 기권');
+  }
+  requireThat(input.action === 'place', '알 수 없는 행동입니다.');
+  requireThat(player === current(room), '내 차례가 아닙니다.');
+  const { x, y } = input;
+  requireThat(integerIn(x, 0, omokSize - 1) && integerIn(y, 0, omokSize - 1), '돌을 놓을 자리를 골라 주세요.');
+  const index = y * omokSize + x;
+  requireThat(!room.board[index], '이미 돌이 놓인 자리입니다.');
+  const black = room.index === room.blackSeat;
+  if (black) {
+    const reason = forbiddenReason(room.board, index);
+    requireThat(!reason, `흑은 ${reason} 금수 자리에 둘 수 없습니다.`);
+  }
+  room.board[index] = black ? BLACK : WHITE;
+  room.lastMove = index;
+  room.turn++;
+  if (winningLine(room.board, index)) return complete(room, [player.id], player.name + (black ? '(흑)' : '(백)') + ' · 오목 완성!');
+  if (room.board.every(Boolean)) return complete(room, room.players.map(candidate => candidate.id), '판이 가득 찼습니다 · 무승부');
+  room.index = 1 - room.index;
 }
 
 function resetDice(room) {

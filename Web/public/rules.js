@@ -4,6 +4,7 @@ export const games = {
   ciao: { title: '차오차오', description: '주사위 눈을 속이고 상대의 선언을 의심하세요.', mode: '2~4인 대전', max: 4 },
   onecard: { title: '원카드', description: '특수 카드를 활용해 손패를 먼저 모두 내세요.', mode: '2~4인 대전', max: 4 },
   yacht: { title: '야추', description: '주사위 다섯 개로 열두 칸의 점수판을 채우세요.', mode: '2인 대전', max: 2 },
+  omok: { title: '오목', description: '렌주룰로 다섯 개를 먼저 한 줄로 이으세요.', mode: '2인 대전', max: 2 },
 };
 
 export const canTakeSeat = room => room.status === 'playing'

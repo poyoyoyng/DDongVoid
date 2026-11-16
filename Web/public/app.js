@@ -495,6 +495,7 @@ app.addEventListener('click', async event => {
   if (button.dataset.action) {
     const action = JSON.parse(button.dataset.action);
     if (action.action === 'delete' && !window.confirm('이 방을 삭제할까요?')) return;
+    if (action.action === 'resign' && !window.confirm('기권하면 이번 판은 패배로 기록됩니다. 기권할까요?')) return;
     await sendAction(action);
   }
 });

@@ -1,4 +1,5 @@
 import { canTakeSeat, cardName, cardRank, cardSuit, games, legalCard, powerCosts, powerNames, sum, suits, suitNames, yachtBonus, yachtCategories, yachtScore, yachtTotal, zones } from './rules.js';
+import { BLACK, forbiddenReason, pointName, size as omokSize, winningLine } from './omok.js';
 
 export const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -10,6 +11,7 @@ const artwork = {
   ciao: '<span class="ciao-die">?</span><span class="ciao-die other">✕</span><span class="ciao-bridge"></span>',
   onecard: '<span class="art-card first">♣</span><span class="art-card second">♥</span><span class="art-card third">♠</span>',
   yacht: '<span class="art-die first">⚄</span><span class="art-die second">⚂</span><span class="art-die third">⚅</span>',
+  omok: '<span class="art-goban"><i class="b"></i><i class="w"></i><i class="b"></i><i class="w"></i><i class="b"></i></span>',
 };
 
 export function home() {
@@ -147,6 +149,7 @@ const waitingNotes = {
   ciao: '2~4명이 참가하고 모두 준비하면 시작합니다.',
   onecard: '2~4명이 참가하고 모두 준비하면 시작합니다.',
   yacht: '두 사람 모두 준비 완료를 누르면 시작합니다.',
+  omok: '두 사람 모두 준비 완료를 누르면 시작합니다.<br>흑이 먼저 두고, 흑과 백은 한 판씩 번갈아 맡아요.',
 };
 
 function stage(room) {
@@ -170,6 +173,7 @@ function roomTitle(room, me) {
   const mine = actual.id === me?.id;
   if (room.game === 'slap') return me ? (mine ? '내 공격 차례!' : '내 수비 차례!') : nameOf(room, actual.id) + '의 공격 차례';
   if (room.game === 'ciao' && !mine && room.responders.includes(me?.id)) return '응답 차례';
+  if (room.game === 'omok') return (mine ? '내 차례' : nameOf(room, actual.id) + '님의 차례') + (room.index === room.blackSeat ? ' · 흑' : ' · 백');
   if (room.game === 'yacht' && mine) return room.rollsUsed === 0 ? '내 차례 · 주사위를 굴리세요'
     : room.rollsUsed < 3 ? '내 차례 · 남길 주사위를 고르세요' : '내 차례 · 점수 칸을 고르세요';
   return mine ? '내 차례' : nameOf(room, actual.id) + '님의 차례';
@@ -187,7 +191,7 @@ export function roomPage(room, user, ui) {
   const me = room.players.find(player => player.id === user);
   const playing = room.status === 'playing';
   const finished = room.status === 'finished';
-  const gameView = { slap: slapView, ciao: ciaoView, onecard: cardView, yacht: yachtView }[room.game];
+  const gameView = { slap: slapView, ciao: ciaoView, onecard: cardView, yacht: yachtView, omok: omokView }[room.game];
   const winnerNames = room.winners.map(id => nameOf(room, id)).join(' · ');
   const main = [
     me && !playing ? action(me.ready ? '준비 취소' : finished ? '다시 하기 · 준비 완료' : '준비 완료',
@@ -463,4 +467,48 @@ function yachtView(room, me, ui) {
     ${room.last ? '<p class="yacht-last">' + escape(room.last) + '</p>' : ''}
     <div class="yacht-sheet">${yachtTable(room, me, own && room.rollsUsed, true)}
       ${yachtTable(room, me, own && room.rollsUsed, false)}</div>`;
+}
+
+// Black is seat blackSeat for the current match; while waiting, the next match swaps the colors.
+function omokVersus(room, me) {
+  const waiting = room.status === 'waiting';
+  const blackSeat = waiting ? room.match % 2 : room.blackSeat;
+  const plates = Array.from({ length: 2 }, (_, seat) => {
+    const player = room.players[seat];
+    const black = seat === blackSeat;
+    const current = room.status === 'playing' ? seat === room.index : room.winners.includes(player?.id);
+    const caption = !player ? '상대를 기다리는 중…' : waiting ? (player.ready ? '준비 완료 ✓' : '준비 대기') : black ? '흑 · 먼저 둠' : '백';
+    return `<div class="omok-player${current ? ' current' : ''}"><span class="stone-icon ${black ? 'black' : 'white'}"></span>
+      <div><strong>${escape(player?.name ?? '빈 자리')}${player && player.id === me?.id ? ' (나)' : ''}</strong><small>${caption}</small></div></div>`;
+  });
+  return `${waiting && room.match ? '<p class="app-muted">이번 판은 흑과 백을 바꿔서 둡니다.</p>' : ''}
+    <div class="omok-versus">${plates.join('<span class="yacht-vs">VS</span>')}</div>`;
+}
+
+const starPoints = [[3, 3], [11, 3], [7, 7], [3, 11], [11, 11]];
+const omokLines = `<svg class="omok-lines" viewBox="0 0 ${omokSize} ${omokSize}" aria-hidden="true">${Array.from({ length: omokSize }, (_, line) =>
+  `<path d="M.5 ${line + .5}H${omokSize - .5}M${line + .5} .5V${omokSize - .5}"/>`).join('')}${starPoints.map(([x, y]) =>
+  `<circle cx="${x + .5}" cy="${y + .5}" r=".12"/>`).join('')}</svg>`;
+
+function omokView(room, me) {
+  if (room.status === 'waiting' || !room.board) return omokVersus(room, me);
+  const playing = room.status === 'playing';
+  const own = playing && !room.paused && room.players[room.index]?.id === me?.id;
+  const blackTurn = room.index === room.blackSeat;
+  const win = room.lastMove === null ? null : winningLine(room.board, room.lastMove);
+  const cells = room.board.map((stone, index) => {
+    const ban = own && blackTurn && !stone ? forbiddenReason(room.board, index) : null;
+    const playable = own && !stone && !ban;
+    const label = pointName(index) + (stone ? (stone === BLACK ? ' 흑돌' : ' 백돌') : ban ? ' 금수 ' + ban : '');
+    const classes = ['omok-cell', playable ? 'playable' : '', ban ? 'ban' : ''].join(' ');
+    const stoneClass = stone ? `stone ${stone === BLACK ? 'black' : 'white'}${index === room.lastMove ? ' last' : ''}${win?.includes(index) ? ' win' : ''}` : '';
+    return playable
+      ? `<button type="button" class="${classes}" aria-label="${label}" title="${label}" data-action="${escape(JSON.stringify({ action: 'place', x: index % omokSize, y: Math.floor(index / omokSize) }))}"></button>`
+      : `<span class="${classes}" title="${label}">${stone ? `<i class="${stoneClass}"></i>` : ''}</span>`;
+  }).join('');
+  return `${omokVersus(room, me)}
+    <div class="omok-board ${blackTurn ? 'black-turn' : 'white-turn'}" role="grid" aria-label="오목판">${omokLines}<div class="omok-grid">${cells}</div></div>
+    ${room.lastMove !== null ? `<p class="app-muted omok-last">마지막 수 · ${pointName(room.lastMove)} (${room.board[room.lastMove] === BLACK ? '흑' : '백'}) · ${room.turn - 1}수째</p>` : ''}
+    ${own && blackTurn ? '<p class="app-muted">× 표시는 흑의 금수(3-3, 4-4, 장목) 자리예요.</p>' : ''}
+    ${playing && me && !room.paused ? action('기권하기', { action: 'resign' }, 'wide') : ''}`;
 }
