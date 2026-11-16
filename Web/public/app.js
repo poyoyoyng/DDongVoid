@@ -17,6 +17,7 @@ let toastTimer;
 let room = null;
 let live = null;
 let chat = null;
+let roomResize = null;
 let solo = null;
 let ui = null;
 
@@ -142,10 +143,12 @@ async function navigate() {
     live = null;
   }
   chat = null;
+  roomResize?.disconnect();
+  roomResize = null;
   solo?.stop();
   solo = null;
   room = null;
-  ui = { connected: false, held: Array(5).fill(false), card: null, call: false };
+  ui = { connected: false, held: Array(5).fill(false), card: null, call: false, power: 0 };
   page = parsePage();
   const { section, key } = page;
   const title = section === 'rankings' ? '랭킹' : section === 'guide' ? '게임설명' : section === 'lobby' ? '공용 대기방' : games[key]?.title ?? '대전방';
@@ -248,13 +251,42 @@ function renderRoom() {
   const hold = previous?.dataset.hold;
   let content = app.querySelector('#room-content');
   if (!content) {
-    paint('<div class="room-layout"><div id="room-content"></div><aside id="chat-host"></aside></div>');
+    paint(`<div class="room-layout"><div id="room-content"></div><aside id="chat-host"></aside>
+      <button type="button" class="chat-tab" data-chat-toggle aria-expanded="false">채팅<i class="chat-unread" hidden></i></button>
+      <button type="button" class="chat-backdrop" data-chat-toggle aria-label="채팅 닫기" tabindex="-1"></button></div>`);
     content = app.querySelector('#room-content');
     chat = mountChat('/rooms/' + room.id, '방 채팅', generation);
+    roomResize = new ResizeObserver(fitRoomChat);
+    roomResize.observe(content);
   }
   content.innerHTML = roomPage(room, user.id, ui);
+  fitRoomChat();
   updateDeadline();
   if (hold !== undefined) app.querySelector('[data-hold="' + hold + '"]')?.focus();
+}
+
+// On narrow screens the room chat is a drawer on the left edge.
+const narrowRoom = () => matchMedia('(max-width: 920px)').matches;
+
+function toggleChat(open) {
+  const layout = app.querySelector('.room-layout');
+  if (!layout) return;
+  const next = open ?? !layout.classList.contains('chat-open');
+  layout.classList.toggle('chat-open', next);
+  layout.querySelector('.chat-tab').setAttribute('aria-expanded', String(next));
+  if (next) layout.querySelector('.chat-unread').hidden = true;
+}
+
+// Beside the game, the chat starts at the game panel and matches its height.
+function fitRoomChat() {
+  const layout = app.querySelector('.room-layout');
+  const aside = layout?.querySelector('#chat-host');
+  if (!aside) return;
+  const panel = layout.querySelector('#room-content .game-panel, #room-content .yacht-panel');
+  const beside = panel && matchMedia('(min-width: 921px)').matches;
+  aside.classList.toggle('chat-fill', Boolean(beside));
+  aside.style.marginTop = beside ? panel.getBoundingClientRect().top - layout.getBoundingClientRect().top + 'px' : '';
+  aside.style.height = beside ? Math.max(panel.offsetHeight, 360) + 'px' : '';
 }
 
 function acceptRoom(next) {
@@ -357,6 +389,11 @@ function connectRoom(id, token) {
     status,
     receive(packet) {
       chat.receive(packet);
+      const layout = app.querySelector('.room-layout');
+      if (packet.chatMessage && packet.chatMessage.playerId !== user.id && narrowRoom() && !layout?.classList.contains('chat-open')) {
+        const unread = layout?.querySelector('.chat-unread');
+        if (unread) unread.hidden = false;
+      }
       const { revision } = packet;
       if (Number.isInteger(revision) && revision > room.revision) void refresh(revision);
     },
@@ -396,7 +433,15 @@ app.addEventListener('click', async event => {
   if (!button) return;
   if (button.hasAttribute('data-account')) return showAccount();
   if (button.hasAttribute('data-reload')) return navigate();
-  if (button.hasAttribute('data-focus-chat')) return app.querySelector('[data-chat-input]')?.focus();
+  if (button.hasAttribute('data-chat-toggle')) return toggleChat();
+  if (button.hasAttribute('data-focus-chat')) {
+    if (narrowRoom() && app.querySelector('.room-layout')) return toggleChat(true);
+    return app.querySelector('[data-chat-input]')?.focus();
+  }
+  if (button.dataset.power !== undefined) {
+    ui.power = Number(button.dataset.power);
+    return renderRoom();
+  }
   if (button.hasAttribute('data-refresh')) {
     try { await refreshLobby(); } catch (error) { message(error.message); }
     return;
@@ -452,6 +497,10 @@ app.addEventListener('click', async event => {
     if (action.action === 'delete' && !window.confirm('이 방을 삭제할까요?')) return;
     await sendAction(action);
   }
+});
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && app.querySelector('.room-layout.chat-open')) toggleChat(false);
 });
 
 app.addEventListener('submit', async event => {
