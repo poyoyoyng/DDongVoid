@@ -98,7 +98,7 @@ test('볼륨과 선택 곡을 기억하고 리듬 게임 및 로그아웃에서 
   const { audio, controller, get, storage } = setup(context, {
     'ddongvoid-music-track': 'last-christmas', 'ddongvoid-music-volume': '0.7',
   });
-  assert.ok(Math.abs(audio.volume - .21) < 1e-12);
+  assert.ok(Math.abs(audio.volume - .14) < 1e-12);
   assert.equal(get('title').textContent, 'Last Christmas');
   controller.update(true, false);
   await settle();
@@ -196,11 +196,11 @@ test('전체 길이가 없거나 로그아웃한 동안에는 탐색하지 않�
   assert.equal(get('seek').disabled, true);
 });
 
-test('볼륨 표시는 0~100%를 유지하고 실제 출력은 0.3배로 조절한다', context => {
+test('볼륨 표시는 0~100%를 유지하고 실제 출력은 0.2배로 조절한다', context => {
   const { audio, get, storage } = setup(context, { 'ddongvoid-music-volume': '0.8' });
   assert.equal(get('volume-value').textContent, '80%');
-  assert.ok(Math.abs(audio.volume - .24) < 1e-12);
-  for (const [setting, output] of [[0, 0], [50, .15], [100, .3]]) {
+  assert.ok(Math.abs(audio.volume - .16) < 1e-12);
+  for (const [setting, output] of [[0, 0], [50, .1], [100, .2]]) {
     get('volume').value = String(setting);
     get('volume').fire('input');
     assert.equal(audio.volume, output);
