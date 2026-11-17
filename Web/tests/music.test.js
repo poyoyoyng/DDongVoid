@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { music, musicKey } from '../src/music.js';
 import { musicTracks } from '../public/music-library.js';
+import musicStorage from '../src/music-storage.js';
 
 const track = new TextEncoder().encode('0123456789');
 
@@ -122,4 +123,42 @@ test('등록되지 않은 곡과 경로는 자산 저장소에 접근하지 못�
   for (const id of ['missing', '../music', 'circles.mp3', '']) {
     await assert.rejects(music(request(), env, id), { status: 404 });
   }
+});
+
+test('사이트 음원이 없어도 별도 음원 서비스에서 여섯 곡과 재생 구간을 읽는다', async () => {
+  for (const trackInfo of musicTracks) {
+    const env = {
+      ASSETS: { fetch: () => assert.fail('사이트 자산에 의존하면 안 됩니다.') },
+      MUSIC_ASSETS: { fetch: input => musicStorage.fetch(input, { ASSETS: {
+        fetch: async assetRequest => {
+          assert.equal(new URL(assetRequest.url).pathname,
+            trackInfo.id === 'circles' ? '/music.mp3' : `/music-files/${trackInfo.id}.mp3`);
+          assert.equal(assetRequest.headers.get('Range'), 'bytes=2-5');
+          return new Response(track, { headers: { 'Content-Type': 'audio/mpeg' } });
+        },
+      } }) },
+    };
+    const response = await music(request('bytes=2-5'), env, trackInfo.id);
+    assert.equal(response.status, 206);
+    assert.equal(response.headers.get('Content-Range'), 'bytes 2-5/10');
+    assert.match(response.headers.get('Cache-Control'), /^private/);
+    assert.equal(await response.text(), '2345');
+  }
+});
+
+test('별도 서비스의 누락은 사이트의 옛 음원으로 대체하지 않는다', async () => {
+  await assert.rejects(music(request(), {
+    MUSIC_ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+    ASSETS: { fetch: () => assert.fail('사이트 자산으로 되돌아가면 안 됩니다.') },
+  }), { status: 404 });
+});
+
+test('음원 서비스는 등록된 음원 조회만 허용한다', async () => {
+  const env = { ASSETS: { fetch: () => assert.fail('음원 이외 자산 접근') } };
+  for (const path of ['/', '/index.html', '/music-files/missing.mp3', '/api/music.mp3']) {
+    const response = await musicStorage.fetch(new Request('https://music.internal' + path), env);
+    assert.equal(response.status, 404);
+  }
+  const response = await musicStorage.fetch(new Request('https://music.internal/music.mp3', { method: 'POST' }), env);
+  assert.equal(response.status, 405);
 });

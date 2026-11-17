@@ -36,6 +36,8 @@ npm run dev
 ```powershell
 npm exec -- wrangler login
 npm exec -- wrangler d1 create ddongvoid --location=apac --update-config=false
+# 아래 배경음악 절의 MP3 파일을 준비한 뒤, 최초 한 번 음원 서비스를 배포합니다.
+npm run deploy:music
 npm run deploy
 ```
 
@@ -47,14 +49,15 @@ GitHub 자동 배포에는 같은 Worker의 Workers Builds를 사용합니다. �
 
 ## 배경음악
 
-로그인한 이용자에게만 배경음악을 재생합니다. R2나 결제수단 등록 없이 기존 Workers 정적 자산에 MP3를 함께 배포합니다. 홈페이지 상단 플레이어에서 현재 곡과 가수를 확인하고 시작, 일시정지, 다음 곡, 재생 목록 선택과 볼륨 조절을 할 수 있습니다. 현재 시간과 전체 길이를 표시하고, 진행 막대를 움직여 재생 위치를 바꿀 수 있습니다. 볼륨 표시는 0~100%이며 첫 방문 기본값은 50%입니다. 실제 출력에는 0.15를 곱합니다. 여섯 곡을 순서대로 재생한 뒤 처음부터 반복하고, 선택 곡·볼륨·일시정지 설정은 브라우저에 기억합니다. 키보드 리듬 화면에서는 BGM이 자동으로 멈추고, 화면을 나가면 이전 재생 상태로 돌아옵니다. 브라우저 정책상 첫 클릭이나 시작 버튼을 누른 뒤 음악이 나올 수 있습니다.
+로그인한 이용자에게만 배경음악을 재생합니다. R2나 결제수단 등록 없이 별도 비공개 Worker `ddongvoid-music-assets`에 MP3를 보관합니다. 사이트 Worker는 로그인 확인 후 `MUSIC_ASSETS` 서비스 바인딩으로 음원을 읽습니다. 음원 Worker는 공개 주소와 미리보기 주소를 모두 비활성화하며, 사이트의 자동 배포와 독립적으로 유지됩니다. 홈페이지 상단 플레이어에서 현재 곡과 가수를 확인하고 시작, 일시정지, 다음 곡, 재생 목록 선택과 볼륨 조절을 할 수 있습니다. 현재 시간과 전체 길이를 표시하고, 진행 막대를 움직여 재생 위치를 바꿀 수 있습니다. 볼륨 표시는 0~100%이며 첫 방문 기본값은 50%입니다. 실제 출력에는 0.15를 곱합니다. 여섯 곡을 순서대로 재생한 뒤 처음부터 반복하고, 선택 곡·볼륨·일시정지 설정은 브라우저에 기억합니다. 키보드 리듬 화면에서는 BGM이 자동으로 멈추고, 화면을 나가면 이전 재생 상태로 돌아옵니다. 브라우저 정책상 첫 클릭이나 시작 버튼을 누른 뒤 음악이 나올 수 있습니다.
 
-`Web` 폴더에서 음원을 배포 자산에 복사한 뒤 배포합니다. 파일은 Git에서 제외됩니다.
+`Web` 폴더에서 아래 여섯 음원을 준비하고, 최초 설정 또는 곡을 추가·교체할 때만 음원 서비스를 배포합니다. MP3는 Git에서 제외됩니다.
 
 ```powershell
 New-Item -ItemType Directory -Path public/api -Force
 Copy-Item -LiteralPath "C:\경로\노래.mp3" -Destination public/api/music.mp3
-npm run deploy
+# 여섯 곡을 모두 준비한 뒤 실행합니다.
+npm run deploy:music
 ```
 
 곡 목록은 `public/music-library.js`에서 관리합니다. 현재 배포하는 음원 파일은 다음과 같습니다.
@@ -68,9 +71,9 @@ npm run deploy
 | 아이유 — 미리 메리 크리스마스 | `public/api/music-files/iu-merry-christmas.mp3` |
 | Wham! — Last Christmas | `public/api/music-files/last-christmas.mp3` |
 
-로컬 개발 서버에서도 같은 파일을 사용합니다. `/api/*`는 항상 Worker를 먼저 거치므로 음원 파일 주소로 직접 접근해도 로그인 검사를 통과해야 하며, 파일 자체는 `/api/music/곡ID`에서만 제공합니다. 기존 `/api/music` 주소는 Circles를 제공합니다. 바꾼 곡은 브라우저 캐시 때문에 최대 1시간 뒤에 반영될 수 있습니다.
+`npm run dev`는 사이트와 음원 Worker를 함께 실행하며 같은 로컬 MP3를 사용합니다. 사이트의 `/api/music/곡ID`는 로그인을 확인한 뒤 비공개 음원 서비스에 접근합니다. 기존 `/api/music` 주소는 Circles를 제공합니다. 바꾼 곡은 브라우저 캐시 때문에 최대 1시간 뒤에 반영될 수 있습니다.
 
-음원을 유지하려면 이후 배포에도 위 MP3 파일을 모두 포함해야 합니다. GitHub 자동 배포에는 이 로컬 파일이 전달되지 않으므로, 자동 배포 후 음악이 사라지면 음원이 있는 로컬에서 다시 배포합니다. 필요하면 선택적으로 `MUSIC` R2 바인딩을 추가해 기존 R2 음원(`bgm`)을 Circles에 사용할 수도 있습니다.
+일반 사이트 업데이트와 GitHub 자동 배포는 `npm run deploy`만 실행합니다. 사이트의 `.assetsignore`는 MP3를 제외하고 기존 음원 서비스를 그대로 연결하므로, 빌드 환경에 MP3가 없어도 배경음악이 유지됩니다. `npm run deploy:music`는 모든 곡의 파일과 크기를 먼저 검사해 파일이 빠진 상태에서 음원 서비스를 덮어쓰는 것을 막습니다. 음원 서비스에는 사이트용 Workers Builds 자동 배포를 연결하지 않습니다.
 
 ## 웹 게임 상태
 

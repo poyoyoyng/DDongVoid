@@ -4,10 +4,11 @@
   "type": "module",
   "scripts": {
     "prepare:assets": "node prepare-assets.js",
-    "dev": "npm run prepare:assets && wrangler d1 migrations apply DB --local && wrangler dev",
+    "dev": "npm run prepare:assets && wrangler d1 migrations apply DB --local && wrangler dev -c wrangler.jsonc -c wrangler.music.jsonc",
     "check": "node --test",
     "check:worker": "node --test tests/worker.integration.js",
-    "deploy": "npm run prepare:assets && wrangler d1 migrations apply DB --remote && wrangler deploy"
+    "deploy": "npm run prepare:assets && wrangler d1 migrations apply DB --remote && wrangler deploy",
+    "deploy:music": "node check-music-assets.js && wrangler deploy -c wrangler.music.jsonc"
   },
   "devDependencies": {
     "wrangler": "^4.105.0",

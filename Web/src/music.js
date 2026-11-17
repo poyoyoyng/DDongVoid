@@ -8,10 +8,12 @@ export const musicKey = 'bgm';
 export async function music(request, env, trackId = 'circles') {
   if (!musicTracks.some(track => track.id === trackId)) throw new HttpError(404, '음악을 찾을 수 없습니다.');
   if (!env.MUSIC || trackId !== 'circles') {
-    if (!env.ASSETS) throw new HttpError(404, '배경음악이 설정되지 않았습니다.');
-    // /api/* always runs the Worker first. Only this authenticated handler can read the asset.
+    const source = env.MUSIC_ASSETS ?? env.ASSETS;
+    if (!source) throw new HttpError(404, '배경음악이 설정되지 않았습니다.');
+    // The separately deployed private service keeps tracks across website builds.
     const path = trackId === 'circles' ? '/api/music.mp3' : `/api/music-files/${trackId}.mp3`;
-    const asset = await env.ASSETS.fetch(new Request(new URL(path, request.url), request));
+    const assetPath = env.MUSIC_ASSETS ? path.slice('/api'.length) : path;
+    const asset = await source.fetch(new Request(new URL(assetPath, request.url), request));
     if (asset.status === 404 || (asset.ok && !asset.headers.get('Content-Type')?.startsWith('audio/'))) {
       throw new HttpError(404, '배경음악 파일이 없습니다.');
     }

@@ -8,6 +8,9 @@
     "binding": "ASSETS",
     "run_worker_first": ["/api/*"]
   },
+  "services": [
+    { "binding": "MUSIC_ASSETS", "service": "ddongvoid-music-assets" }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
