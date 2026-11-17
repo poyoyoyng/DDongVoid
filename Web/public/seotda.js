@@ -37,13 +37,12 @@ export function handOf(cards) {
   return hand;
 }
 
-// Every hand from best to worst, with the rank handOf gives it.
+// Hands from best to worst; 9~1땡 and 8~1끗 share a row, each covering the ranks handOf gives them.
 export const handLadder = [
-  [1000, '38광땡'], [990, '18광땡'], [980, '13광땡'], [910, '장땡'],
-  ...Array.from({ length: 9 }, (_, step) => [909 - step, 9 - step + '땡']),
-  ...pairs.map(([, , name], step) => [806 - step, name]),
-  ...Array.from({ length: 10 }, (_, step) => [9 - step, step ? step === 9 ? '망통' : 9 - step + '끗' : '갑오']),
-].map(([rank, name]) => ({ rank, name }));
+  [1000, 1000, '38광땡'], [990, 990, '18광땡'], [980, 980, '13광땡'], [910, 910, '장땡'], [901, 909, '9~1땡'],
+  ...pairs.map(([, , name], step) => [806 - step, 806 - step, name]),
+  [9, 9, '갑오'], [1, 8, '8~1끗'], [0, 0, '망통'],
+].map(([low, high, name]) => ({ low, high, name }));
 
 export const specialHands = [
   ['암행어사', '4·7 열끗', '13·18광땡을 잡음'], ['땡잡이', '3광·7 열끗', '1~9땡을 잡음'],

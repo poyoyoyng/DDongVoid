@@ -609,8 +609,13 @@ function seotdaLadder(opened) {
   return `<aside class="seotda-ranks" aria-label="족보 순서">
     <h3>족보 순서</h3>
     ${hand ? '' : '<p>두 장을 받아 모두 열면 내 족보를 표시해요.</p>'}
-    <ol>${handLadder.map(({ rank, name }) => `<li class="${groups.has(rank) ? 'group' : ''}${hand?.rank === rank ? ' mine' : ''}"
-      ${hand?.rank === rank ? 'aria-current="true"' : ''}>${name}${hand?.rank === rank ? ' <i>내 패</i>' : ''}</li>`).join('')}</ol>
+    <ol>${handLadder.map(({ low, high, name }) => {
+      const mine = hand && hand.rank >= low && hand.rank <= high;
+      // A shared row names the exact hand in its badge, e.g. "7땡".
+      const badge = low === high ? '내 패' : '내 패 · ' + hand?.name.replace(/.*\((.*)\)/, '$1');
+      return `<li class="${groups.has(high) ? 'group' : ''}${mine ? ' mine' : ''}"
+        ${mine ? 'aria-current="true"' : ''}>${name}${mine ? ` <i>${badge}</i>` : ''}</li>`;
+    }).join('')}</ol>
     <h4>특수 패</h4>
     <ul>${specialHands.map(([name, cards, effect]) => `<li class="${hand?.special === name ? 'mine' : ''}">
       <b>${name}</b>${hand?.special === name ? ' <i>내 패</i>' : ''}<small>${cards} · ${effect}</small></li>`).join('')}</ul>

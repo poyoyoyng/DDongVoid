@@ -232,5 +232,5 @@ test('내 패는 열기 전까지 뒷면이고, 두 장을 모두 열어야 족�
   assert.equal((html.match(/data-peek="room:1:0:1"/g) ?? []).length, 1, '새로 받은 둘째 장만 가려진다');
   assert.doesNotMatch(html, /class="[^"]*mine/);
   html = page([peekKey(room, 0), peekKey(room, 1)]);
-  assert.match(html, /mine"\s+aria-current="true">9땡/);
+  assert.match(html, /mine"\s+aria-current="true">9~1땡 <i>내 패 · 9땡<\/i>/);
 });
