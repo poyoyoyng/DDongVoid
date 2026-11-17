@@ -6,13 +6,15 @@ export const games = {
   onecard: { title: '원카드', description: '특수 카드를 활용해 손패를 먼저 모두 내세요.', mode: '2~4인 대전', max: 4 },
   yacht: { title: '야추', description: '주사위 다섯 개로 열두 칸의 점수판을 채우세요.', mode: '2인 대전', max: 2 },
   omok: { title: '오목', description: '렌주룰로 다섯 개를 먼저 한 줄로 이으세요.', mode: '2인 대전', max: 2 },
+  seotda: { title: '섯다', description: '화투 두 장으로 족보를 겨루고 판돈을 따세요.', mode: '2~4인 대전', max: 4 },
 };
 
 // The account with this nickname can delete any room from the lobby.
 export const isAdmin = account => account?.name === '포요용';
 
+// A 섯다 seat left mid-hand has folded, so nobody can take it over until the hand ends.
 export const canTakeSeat = room => room.status === 'playing'
-  ? room.players.some(player => player.vacant)
+  ? room.game !== 'seotda' && room.players.some(player => player.vacant)
   : room.status !== 'deleted' && room.players.length < games[room.game].max;
 
 export const suits = ['♠', '♥', '♦', '♣'];

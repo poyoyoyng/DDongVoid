@@ -339,6 +339,39 @@ button.omok-cell:hover::after, button.omok-cell:focus-visible::after { content: 
 .art-goban i.w { background: radial-gradient(circle at 34% 30%, #fff, #dcdcd2 72%); box-shadow: inset 0 0 0 1px #0002; }
 .art-goban i:nth-child(1) { left: 25%; top: 25%; } .art-goban i:nth-child(2) { left: 50%; top: 25%; } .art-goban i:nth-child(3) { left: 50%; top: 50%; }
 .art-goban i:nth-child(4) { left: 75%; top: 50%; } .art-goban i:nth-child(5) { left: 75%; top: 75%; }
+.art-seotda { background: #f3b8a6; }
+.art-hwatu { position: absolute; top: 18%; display: grid; place-content: center; justify-items: center; width: 33%; aspect-ratio: .62; border: 3px solid #fff7ea; border-radius: 7px; background: #b8202f; color: #fff7ea; font-size: clamp(20px, 3.2vw, 36px); font-weight: 900; line-height: 1; box-shadow: 1px 4px #7c1b2580; }
+.art-hwatu small { margin-top: 4px; padding: 2px 6px; border-radius: 999px; background: #ffd064; color: #7c1b25; font-size: 40%; }
+.art-hwatu.first { left: 18%; transform: rotate(-12deg); }
+.art-hwatu.second { right: 18%; transform: rotate(10deg); }
+.art-coin { position: absolute; bottom: 10%; display: grid; place-items: center; width: 22%; aspect-ratio: 1; border-radius: 50%; background: #ffd064; color: #7c4a14; font-weight: 900; font-size: clamp(14px, 2vw, 22px); box-shadow: 0 3px #b07a26; }
+.hwatu { display: inline-grid; place-content: center; justify-items: center; flex: none; width: 34px; aspect-ratio: .62; border: 2px solid #fff7ea; border-radius: 5px; background: #b8202f; color: #fff7ea; line-height: 1.05; box-shadow: 0 2px 0 #0007; }
+.hwatu b { font-size: 16px; }
+.hwatu small { font-size: 10px; font-weight: 700; opacity: .9; }
+.hwatu.gwang small { padding: 0 4px; border-radius: 999px; background: #ffd064; color: #7c1b25; opacity: 1; }
+.hwatu.back { border-color: #7c1b25; background: repeating-linear-gradient(45deg, #7c1b25 0 4px, #962131 4px 8px); }
+.seotda-cards { display: inline-flex; gap: 4px; min-height: 30px; }
+.seotda-cards.big .hwatu { width: 54px; border-width: 3px; border-radius: 7px; }
+.seotda-cards.big .hwatu b { font-size: 24px; }
+.seotda-cards.big .hwatu small { font-size: 12px; }
+.seotda-table { margin-bottom: 10px; padding: 12px; border-radius: 12px; background: var(--app-inner); text-align: center; }
+.seotda-table > p:first-child { color: var(--app-gold); font-size: 15px; font-weight: 800; }
+.seotda-table b { font-size: 22px; }
+.seotda-table .app-muted { margin: 2px 0 0; }
+.seotda-seats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; }
+.seotda-seat { display: grid; align-content: start; gap: 6px; min-width: 0; padding: 9px 10px; border: 1px solid #395447; border-radius: 10px; background: var(--app-inner); font-size: 13px; }
+.seotda-seat strong { color: var(--seat); overflow-wrap: anywhere; }
+.seotda-seat small { color: var(--app-muted); font-size: 12px; line-height: 1.45; }
+.seotda-seat small b { color: var(--app-gold); font-size: 13px; }
+.seotda-seat.current { border-color: var(--app-mint); background: #31583f; }
+.seotda-seat.folded { opacity: .55; }
+.seotda-seat .gain { color: var(--app-mint); font-weight: 800; }
+.seotda-seat .loss { color: #f4a08a; font-weight: 800; }
+.seotda-hand { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 4px 0 10px; }
+.seotda-hand p { color: var(--app-muted); font-size: 14px; }
+.seotda-hand p b { color: var(--app-gold); font-size: 20px; }
+.seotda-log { margin: 12px 0 0; padding: 10px 12px 10px 30px; border-radius: 10px; background: var(--app-inner); color: var(--app-muted); font-size: 12px; line-height: 1.6; }
+.seotda-log li:last-child { color: var(--app-peach); }
 .card-players { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; }
 .card-players li { display: grid; max-width: 160px; padding: 7px 10px; border-radius: 8px; background: var(--app-inner); font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
 .card-players li.current { background: #304b3b; }
@@ -598,6 +631,7 @@ dialog .form-error { color: #a53745; margin: 0; }
   .yacht-sheet { grid-template-columns: minmax(0, 1fr); }
   .yacht-tray { grid-template-columns: minmax(0, 1fr); }
   .yacht-roll { display: flex; justify-content: center; align-items: center; }
+  .seotda-actions { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }

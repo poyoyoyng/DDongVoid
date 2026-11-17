@@ -234,3 +234,40 @@ test('Cloudflare 로컬 실행기에서 가입, WebSocket 대전, 알람, 랭킹
   }
   assert.deepEqual(unexpected, []);
 });
+
+test('섯다는 판이 끝나면 D1 잔액과 돈 랭킹에 반영하고 다음 판은 그 잔액으로 시작한다', { timeout: 30_000 }, async () => {
+  const prefix = 'qa-' + randomUUID().slice(0, 8);
+  const password = randomUUID().slice(0, 4);
+  const members = [];
+  for (const name of [prefix + '-a', prefix + '-b']) members.push(await request('/join', { data: { name, password }, status: 201 }));
+  const { room: created } = await request('/rooms', { cookie: members[0].cookie, data: { title: prefix + ' 섯다', game: 'seotda' }, status: 201 });
+  let room = created;
+  const act = async (member, input) => {
+    ({ room } = await request('/rooms/' + room.id + '/action', { cookie: member.cookie,
+      data: { ...input, turn: room.turn, revision: room.revision, match: room.match, seatEpoch: room.seatEpoch } }));
+    return room;
+  };
+  const money = async () => {
+    const { rows } = await request('/rankings?game=seotda', { cookie: members[0].cookie });
+    return members.map(member => rows.find(row => row.name === member.user.name).money);
+  };
+  assert.deepEqual(await money(), [10_000_000, 10_000_000]);
+  await act(members[1], { action: 'join' });
+  await act(members[0], { action: 'ready', ready: true });
+  await act(members[1], { action: 'ready', ready: true });
+  assert.equal(room.status, 'playing');
+  assert.equal(room.pot, 200_000);
+  assert.equal(room.players[0].cards, undefined);
+  assert.equal(room.players[1].cards.length, 1);
+  await act(members[0], { action: 'die' });
+  assert.equal(room.status, 'finished');
+  await eventually(money, balances => balances[0] === 9_900_000 && balances[1] === 10_100_000);
+
+  await act(members[0], { action: 'ready', ready: true });
+  await act(members[1], { action: 'ready', ready: true });
+  assert.equal(room.players[0].balance, 9_900_000);
+  assert.equal(room.players[room.index].id, members[1].user.id);
+  await act(members[1], { action: 'bet', kind: 'ping' });
+  await act(members[0], { action: 'die' });
+  await eventually(money, balances => balances[0] === 9_800_000 && balances[1] === 10_200_000);
+});

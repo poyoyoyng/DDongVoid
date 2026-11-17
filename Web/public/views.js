@@ -1,5 +1,6 @@
 import { canTakeSeat, cardName, isAdmin, cardRank, cardSuit, games, legalCard, powerCosts, powerNames, sum, suits, suitNames, yachtBonus, yachtCategories, yachtScore, yachtTotal, zones } from './rules.js';
 import { BLACK, forbiddenReason, pointName, size as omokSize, winningLine } from './omok.js';
+import { baseBet, betOptions, cardKind, cardMonth, cardName as hwatuName, handOf, isGwang, startMoney, won } from './seotda.js';
 
 export const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -13,6 +14,7 @@ const artwork = {
   onecard: '<span class="art-card first">♣</span><span class="art-card second">♥</span><span class="art-card third">♠</span>',
   yacht: '<span class="art-die first">⚄</span><span class="art-die second">⚂</span><span class="art-die third">⚅</span>',
   omok: '<span class="art-goban"><i class="b"></i><i class="w"></i><i class="b"></i><i class="w"></i><i class="b"></i></span>',
+  seotda: '<span class="art-hwatu first">3<small>광</small></span><span class="art-hwatu second">8<small>광</small></span><span class="art-coin">₩</span>',
 };
 
 export function home() {
@@ -111,12 +113,14 @@ export function roomList(rooms, account) {
   }).join('')}</ul>`;
 }
 
+const rankingTabs = game => `<div class="tabs" aria-label="랭킹 게임">${Object.entries(games).map(([id, item]) =>
+  `<a class="${id === game ? 'selected' : ''}" href="#rankings/${id}" ${id === game ? 'aria-current="page"' : ''}>${item.title}</a>`).join('')}</div>`;
+
 export function rankings(game, rows) {
+  if (game === 'seotda') return moneyRankings(game, rows);
   const solo = games[game].max === 1;
-  const tabs = Object.entries(games).map(([id, item]) =>
-    `<a class="${id === game ? 'selected' : ''}" href="#rankings/${id}" ${id === game ? 'aria-current="page"' : ''}>${item.title}</a>`).join('');
   return heading('랭킹', solo ? '게임별 최고 점수를 확인하세요.' : '대전 게임은 점수 순입니다. 모두 1000점에서 시작해 이기면 오르고 지면 내려가요.') + `
-    <div class="tabs" aria-label="랭킹 게임">${tabs}</div>
+    ${rankingTabs(game)}
     <section class="panel rankings">
       <h2>${games[game].title}</h2>
       <table><thead><tr><th scope="col">순위</th><th scope="col">닉네임</th>${solo ?
@@ -124,6 +128,19 @@ export function rankings(game, rows) {
       <tbody>${rows.length ? rows.map(row => `<tr><td>${row.rank}</td><th scope="row">${escape(row.name)}${row.streak >= 2 ? ` <span class="streak">${row.streak}연승</span>` : ''}</th>${solo ?
         '<td>' + row.score.toLocaleString('ko-KR') + '</td>' : `<td class="mmr">${row.mmr}</td><td>${row.wins}</td><td>${row.draws}</td><td>${row.losses}</td>`}</tr>`).join('')
         : `<tr><td colspan="${solo ? 3 : 6}" class="empty">아직 기록이 없습니다.</td></tr>`}</tbody></table>
+    </section>`;
+}
+
+function moneyRankings(game, rows) {
+  return heading('랭킹', `섯다는 보유 금액 순입니다. 모두 ${won(startMoney)}에서 시작하고, 잔액이 ${won(baseBet)}보다 적으면 파산해서 ${won(startMoney)}을 다시 받아요.`) + `
+    ${rankingTabs(game)}
+    <section class="panel rankings">
+      <h2>${games[game].title}</h2>
+      <table><thead><tr><th scope="col">순위</th><th scope="col">닉네임</th><th scope="col">보유 금액</th>
+        <th scope="col">승</th><th scope="col">무</th><th scope="col">패</th><th scope="col">파산</th></tr></thead>
+      <tbody>${rows.length ? rows.map(row => `<tr><td>${row.rank}</td><th scope="row">${escape(row.name)}</th>
+        <td class="mmr">${won(row.money)}</td><td>${row.wins}</td><td>${row.draws}</td><td>${row.losses}</td><td>${row.bankruptcies}</td></tr>`).join('')
+        : '<tr><td colspan="7" class="empty">아직 기록이 없습니다.</td></tr>'}</tbody></table>
     </section>`;
 }
 
@@ -159,11 +176,13 @@ const waitingNotes = {
   onecard: '2~4명이 참가하고 모두 준비하면 시작합니다.',
   yacht: '두 사람 모두 준비 완료를 누르면 시작합니다.',
   omok: '두 사람 모두 준비 완료를 누르면 시작합니다.<br>흑이 먼저 두고, 흑과 백은 한 판씩 번갈아 맡아요.',
+  seotda: `2~4명이 참가하고 모두 준비하면 시작합니다.<br>판마다 기본 판돈 ${won(baseBet)}을 내고, 패를 한 장씩 두 번 받으며 베팅해요.`,
 };
 
 function stage(room) {
   if (room.status === 'finished') return 'GAME OVER';
   if (room.status !== 'playing') return 'WAITING ROOM';
+  if (room.game === 'seotda') return (room.stage === 1 ? '첫째 장' : '둘째 장') + ' 베팅';
   return room.game === 'slap' ? 'ROUND ' + room.turn : room.game === 'yacht' ? `ROUND ${room.turn} / 12` : 'TURN ' + room.turn;
 }
 
@@ -200,7 +219,7 @@ export function roomPage(room, user, ui) {
   const me = room.players.find(player => player.id === user);
   const playing = room.status === 'playing';
   const finished = room.status === 'finished';
-  const gameView = { slap: slapView, ciao: ciaoView, onecard: cardView, yacht: yachtView, omok: omokView }[room.game];
+  const gameView = { slap: slapView, ciao: ciaoView, onecard: cardView, yacht: yachtView, omok: omokView, seotda: seotdaView }[room.game];
   const winnerNames = room.winners.map(id => nameOf(room, id)).join(' · ');
   const main = [
     me && !playing ? action(me.ready ? '준비 취소' : finished ? '다시 하기 · 준비 완료' : '준비 완료',
@@ -520,4 +539,61 @@ function omokView(room, me) {
     ${room.lastMove !== null ? `<p class="app-muted omok-last">마지막 수 · ${pointName(room.lastMove)} (${room.board[room.lastMove] === BLACK ? '흑' : '백'}) · ${room.turn - 1}수째</p>` : ''}
     ${own && blackTurn ? '<p class="app-muted">× 표시는 흑의 금수(3-3, 4-4, 장목) 자리예요.</p>' : ''}
     ${playing && me && !room.paused ? action('기권하기', { action: 'resign' }, 'wide') : ''}`;
+}
+
+export const hwatu = (card, classes = '') => card == null ? `<span class="hwatu back ${classes}" aria-hidden="true"></span>`
+  : `<span class="hwatu${isGwang(card) ? ' gwang' : ''} ${classes}" title="${hwatuName(card)}" role="img" aria-label="${hwatuName(card)}"><b>${cardMonth(card)}</b><small>${cardKind(card)}</small></span>`;
+
+// Each seat shows its cards, what it has bet this hand and what is left; others' cards stay face down until the showdown.
+function seotdaSeat(room, player, seat, me) {
+  const playing = room.status === 'playing';
+  const stake = room.stakes?.[player.id];
+  const shown = room.status === 'finished' ? room.reveal?.find(entry => entry.id === player.id) : null;
+  const cards = shown?.cards ?? player.cards ?? Array(player.cardCount ?? 0).fill(null);
+  const delta = room.status === 'finished' ? room.settlement?.money.find(entry => entry.id === player.id)?.delta : undefined;
+  const lines = [];
+  if (room.status === 'waiting' || !stake) {
+    lines.push(player.ready ? '준비 완료 ✓' : '준비 대기');
+    if (player.balance != null) lines.push(player.balance < baseBet ? '파산 · 다음 판 ' + won(startMoney) + ' 지원' : '잔액 ' + won(player.balance));
+  } else {
+    if (shown) lines.push('<b>' + escape(shown.hand) + '</b>');
+    else if (player.vacant) lines.push('관전석으로 이동 · 다이');
+    else if (player.folded) lines.push('다이');
+    else if (playing && seat === room.index) lines.push('베팅 차례');
+    if (delta === undefined) lines.push('건 돈 ' + won(stake.paid), '잔액 ' + won(player.balance - stake.paid));
+    else lines.push(`<span class="${delta >= 0 ? 'gain' : 'loss'}">${delta >= 0 ? '+' : ''}${won(delta)}</span>`, '잔액 ' + won(player.balance));
+  }
+  const highlight = playing ? seat === room.index : room.winners.includes(player.id);
+  return `<li class="seotda-seat seat-${seat}${highlight ? ' current' : ''}${player.folded || player.vacant ? ' folded' : ''}">
+    <strong>${playing && seat === room.index ? '▶ ' : ''}${escape(player.name)}${player.id === me?.id ? ' (나)' : ''}</strong>
+    <span class="seotda-cards">${cards.map(card => hwatu(card)).join('')}</span>
+    <small>${lines.join('<br>')}</small></li>`;
+}
+
+function seotdaControls(room, me) {
+  const actor = room.players[room.index];
+  const timer = `<strong data-deadline="${room.deadline}"></strong>`;
+  if (actor.id !== me?.id || me.folded) return `<p class="app-muted">${nameOf(room, actor.id)}님이 베팅하고 있어요 · 남은 시간 ${timer}</p>`;
+  const options = betOptions(room, me);
+  const bet = (label, kind) => options[kind] ? action(`${label}<small>${won(options[kind])}</small>`, { action: 'bet', kind }, 'primary') : '';
+  return `<p class="app-warn">내 차례 · 남은 시간 ${timer} · 시간이 지나면 ${options.toCall ? '다이' : '체크'}</p>
+    <div class="app-row seotda-actions">
+      ${action('다이<small>포기</small>', { action: 'die' })}
+      ${options.toCall ? action(`콜<small>${won(options.toCall)}</small>`, { action: 'call' }) : action('체크<small>0원</small>', { action: 'check' })}
+      ${bet('삥', 'ping')}${bet('따당', 'ddadang')}${bet('하프', 'half')}
+    </div>`;
+}
+
+function seotdaView(room, me) {
+  const seats = `<ul class="seotda-seats">${room.players.map((player, seat) => seotdaSeat(room, player, seat, me)).join('')}</ul>`;
+  if (room.status === 'waiting') return seats + (room.log?.length ? `<p class="app-muted">지난 판 · ${escape(room.log.at(-1))}</p>` : '');
+  const mine = me?.cards?.length ? `<div class="seotda-hand"><span class="seotda-cards big">${me.cards.map(card => hwatu(card)).join('')}</span>
+    <p>내 패 · <b>${me.cards.length === 2 ? handOf(me.cards).name : cardMonth(me.cards[0]) + '월'}</b>${me.folded ? ' · 다이' : ''}</p></div>` : '';
+  return `<div class="seotda-table">
+      <p>판돈 <b>${won(room.pot)}</b></p>
+      <p class="app-muted">기본 판돈 ${won(baseBet)} · 이번 판 최대 ${won(room.cap)}${room.status === 'playing' && room.currentBet ? ' · 이번 베팅 ' + won(room.currentBet) : ''}</p>
+    </div>
+    ${seats}${mine}
+    ${room.status === 'playing' && !room.paused ? seotdaControls(room, me) : ''}
+    ${room.log?.length ? `<ol class="seotda-log">${room.log.map(line => '<li>' + escape(line) + '</li>').join('')}</ol>` : ''}`;
 }

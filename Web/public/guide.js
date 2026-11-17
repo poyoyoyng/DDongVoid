@@ -1,5 +1,6 @@
 import { cardName, games, powerCosts, powerNames, yachtCategories, yachtScore } from './rules.js';
-import { cardFace, heading, redCard, yachtFace } from './views.js';
+import { baseBet, startMoney, won } from './seotda.js';
+import { cardFace, heading, hwatu, redCard, yachtFace } from './views.js';
 
 const dice = (values, { held = [], dim = [] } = {}) => `<span class="guide-dice">${values.map((value, index) =>
   `<span class="die-face guide-die${held.includes(index) ? ' held' : ''}${dim.includes(index) ? ' dim' : ''}">${yachtFace(value)}</span>`).join('')}</span>`;
@@ -380,7 +381,67 @@ function omokGuide() {
   });
 }
 
-const guides = { dodge: dodgeGuide, rhythm: rhythmGuide, slap: slapGuide, ciao: ciaoGuide, onecard: oneCardGuide, yacht: yachtGuide, omok: omokGuide };
+// Hwatu cards by month; the picture card (광 or 열끗) is variant 0.
+const hwatuPair = ([first, second]) => `<span class="seotda-cards">${hwatu(first)}${hwatu(second)}</span>`;
+const month = (number, picture = true) => (number - 1) * 2 + (picture ? 0 : 1);
+
+function seotdaGuide() {
+  const steps = [
+    ['기본 판돈 내기', `모두 ${won(baseBet)}씩 판돈에 넣고<br>화투를 한 장씩 받아요. 내 패는 나만 봐요.`,
+      `${hwatu(month(7))}${chip('판돈 +' + won(baseBet), 'gold')}`],
+    ['첫째 장 보고 베팅', '돌아가며 다이 · 체크 · 콜 · 삥 · 따당 · 하프 중<br>하나를 골라요. 판마다 첫 순서가 바뀌어요.', chip('체크') + chip('삥', 'mint') + chip('다이', 'peach')],
+    ['둘째 장 받고 또 베팅', '한 장을 더 받아 두 장으로 족보를 확인하고<br>한 번 더 베팅해요.', `${hwatuPair([month(9), month(9, false)])}<b class="guide-swap">→</b>${chip('9땡', 'gold')}`],
+    ['패 공개', '다이하지 않은 사람끼리 족보를 비교해요.<br>이긴 사람이 판돈을 모두 가져가요.', chip('판돈 획득', 'mint')],
+  ];
+  const hands = [
+    ['38광땡', '3월 광 + 8월 광 · 가장 높은 패', [month(3), month(8)], '1위'],
+    ['18 · 13광땡', '광 두 장 · 18광땡이 13광땡보다 높아요', [month(1), month(8)], '광땡'],
+    ['장땡', '10월 두 장 · 땡 중에서 가장 높아요', [month(10), month(10, false)], '땡'],
+    ['9땡 ~ 1땡', '같은 월 두 장 · 숫자가 클수록 높아요', [month(5), month(5, false)], '땡'],
+    ['알리 → 세륙', '알리(1·2) > 독사(1·4) > 구삥(1·9) > 장삥(1·10) > 장사(4·10) > 세륙(4·6)', [month(1, false), month(2, false)], '중간'],
+    ['갑오 → 망통', '두 장 합의 끝자리 · 9끗(갑오)이 가장 높고 0끗(망통)이 가장 낮아요', [month(2, false), month(7, false)], '끗'],
+  ];
+  const specials = [
+    ['암행어사', '4월 열끗 + 7월 열끗 · 13·18광땡을 잡아요 (38광땡은 못 잡음) · 아니면 1끗', [month(4), month(7)], '광땡 잡기'],
+    ['땡잡이', '3월 광 + 7월 열끗 · 1~9땡을 잡아요 (장땡은 못 잡음) · 아니면 망통', [month(3), month(7)], '땡 잡기'],
+    ['구사', '4월 + 9월 · 가장 높은 패가 알리 이하면 재경기 · 아니면 3끗', [month(4, false), month(9, false)], '재경기'],
+    ['멍텅구리 구사', '4월 열끗 + 9월 열끗 · 가장 높은 패가 9땡 이하면 재경기', [month(4), month(9)], '재경기'],
+  ];
+  const bets = [
+    ['다이', '이번 판을 포기해요. 이미 건 돈은 판돈에 남아요.', chip('포기', 'peach'), '0원'],
+    ['체크', '앞에서 아무도 베팅하지 않았을 때 돈을 걸지 않고 넘겨요.', chip('넘기기'), '0원'],
+    ['콜', '앞 사람이 건 만큼 맞춰서 받아요.', chip('맞추기'), '차액'],
+    ['삥', '아무도 베팅하지 않았을 때 첫 베팅을 해요.', chip('첫 베팅', 'mint'), won(baseBet)],
+    ['따당', '앞 사람 베팅의 두 배로 올려요.', chip('× 2', 'mint'), '2배'],
+    ['하프', '콜한 뒤 판돈의 절반만큼 더 올려요.', chip('+ 판돈 ½', 'mint'), '절반'],
+  ];
+  const row = ([name, text, visual, result]) => `<li><strong>${name}</strong><span>${text}</span>${visual}<b>${result}</b></li>`;
+  return article('seotda', {
+    eyebrow: '섯다 게임 룰', title: '섯다 쉽게 배우기',
+    intro: '화투 두 장으로 족보를 만들고 베팅해요. 끝까지 남아 가장 높은 족보를 가진 사람이 판돈을 가져가요. 섯다 랭킹은 보유 금액 순이에요.',
+    art: hwatu(month(3)) + hwatu(month(8)),
+    stats: [['2~4명', '돌아가며 베팅'], ['20장', '1~10월 두 장씩'], [won(startMoney), '모두 같은 시작 금액'], [won(baseBet), '기본 판돈']],
+    sections: [
+      ['한 판은 이렇게 해요', stepList(steps,
+        '내 차례에 <b>30초</b> 안에 고르지 않으면 앞 베팅이 없을 땐 체크, 있을 땐 <b>다이</b>로 처리돼요. 판 도중 관전석으로 이동해도 다이예요.')],
+      ['족보 (높은 순서)', `<ul class="guide-combos">${hands.map(([name, text, cards, result]) => row([name, text, hwatuPair(cards), result])).join('')}</ul>
+        <p class="guide-small">· 광은 1월 · 3월 · 8월에만 있어요 · 족보가 같으면 판돈을 똑같이 나눠요</p>`],
+      ['특수 패', `<ul class="guide-combos">${specials.map(([name, text, cards, result]) => row([name, text, hwatuPair(cards), result])).join('')}</ul>
+        <p class="guide-small">· 재경기는 다이하지 않은 사람끼리 판돈을 그대로 두고 패를 새로 받아 다시 베팅해요</p>`],
+      ['베팅 방법', `<ul class="guide-combos">${bets.map(row).join('')}</ul>
+        <p class="guide-small">· 누가 올리면 나머지 사람은 다시 콜 · 다이 · 따당 · 하프 중에서 골라요</p>`],
+      ['돈과 랭킹', `<div class="guide-upper">
+          <div><h4>모두 ${won(startMoney)}으로 시작</h4><p>딴 돈과 잃은 돈은 계정에 남고, 섯다 랭킹은 보유 금액 순이에요.</p>
+            <p class="guide-small">한 판에 걸 수 있는 돈은 그 판 참가자 중 잔액이 가장 적은 사람의 잔액까지예요.</p></div>
+          <div class="guide-bonus"><p>잔액이 ${won(baseBet)}보다 적으면</p><strong>파산 · ${won(startMoney)} 지원</strong>
+            <p>다음 판을 시작할 때 다시 ${won(startMoney)}을 받아요.</p><p class="guide-small">파산 횟수는 랭킹에 표시돼요.</p></div>
+        </div>`],
+    ],
+    foot: '게임 선택 → 섯다 → 방 만들기 · 2~4명이 참가하고 모두 준비 완료를 누르면 시작해요.',
+  });
+}
+
+const guides = { dodge: dodgeGuide, rhythm: rhythmGuide, slap: slapGuide, ciao: ciaoGuide, onecard: oneCardGuide, yacht: yachtGuide, omok: omokGuide, seotda: seotdaGuide };
 
 export function guide(game) {
   const tabs = Object.entries(games).map(([id, item]) =>

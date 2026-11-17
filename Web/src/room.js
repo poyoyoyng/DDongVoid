@@ -4,6 +4,7 @@ import { applyAction, createRoom, expireRoom, roomView } from './games.js';
 import { errorResponse, json, readBody, requireThat } from './http.js';
 import { extendsStreak, ratingChanges, startRating, streakBonus } from './ratings.js';
 import { isRoomMember } from './room-members.js';
+import { startMoney } from '../public/seotda.js';
 
 const retryDelay = 5000;
 
@@ -32,7 +33,10 @@ export class GameRoom extends DurableObject {
       id: room.id, game: room.game, title: room.title, revision: room.revision,
       createdAt: room.createdAt, ...JSON.parse(summary),
     };
-    if (room.status === 'finished' && previous?.status === 'playing' && room.winners.length && !room.substituted) {
+    // A 섯다 hand records the money each bettor won or lost, even when it ended because someone left.
+    if (room.settlement && room.settlement.match !== previous?.settlement?.match) {
+      pending.results.push({ id: room.id, game: room.game, ...room.settlement });
+    } else if (room.game !== 'seotda' && room.status === 'finished' && previous?.status === 'playing' && room.winners.length && !room.substituted) {
       pending.results.push({
         id: room.id, game: room.game, match: room.match,
         outcomes: room.players.map(({ id }) => ({
@@ -80,7 +84,7 @@ export class GameRoom extends DurableObject {
       `).bind(summary.id, JSON.stringify(summary.spectators ?? []), summary.revision));
     }
     const results = pending.results.slice(0, 15);
-    const ids = [...new Set(results.flatMap(result => result.outcomes.map(player => player.id)))];
+    const ids = [...new Set(results.filter(result => !result.money).flatMap(result => result.outcomes.map(player => player.id)))];
     const ratings = new Map();
     if (ids.length) {
       const { results: rows } = await db.prepare(`SELECT game, account_id, rating, streak FROM ratings WHERE account_id IN (${ids.map(() => '?').join(', ')})`)
@@ -88,20 +92,32 @@ export class GameRoom extends DurableObject {
       for (const row of rows) ratings.set(row.game + ':' + row.account_id, { rating: row.rating, streak: row.streak });
     }
     for (const result of results) {
-      const entry = id => ratings.get(result.game + ':' + id) ?? { rating: startRating, streak: 0 };
-      const current = new Map(result.outcomes.map(player => [player.id, entry(player.id).rating]));
-      const outcomes = new Map(result.outcomes.map(player => [player.id, player.outcome]));
-      // Rating changes run before the match is recorded, so a retried batch finds the match and skips them.
-      for (const { id, change: elo } of ratingChanges(result.outcomes, current)) {
-        const won = extendsStreak(outcomes.get(id));
-        const streak = won ? entry(id).streak + 1 : 0;
-        const change = elo + streakBonus(streak);
-        ratings.set(result.game + ':' + id, { rating: current.get(id) + change, streak });
-        statements.push(db.prepare(`
-          INSERT INTO ratings (game, account_id, rating, streak)
-          SELECT ?1, ?2, ?3 + ?4, ?7 WHERE NOT EXISTS (SELECT 1 FROM match_results WHERE room_id = ?5 AND match_no = ?6)
-          ON CONFLICT (game, account_id) DO UPDATE SET rating = ratings.rating + ?4, streak = CASE WHEN ?7 THEN ratings.streak + 1 ELSE 0 END
-        `).bind(result.game, id, startRating, change, result.id, result.match, won ? 1 : 0));
+      if (result.money) {
+        // Like ratings, balances change only while the hand is not yet recorded, so a retried batch skips them.
+        for (const { id, delta, refill } of result.money) {
+          statements.push(db.prepare(`
+            INSERT INTO wallets (account_id, balance, bankruptcies)
+            SELECT ?1, ?2 + ?3, ?4 WHERE NOT EXISTS (SELECT 1 FROM match_results WHERE room_id = ?5 AND match_no = ?6)
+            ON CONFLICT (account_id) DO UPDATE SET balance = CASE WHEN ?4 THEN ?2 ELSE wallets.balance END + ?3,
+              bankruptcies = wallets.bankruptcies + ?4
+          `).bind(id, startMoney, delta, refill ? 1 : 0, result.id, result.match));
+        }
+      } else {
+        const entry = id => ratings.get(result.game + ':' + id) ?? { rating: startRating, streak: 0 };
+        const current = new Map(result.outcomes.map(player => [player.id, entry(player.id).rating]));
+        const outcomes = new Map(result.outcomes.map(player => [player.id, player.outcome]));
+        // Rating changes run before the match is recorded, so a retried batch finds the match and skips them.
+        for (const { id, change: elo } of ratingChanges(result.outcomes, current)) {
+          const won = extendsStreak(outcomes.get(id));
+          const streak = won ? entry(id).streak + 1 : 0;
+          const change = elo + streakBonus(streak);
+          ratings.set(result.game + ':' + id, { rating: current.get(id) + change, streak });
+          statements.push(db.prepare(`
+            INSERT INTO ratings (game, account_id, rating, streak)
+            SELECT ?1, ?2, ?3 + ?4, ?7 WHERE NOT EXISTS (SELECT 1 FROM match_results WHERE room_id = ?5 AND match_no = ?6)
+            ON CONFLICT (game, account_id) DO UPDATE SET rating = ratings.rating + ?4, streak = CASE WHEN ?7 THEN ratings.streak + 1 ELSE 0 END
+          `).bind(result.game, id, startRating, change, result.id, result.match, won ? 1 : 0));
+        }
       }
       for (const player of result.outcomes) {
         statements.push(db.prepare('INSERT OR IGNORE INTO match_results VALUES (?, ?, ?, ?, ?)')
@@ -176,6 +192,18 @@ export class GameRoom extends DurableObject {
     }
   }
 
+  // 섯다 bets against D1 balances, so this room's finished hands are written first.
+  async loadWallets(room) {
+    while (this.pending?.results.length) await this.flush();
+    const ids = room.players.filter(player => !player.vacant).map(player => player.id);
+    const wallets = new Map(ids.map(id => [id, startMoney]));
+    if (!ids.length) return wallets;
+    const { results } = await this.env.DB.prepare(`SELECT account_id, balance FROM wallets WHERE account_id IN (${ids.map(() => '?').join(', ')})`)
+      .bind(...ids).all();
+    for (const row of results) wallets.set(row.account_id, row.balance);
+    return wallets;
+  }
+
   async alarm() {
     const previous = this.room;
     const room = structuredClone(previous);
@@ -190,6 +218,8 @@ export class GameRoom extends DurableObject {
       const account = { id: request.headers.get('x-player'), name: decodeURIComponent(request.headers.get('x-player-name') ?? '') };
       requireThat(account.id, '로그인이 필요합니다.', 401);
       const body = request.method === 'POST' ? await readBody(request) : null;
+      const seotdaReady = path === '/action' && body.action === 'ready' && body.ready === true && this.room?.game === 'seotda';
+      const wallets = seotdaReady && this.room.status !== 'deleted' ? await this.loadWallets(this.room) : null;
       const now = Date.now();
       const previous = this.room;
       if (path === '/create') {
@@ -207,7 +237,7 @@ export class GameRoom extends DurableObject {
       }
       if (path === '/action') {
         const next = structuredClone(room);
-        if (applyAction(next, account, body, now)) await this.store(next, room);
+        if (applyAction(next, account, body, now, undefined, wallets)) await this.store(next, room);
         return json({ room: next.status !== 'deleted' && isRoomMember(next, account.id)
           ? roomView(next, account.id) : null });
       }

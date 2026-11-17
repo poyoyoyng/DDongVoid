@@ -4,6 +4,7 @@ import { errorResponse, json, readBody, requireThat } from './http.js';
 import { music } from './music.js';
 import { startRating } from './ratings.js';
 import { isSoloGame, startSolo } from './scores.js';
+import { startMoney } from '../public/seotda.js';
 export { GameRoom } from './room.js';
 export { ScoreVerifier } from './scores.js';
 export { AccountPasswords } from './passwords.js';
@@ -13,18 +14,28 @@ const roomPath = /^\/api\/rooms\/([0-9a-f-]{36})(?:\/(action|socket|chat))?$/;
 
 async function rankings(db, game) {
   requireThat(isRoomGame(game) || isSoloGame(game), '게임을 선택해 주세요.');
-  // Every account is listed; members without a record show zeros.
-  const sql = isSoloGame(game) ? `
+  // Every account is listed; members without a record show zeros, or the starting money in 섯다.
+  const totals = `totals AS (
+      SELECT account_id, SUM(outcome = 'W') AS wins, SUM(outcome = 'D') AS draws, SUM(outcome = 'L') AS losses
+      FROM match_results WHERE game = ?1 GROUP BY account_id
+    )`;
+  const sql = game === 'seotda' ? `
+    WITH ${totals}, board AS (
+      SELECT name, COALESCE(wallets.balance, ${startMoney}) AS money, COALESCE(wallets.bankruptcies, 0) AS bankruptcies,
+        COALESCE(wins, 0) AS wins, COALESCE(draws, 0) AS draws, COALESCE(losses, 0) AS losses
+      FROM accounts LEFT JOIN totals ON totals.account_id = accounts.id
+        LEFT JOIN wallets ON wallets.account_id = accounts.id
+    )
+    SELECT name, money, bankruptcies, wins, draws, losses, RANK() OVER (ORDER BY money DESC) AS rank
+    FROM board ORDER BY rank, name LIMIT 1000
+  ` : isSoloGame(game) ? `
     WITH board AS (
       SELECT name, COALESCE(score, 0) AS score
       FROM accounts LEFT JOIN solo_bests ON solo_bests.account_id = accounts.id AND solo_bests.game = ?
     )
     SELECT name, score, RANK() OVER (ORDER BY score DESC) AS rank FROM board ORDER BY rank, name LIMIT 1000
   ` : `
-    WITH totals AS (
-      SELECT account_id, SUM(outcome = 'W') AS wins, SUM(outcome = 'D') AS draws, SUM(outcome = 'L') AS losses
-      FROM match_results WHERE game = ?1 GROUP BY account_id
-    ), board AS (
+    WITH ${totals}, board AS (
       SELECT name, CAST(ROUND(COALESCE(ratings.rating, ${startRating})) AS INTEGER) AS mmr, COALESCE(ratings.streak, 0) AS streak,
         COALESCE(wins, 0) AS wins, COALESCE(draws, 0) AS draws, COALESCE(losses, 0) AS losses
       FROM accounts LEFT JOIN totals ON totals.account_id = accounts.id

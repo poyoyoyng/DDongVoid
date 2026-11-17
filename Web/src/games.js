@@ -2,8 +2,9 @@ import { cardAttack, cardName, cardRank, cardSuit, games, legalCard, powerCosts,
 import { BLACK, WHITE, forbiddenReason, size as omokSize, winningLine } from '../public/omok.js';
 import { randomInt, requireThat } from './http.js';
 import { applyMemberAction, isMemberAction } from './room-members.js';
+import { expireSeotda, leaveSeotda, seotdaAction, seotdaView, startSeotda } from './seotda.js';
 
-const roomGames = new Set(['slap', 'ciao', 'onecard', 'yacht', 'omok']);
+const roomGames = new Set(['slap', 'ciao', 'onecard', 'yacht', 'omok', 'seotda']);
 export const isRoomGame = game => roomGames.has(game);
 const current = room => room.players[room.index];
 const integerIn = (value, first, last) => Number.isInteger(value) && value >= first && value <= last;
@@ -26,23 +27,34 @@ function complete(room, winners, reason) {
   room.endReason = reason;
 }
 
-export function applyAction(room, account, input, now, roll = randomInt) {
+// wallets maps each player to their 섯다 balance; the room loads it when a player gets ready.
+export function applyAction(room, account, input, now, roll = randomInt, wallets = null) {
   const id = account.id;
   const player = room.players.find(candidate => candidate.id === id);
   const action = input.action;
   if (isMemberAction(action)) {
+    const seotda = room.game === 'seotda' && room.status === 'playing';
+    if (seotda && action === 'spectate' && player) leaveSeotda(room, player, now, roll);
     if (!applyMemberAction(room, account, input, player, now)) return false;
+    // A 섯다 hand never waits for an empty seat: whoever leaves has folded, so the turn clock keeps running.
+    if (seotda && room.deadlineRemaining != null) {
+      room.deadline = now + room.deadlineRemaining;
+      delete room.deadlineRemaining;
+    }
   } else {
     requireThat(player, '이 방의 참가자가 아닙니다.', 403);
     if (action === 'ready') {
       requireThat(room.status !== 'playing', '이미 게임이 진행 중입니다.');
       requireThat(typeof input.ready === 'boolean', '준비 상태를 선택해 주세요.');
+      if (room.game === 'seotda' && wallets) {
+        for (const candidate of room.players) if (wallets.has(candidate.id)) candidate.balance = wallets.get(candidate.id);
+      }
       if (player.ready === input.ready) return false;
       player.ready = input.ready;
-      if (room.players.length >= 2 && room.players.every(candidate => candidate.ready)) start(room, roll);
+      if (room.players.length >= 2 && room.players.every(candidate => candidate.ready)) start(room, roll, now, wallets);
     } else {
       requireThat(room.status === 'playing', '게임이 진행 중이 아닙니다.', 409);
-      requireThat(!room.players.some(player => player.vacant), '빈 자리에 참가자가 들어오면 경기를 이어갑니다.', 409);
+      requireThat(room.game === 'seotda' || !room.players.some(player => player.vacant), '빈 자리에 참가자가 들어오면 경기를 이어갑니다.', 409);
       requireThat(input.match === room.match, stale, 409);
       requireThat(!room.seatEpoch || input.seatEpoch === room.seatEpoch, stale, 409);
       if (room.game === 'slap') slapAction(room, player, input);
@@ -50,13 +62,14 @@ export function applyAction(room, account, input, now, roll = randomInt) {
       if (room.game === 'onecard') oneCardAction(room, player, input, now, roll);
       if (room.game === 'yacht') yachtAction(room, player, input, roll);
       if (room.game === 'omok') omokAction(room, player, input);
+      if (room.game === 'seotda') seotdaAction(room, player, input, now, roll);
     }
   }
   room.revision++;
   return true;
 }
 
-function start(room, roll) {
+function start(room, roll, now, wallets) {
   room.status = 'playing';
   room.match++;
   room.index = 0;
@@ -89,6 +102,9 @@ function start(room, roll) {
     case 'yacht':
       resetDice(room);
       room.players.forEach(player => { player.scores = Array(12).fill(null); });
+      break;
+    case 'seotda':
+      startSeotda(room, roll, now, wallets);
       break;
   }
 }
@@ -233,9 +249,11 @@ function finishCiao(room, message) {
   complete(room, room.players.filter(player => sum(player.goals) === best).map(player => player.id), message);
 }
 
-export function expireRoom(room, now) {
-  if (room.status !== 'playing' || room.game !== 'ciao' || !room.deadline || now < room.deadline) return false;
-  resolveCiao(room, null, responders(room));
+export function expireRoom(room, now, roll = randomInt) {
+  if (room.status !== 'playing' || !room.deadline || now < room.deadline) return false;
+  if (room.game === 'ciao') resolveCiao(room, null, responders(room));
+  else if (room.game === 'seotda') expireSeotda(room, now, roll);
+  else return false;
   room.revision++;
   return true;
 }
@@ -404,7 +422,7 @@ export function roomView(room, id) {
   const view = structuredClone(room);
   view.spectators ??= [];
   view.hostId ??= room.players[0]?.id;
-  view.paused = room.players.some(player => player.vacant);
+  view.paused = room.game !== 'seotda' && room.players.some(player => player.vacant);
   delete view.deadlineRemaining;
   for (const player of view.players) delete player.previousPlayerId;
   if (view.game === 'slap') {
@@ -427,5 +445,6 @@ export function roomView(room, id) {
       if (player.id !== id) delete player.hand;
     }
   }
+  if (view.game === 'seotda') seotdaView(view, id);
   return view;
 }
