@@ -90,7 +90,18 @@ test('원카드 덱과 상대 패를 감추고 선언, 누적 공격, 무늬 선
   assert.equal(room.uncalled[0], '0');
   play(1, { action: 'call' });
   assert.equal(room.players[0].hand.length, 2);
-  assert.throws(() => play(1, { action: 'call' }), /1초/);
+  assert.throws(() => play(0, { action: 'call' }), /방금 누군가/);
+  assert.throws(() => play(1, { action: 'call' }), /방금 누군가/);
+});
+
+test('원카드 버튼은 누군가 누른 뒤 0.5초 동안 아무도 누를 수 없다', () => {
+  const { room } = match('onecard');
+  const call = (index, at) => applyAction(room, players[index], { action: 'call', match: room.match, seatEpoch: room.seatEpoch }, at);
+  call(0, now);
+  assert.throws(() => call(1, now + 499), /방금 누군가/);
+  call(1, now + 500);
+  assert.throws(() => call(1, now + 1_200), /1초/);
+  call(0, now + 1_200);
 });
 
 test('야추 고정 주사위, 족보와 상단 보너스를 계산한다', () => {

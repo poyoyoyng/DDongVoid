@@ -14,7 +14,7 @@ const artwork = {
   onecard: '<span class="art-card first">♣</span><span class="art-card second">♥</span><span class="art-card third">♠</span>',
   yacht: '<span class="art-die first">⚄</span><span class="art-die second">⚂</span><span class="art-die third">⚅</span>',
   omok: '<span class="art-goban"><i class="b"></i><i class="w"></i><i class="b"></i><i class="w"></i><i class="b"></i></span>',
-  seotda: '<span class="art-hwatu first">3<small>광</small></span><span class="art-hwatu second">8<small>광</small></span><span class="art-coin">₩</span>',
+  seotda: '<img class="art-hwatu first" src="/assets/hwatu/m3-0.svg" alt=""><img class="art-hwatu second" src="/assets/hwatu/m8-0.svg" alt=""><span class="art-coin">₩</span>',
 };
 
 export function home() {
@@ -423,7 +423,7 @@ function cardView(room, me, ui) {
         ${room.pending ? '<br>누적 공격 +' + room.pending : ''}</p>
     </div>
     ${playing && me && !room.paused ? `<div class="app-stack">${action(room.pending ? `공격 받기 · ${room.pending}장` : '카드 1장 받기 · 차례 넘기기',
-      { action: 'draw' }, '', !own)}${action('원카드!', { action: 'call' }, 'primary')}</div>` : ''}
+      { action: 'draw' }, '', !own)}${action('원카드!', { action: 'call' }, 'primary call-button', ui.call)}</div>` : ''}
     ${me ? `<p class="app-label">내 손패 · ${me.count}장</p>` : ''}${hand}
     ${room.last ? `<p class="app-warn">${escape(room.last)}</p>` : ''}`;
 }
@@ -541,8 +541,10 @@ function omokView(room, me) {
     ${playing && me && !room.paused ? action('기권하기', { action: 'resign' }, 'wide') : ''}`;
 }
 
-export const hwatu = (card, classes = '') => card == null ? `<span class="hwatu back ${classes}" aria-hidden="true"></span>`
-  : `<span class="hwatu${isGwang(card) ? ' gwang' : ''} ${classes}" title="${hwatuName(card)}" role="img" aria-label="${hwatuName(card)}"><b>${cardMonth(card)}</b><small>${cardKind(card)}</small></span>`;
+// Card pictures are public/assets/hwatu/m<month>-<variant>.svg; the month and kind are written below each one.
+export const hwatu = (card, classes = '') => card == null ? `<span class="hwatu back ${classes}" aria-hidden="true"><i></i><small>&nbsp;</small></span>`
+  : `<span class="hwatu${isGwang(card) ? ' gwang' : ''} ${classes}" title="${hwatuName(card)}" role="img" aria-label="${hwatuName(card)}">
+    <img src="/assets/hwatu/m${cardMonth(card)}-${card % 2}.svg" alt="" draggable="false"><small>${cardMonth(card)}${cardKind(card)}</small></span>`;
 
 // Each seat shows its cards, what it has bet this hand and what is left; others' cards stay face down until the showdown.
 function seotdaSeat(room, player, seat, me) {

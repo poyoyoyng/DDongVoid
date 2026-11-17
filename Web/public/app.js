@@ -332,6 +332,7 @@ function acceptRoom(next) {
         if (token === generation && room?.callCount === call) {
           ui.call = false;
           app.querySelector('.call-bubble')?.remove();
+          app.querySelector('.call-button')?.removeAttribute('disabled');
         }
       }, 500);
     }

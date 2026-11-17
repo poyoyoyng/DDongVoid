@@ -272,7 +272,7 @@ function startCards(room, random) {
   const [opener] = deck.splice(first, 1);
   Object.assign(room, {
     deck, discard: [opener], activeSuit: cardSuit(opener), direction: 1, pending: 0,
-    emptyDraws: 0, uncalled: [], callCount: 0, lastCaller: null, last: '각자 7장씩 받았습니다.',
+    emptyDraws: 0, uncalled: [], callCount: 0, lastCaller: null, lastCallAt: 0, last: '각자 7장씩 받았습니다.',
   });
   room.players.forEach(player => { player.hand = []; });
   for (let round = 0; round < 7; round++) {
@@ -303,8 +303,10 @@ function oneCardAction(room, player, input, now, random) {
   const id = player.id;
   const top = room.discard.at(-1);
   if (input.action === 'call') {
+    requireThat(!room.lastCallAt || now - room.lastCallAt >= 500, '방금 누군가 원카드를 눌렀습니다. 잠시 후 눌러 주세요.', 429);
     requireThat(!player.lastCall || now - player.lastCall >= 1000, '원카드는 1초에 한 번 누를 수 있습니다.', 429);
     player.lastCall = now;
+    room.lastCallAt = now;
     room.lastCaller = player.name;
     room.callCount++;
     const target = room.uncalled.includes(id) ? id : room.uncalled[0];
