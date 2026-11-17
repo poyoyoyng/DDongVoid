@@ -487,6 +487,18 @@ button.card-face.picked { outline: 3px solid var(--app-mint); transform: transla
   61% { transform: translateY(-4px) rotate(-12deg); }
   79% { transform: rotate(7deg); }
 }
+.yacht-fanfare { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; overflow: hidden; pointer-events: none; }
+.yacht-fanfare strong { font-size: clamp(48px, 13vw, 120px); font-weight: 900; letter-spacing: 0.04em; color: #ffd166; text-shadow: 0 4px 0 #b5651d, 0 0 28px rgba(255, 209, 102, 0.7); animation: yacht-banner 2.2s ease-out forwards; }
+.yacht-fanfare i { position: absolute; top: -16px; left: var(--x); width: 9px; height: 15px; border-radius: 2px; animation: yacht-confetti 1.9s var(--d) ease-in forwards; }
+@keyframes yacht-banner {
+  0% { transform: scale(0.3); opacity: 0; }
+  18% { transform: scale(1.15); opacity: 1; }
+  30%, 78% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.05); opacity: 0; }
+}
+@keyframes yacht-confetti {
+  to { transform: translateY(105vh) rotate(var(--r)); opacity: 0.6; }
+}
 .yacht-roll { display: grid; gap: 4px; justify-items: center; white-space: nowrap; font-size: 12px; color: #b8d1c2; }
 .yacht-roll .button { padding-inline: 10px; }
 .yacht-last { margin: 10px 0 0; color: #f4c59d; font-size: 14px; }
