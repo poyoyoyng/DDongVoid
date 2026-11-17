@@ -180,7 +180,7 @@ const waitingNotes = {
   yacht: '두 사람 모두 준비 완료를 누르면 시작합니다.',
   omok: '두 사람 모두 준비 완료를 누르면 시작합니다.<br>흑이 먼저 두고, 흑과 백은 한 판씩 번갈아 맡아요.',
   seotda: `2~4명이 참가하고 모두 준비하면 시작합니다.<br>판마다 기본 판돈 ${won(baseBet)}을 내고, 패를 한 장씩 두 번 받으며 베팅해요.`,
-  saboteur: '3~10명이 참가하고 모두 준비하면 시작합니다.<br>역할은 비밀! 광부는 금을 향해 굴을 파고, 방해꾼은 몰래 막아요. 한 판으로 승부하고 금을 가장 많이 받은 사람이 이겨요.',
+  saboteur: '3~10명이 참가하고 모두 준비하면 시작합니다.<br>광부 팀 vs 방해꾼 팀! 역할은 비밀이에요. 금을 찾으면 광부 팀 모두, 카드가 다 떨어지면 방해꾼 팀 모두 이겨요.',
 };
 
 function stage(room) {
@@ -195,6 +195,7 @@ function roomTitle(room, me) {
   const winners = room.winners;
   if (room.status === 'waiting') return room.game === 'slap' && room.players.length < 2 ? '상대를 기다리는 중' : '준비되면 시작!';
   if (room.status === 'finished') {
+    if (room.game === 'saboteur') return saboteurTitle(room, me);
     if (!winners.length) return '대전을 종료했어요';
     if (!me) return winners.length > 1 ? '공동 승리!' : nameOf(room, winners[0]) + ' 승리!';
     if (winners.length > 1 && winners.includes(me.id)) return '무승부!';
@@ -202,7 +203,6 @@ function roomTitle(room, me) {
     return { slap: '졌어요… 얼얼하다', yacht: '아쉽게 졌어요' }[room.game] ?? '게임이 끝났어요';
   }
   if (room.paused) return '빈 자리 대기 중';
-  if (room.game === 'saboteur' && room.phase === 'roundEnd') return saboteurTitle(room);
   const actual = room.players[room.index];
   const mine = actual.id === me?.id;
   if (room.game === 'slap') return me ? (mine ? '내 공격 차례!' : '내 수비 차례!') : nameOf(room, actual.id) + '의 공격 차례';

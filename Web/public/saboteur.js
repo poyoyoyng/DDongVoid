@@ -1,9 +1,8 @@
 // 사보타지 (Saboteur, AMIGO 2004): 3~10 dwarves dig from the start card toward three face-down goal cards; one hides the gold.
 // Rules follow the base game as described on 나무위키 and Wikipedia; the board, cards and roles are shared by server and browser.
-// One round decides the game (단판제); the original plays three.
-export const rounds = 1;
+// Here one round is the whole game and it is a team game: the gold diggers all win when the gold is reached,
+// otherwise the saboteurs all win (the original plays three rounds and shares out gold cards).
 export const turnTime = 60_000;
-export const breakTime = 20_000;
 
 export const tools = ['pick', 'lantern', 'cart'];
 export const toolNames = { pick: '곡괭이', lantern: '랜턴', cart: '수레' };
@@ -36,8 +35,6 @@ export const cards = [
 // [saboteurs, gold diggers]: one more role card than players, and the spare stays face down.
 export const roleCounts = { 3: [1, 3], 4: [1, 4], 5: [2, 4], 6: [2, 5], 7: [3, 5], 8: [3, 6], 9: [3, 7], 10: [4, 7] };
 export const handSize = count => count <= 5 ? 6 : count <= 7 ? 5 : 4;
-export const saboteurReward = count => count === 1 ? 4 : count <= 3 ? 3 : 2;
-export const goldCards = [...Array(16).fill(1), ...Array(8).fill(2), ...Array(4).fill(3)];
 
 // The start card sits at 0,0; the goals stand 7 cards to its right, one card apart.
 export const goalX = 8;

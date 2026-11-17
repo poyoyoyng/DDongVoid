@@ -175,17 +175,6 @@ export function roleArt(role, label = '') {
     <text x="30" y="83.5" text-anchor="middle" font-size="9" font-weight="900" fill="#fff" font-family="system-ui, sans-serif">방해꾼</text>`, label);
 }
 
-// Gold nugget cards worth 1, 2 or 3.
-export function goldArt(value, label = '') {
-  const spots = { 1: [[30, 42, 1.25]], 2: [[22, 36, 1], [38, 50, 1]], 3: [[20, 30, .9], [40, 40, .9], [26, 56, .9]] }[value];
-  const nugget = ([x, y, scale]) => `<g transform="translate(${x} ${y}) scale(${scale})">
-    <path d="M-11 4 Q-10 -6 -3 -5 Q0 -11 7 -6 Q13 -4 11 4 Q9 9 0 9 Q-10 9 -11 4 Z" fill="#c8901a"/>
-    <path d="M-8 2 Q-7 -4 -2 -3 Q1 -8 6 -4 Q10 -2 8 3 Q6 6 0 6 Q-7 6 -8 2 Z" fill="#ffd23f"/><circle cx="-2" cy="-1" r="1.8" fill="#fff3b0"/></g>`;
-  return svg(`<rect width="60" height="90" rx="5" fill="#5a3a12"/><rect x="4" y="4" width="52" height="68" rx="3.5" fill="#2a1c0c"/>
-    ${spots.map(nugget).join('')}
-    <text x="30" y="84" text-anchor="middle" font-size="10" font-weight="900" fill="#ffd23f" font-family="system-ui, sans-serif">금 ${value}</text>`, label);
-}
-
 // Small tool marks for the player list: the tool with a red cross through it.
 export const brokenTool = (tool, label = '') => `<svg class="sab-tool" viewBox="0 0 60 70" role="img" aria-label="${label}">
   <rect x="2" y="6" width="56" height="62" rx="12" fill="#f6e2c4"/>${scaled(icons[tool], 0, -6, 1)}

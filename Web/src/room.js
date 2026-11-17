@@ -7,6 +7,8 @@ import { isRoomMember } from './room-members.js';
 import { refillMoney, startMoney } from '../public/seotda.js';
 
 const retryDelay = 5000;
+// In a team game every member of the winning team wins.
+const teamGames = new Set(['saboteur']);
 
 function projection(room) {
   return JSON.stringify({
@@ -40,7 +42,7 @@ export class GameRoom extends DurableObject {
       pending.results.push({
         id: room.id, game: room.game, match: room.match,
         outcomes: room.players.map(({ id }) => ({
-          id, outcome: room.winners.includes(id) ? (room.winners.length > 1 ? 'D' : 'W') : 'L',
+          id, outcome: room.winners.includes(id) ? (room.winners.length > 1 && !teamGames.has(room.game) ? 'D' : 'W') : 'L',
         })),
       });
     }

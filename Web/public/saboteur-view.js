@@ -1,6 +1,6 @@
 import { escape } from './views.js';
 import {
-  bounds, cardHelp, cardName, cards, goalFaceName, goalNames, goalX, goalYs, placements, roleNames, rounds, toolNames,
+  bounds, cardHelp, cardName, cards, goalFaceName, goalNames, goalX, goalYs, placements, roleNames, toolNames,
 } from './saboteur.js';
 import { brokenTool, cardArt, cardBack, goalArt, goalBack, roleArt, startArt } from './saboteur-art.js';
 
@@ -8,15 +8,18 @@ const act = (label, data, classes = '', disabled = false) =>
   `<button class="app-button ${classes}" type="button" data-action="${escape(JSON.stringify(data))}" ${disabled ? 'disabled' : ''}>${label}</button>`;
 
 const roleHelp = {
-  digger: '금으로 가는 길을 이어요. 금을 찾으면 광부끼리 금 카드를 나눠 가져요.',
-  saboteur: '정체를 숨기고 길을 막아요. 카드가 모두 떨어질 때까지 금을 못 찾으면 방해꾼이 이겨요.',
+  digger: '금으로 가는 길을 이어요. 누구든 길이 금에 닿으면 광부 팀 모두 승리!',
+  saboteur: '정체를 숨기고 길을 막아요. 카드가 모두 떨어질 때까지 금을 못 찾으면 방해꾼 팀 모두 승리!',
 };
 
-export const saboteurStage = room => rounds > 1 ? `라운드 ${room.round ?? 1} / ${rounds}` : '단판 승부';
+export const saboteurStage = () => '광부 vs 방해꾼';
+const teamNames = { digger: '광부 팀', saboteur: '방해꾼 팀' };
 
-export function saboteurTitle(room) {
-  const result = room.result;
-  return `${result.round}라운드 끝 · ${result.winner === 'digger' ? '광부' : '방해꾼'} 승리!`;
+// The finished game's headline: which team won, and whether I was on it.
+export function saboteurTitle(room, me) {
+  if (!room.winners.length) return '아무도 이기지 못했어요';
+  const team = teamNames[room.result.winner] + ' 승리!';
+  return me ? team + (room.winners.includes(me.id) ? ' 이겼어요!' : ' 졌어요…') : team;
 }
 
 function cellArt(room, cell, me) {
@@ -24,7 +27,7 @@ function cellArt(room, cell, me) {
   if (cell.kind === 'path') return cardArt(cell.card, cell.rot, cardName(cell.card));
   const name = goalNames[cell.goal] + ' 목적지';
   if (cell.face) return goalArt(cell.face, name + ' · ' + goalFaceName(cell.face));
-  // Once the round is over every goal is shown, the unturned ones dimmed.
+  // Once the game is over every goal is shown, the unturned ones dimmed.
   if (room.goals) return goalArt(room.goals[cell.goal], name + ' · ' + goalFaceName(room.goals[cell.goal]));
   const peek = me?.peeks?.[cell.goal];
   return goalBack(name + (peek ? ' · 지도로 본 카드: ' + goalFaceName(peek) : ' · 뒷면')) +
@@ -78,11 +81,7 @@ function seatList(room, me, revealed) {
   return `<ul class="sab-players">${room.players.map((player, seat) => {
     const current = playing && seat === room.index;
     const role = revealed ? player.role : null;
-    const gain = revealed ? room.result?.gains?.[seat] : null;
-    const lines = [];
-    if (room.status === 'finished') lines.push(`<b class="gold">금 ${player.gold}개</b>`);
-    else if (gain != null) lines.push(gain ? `<b class="gold">금 +${gain}</b>` : '금 없음');
-    if (room.phase === 'roundEnd' && room.status === 'playing') lines.push(player.next ? '<span class="ready">다음 라운드 준비 ✓</span>' : '준비 대기');
+    const lines = revealed ? [room.winners.includes(player.id) ? '<b class="gold">승리</b>' : '패배'] : [];
     return `<li class="${current ? 'current' : ''}${player.vacant ? ' vacant' : ''}${role ? ' ' + role : ''}">
       ${role ? `<span class="sab-role-mini">${roleArt(role, roleNames[role])}</span>` : ''}
       <div><strong>${current ? '▶ ' : ''}${escape(player.name)}${player.id === me?.id ? ' (나)' : ''}</strong>
@@ -100,7 +99,6 @@ function myPanel(room, me) {
     <span class="sab-role-card">${roleArt(me.role, '내 역할 ' + roleNames[me.role])}</span>
     <div><p class="app-label">내 역할</p><p class="sab-role-title">${roleNames[me.role]}</p>
       <p class="app-muted">${roleHelp[me.role]}</p>
-      ${me.gold != null ? `<p class="sab-gold">내 금 <b>${me.gold}</b>개 <small>· 다른 사람의 금은 게임이 끝날 때 공개돼요</small></p>` : ''}
       ${peeks.length ? `<p class="sab-known">지도로 본 목적지 · ${peeks.map(([goal, face]) => `${goalNames[goal]} = <b>${goalFaceName(face)}</b>`).join(' · ')}</p>` : ''}
       ${me.broken?.length ? `<p class="app-warn">부서진 도구 · ${me.broken.map(tool => toolNames[tool]).join(', ')} · 고칠 때까지 길 카드를 못 내요</p>` : ''}
     </div></div>`;
@@ -143,31 +141,29 @@ function controls(room, me, selection) {
     ${act('이 카드 버리고 패스', { action: 'discard', card }, 'wide', !canPlay)}</div>`;
 }
 
-function result(room, me) {
+function result(room) {
   const outcome = room.result;
   if (!outcome) return '';
   const finder = outcome.finder !== null ? room.players[outcome.finder] : null;
-  const roundEnd = room.status === 'playing' && room.phase === 'roundEnd';
-  const standings = room.status === 'finished'
-    ? `<ol class="sab-final">${[...room.players].sort((a, b) => b.gold - a.gold).map(player =>
-      `<li class="${room.winners.includes(player.id) ? 'winner' : ''}"><strong>${escape(player.name)}</strong><b>금 ${player.gold}개</b></li>`).join('')}</ol>` : '';
+  const team = role => room.players.filter(player => player.role === role).map(player => escape(player.name)).join(', ') || '없음';
   return `<section class="sab-result ${outcome.winner}">
-    <h3>${rounds > 1 ? outcome.round + '라운드 · ' : ''}${outcome.winner === 'digger' ? '광부 승리!' : '방해꾼 승리!'}</h3>
-    <p>${finder ? `${escape(finder.name)}님이 금을 찾았어요. 광부들이 금 카드를 한 장씩 나눠 가졌어요.`
-      : '카드가 모두 떨어질 때까지 금을 찾지 못했어요. 방해꾼들이 금을 가져가요.'}</p>
+    <h3>${room.winners.length ? teamNames[outcome.winner] + ' 승리!' : '승자 없음'}</h3>
+    <p>${finder ? `${escape(finder.name)}님의 길이 금에 닿았어요. 광부 팀 모두 이겼어요!`
+      : room.winners.length ? '카드가 모두 떨어질 때까지 금을 찾지 못했어요. 방해꾼 팀 모두 이겼어요!'
+        : '금을 찾지 못했지만 이번 판에는 방해꾼이 없었어요.'}</p>
     <div class="sab-goals">${goalNames.map((name, goal) => `<figure>${goalArt(outcome.goals[goal], name + ' 목적지 · ' + goalFaceName(outcome.goals[goal]))}
       <figcaption>${name} · ${goalFaceName(outcome.goals[goal])}</figcaption></figure>`).join('')}</div>
-    ${rounds > 1 && room.history?.length ? `<p class="app-muted">${room.history.map(entry => `${entry.round}R ${entry.winner === 'digger' ? '광부' : '방해꾼'}`).join(' · ')}</p>` : ''}
-    ${standings}
-    ${roundEnd ? `<p class="app-muted">${outcome.round + 1}라운드는 역할을 새로 나눠요 · 자동 시작까지 <strong data-deadline="${room.deadline}"></strong></p>
-      ${me ? act(me.next ? '다른 사람을 기다리는 중…' : '다음 라운드 준비', { action: 'next' }, 'primary wide', me.next) : ''}` : ''}
+    <ul class="sab-teams">
+      <li class="digger${outcome.winner === 'digger' ? ' won' : ''}">${roleArt('digger')}<div><b>광부 팀</b><span>${team('digger')}</span></div></li>
+      <li class="saboteur${outcome.winner === 'saboteur' && room.winners.length ? ' won' : ''}">${roleArt('saboteur')}<div><b>방해꾼 팀</b><span>${team('saboteur')}</span></div></li>
+    </ul>
   </section>`;
 }
 
 // ui.sabCard is the hand card I picked, ui.sabRot whether it is turned 180°, ui.sabZoom the board's card size (app.js).
 export function saboteurView(room, me, ui) {
   const playing = room.status === 'playing';
-  const revealed = !playing || room.phase === 'roundEnd';
+  const revealed = room.status === 'finished';
   const mySeat = room.players.indexOf(me);
   const inPlay = playing && room.phase === 'play';
   const myTurn = inPlay && !room.paused && mySeat >= 0 && room.index === mySeat;
@@ -184,11 +180,11 @@ export function saboteurView(room, me, ui) {
       data-sab-card="${id}" aria-pressed="${id === card}" title="${escape(cardName(id) + ' · ' + cardHelp(id))}">${cardArt(id, id === card ? rot : 0, cardName(id))}
       <small>${cardName(id)}</small></button>`).join('')}</div>` : '';
   return `<div class="sab-status">
-      ${rounds > 1 ? `<span>라운드 <b>${room.round}</b> / ${rounds}</span>` : ''}<span>남은 카드 <b>${room.deckCount}</b>장</span>
-      <span>금 카드 더미 <b>${room.goldLeft}</b>장</span></div>
+      <span>남은 카드 <b>${room.deckCount}</b>장</span><span>버린 카드 <b>${room.discarded ?? 0}</b>장</span>
+      <span>목적지 <b>${room.board.filter(cell => cell.kind === 'goal' && cell.face).length}</b> / 3 공개</span></div>
     ${turn}
-    ${revealed ? result(room, me) : ''}
-    ${playing && !revealed ? myPanel(room, me) : ''}
+    ${revealed ? result(room) : ''}
+    ${playing ? myPanel(room, me) : ''}
     ${seatList(room, me, revealed)}
     ${mine(room, me, ui, selection)}
     ${hand}

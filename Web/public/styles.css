@@ -461,9 +461,6 @@ button.omok-cell:hover::after, button.omok-cell:focus-visible::after { content: 
 .sab-role-title { color: #fff; font-size: 22px; font-weight: 900; line-height: 1.2; }
 .sab-me.digger .sab-role-title { color: #9fd0ff; }
 .sab-me.saboteur .sab-role-title { color: #ff8b8b; }
-.sab-gold { color: var(--app-text); font-size: 14px; }
-.sab-gold b { color: var(--app-gold); font-size: 18px; }
-.sab-gold small { color: var(--app-muted); font-size: 11px; }
 .sab-known { color: var(--app-text); font-size: 13px; }
 .sab-known b { color: var(--app-gold); }
 .sab-players { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin: 0 0 6px; padding: 0; list-style: none; }
@@ -526,12 +523,12 @@ button.sab-cell.target:hover { transform: translateY(-2px); }
 .sab-goals { display: flex; justify-content: center; gap: 12px; margin: 10px 0; }
 .sab-goals figure { width: 62px; margin: 0; }
 .sab-goals figcaption { color: var(--app-muted); font-size: 11px; font-weight: 700; }
-.sab-final { display: grid; gap: 4px; max-width: 360px; margin: 10px auto; padding: 0; list-style: none; counter-reset: sab-rank; text-align: left; }
-.sab-final li { counter-increment: sab-rank; display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 8px; background: #0006; }
-.sab-final li::before { content: counter(sab-rank); color: var(--app-muted); font-size: 12px; }
-.sab-final li b { margin-left: auto; color: var(--app-gold); }
-.sab-final li.winner { background: var(--app-gold); color: #3b2a06; }
-.sab-final li.winner b, .sab-final li.winner::before { color: #3b2a06; }
+.sab-teams { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; text-align: left; }
+.sab-teams li { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid #ffffff1f; border-radius: 10px; background: #0005; opacity: .65; }
+.sab-teams li.won { border-color: var(--app-gold); background: #3b2a06; opacity: 1; }
+.sab-teams b { display: block; color: #fff; font-size: 14px; }
+.sab-teams li.won b::after { content: ' · 승리'; color: var(--app-gold); }
+.sab-teams span { color: #c9d6cf; font-size: 12.5px; overflow-wrap: anywhere; }
 .sab-log { margin: 12px 0 0; padding: 10px 12px 10px 30px; border-radius: 10px; background: var(--app-inner); color: var(--app-muted); font-size: 12px; line-height: 1.6; }
 .sab-log li:last-child { color: var(--app-peach); }
 .guide-sab-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }

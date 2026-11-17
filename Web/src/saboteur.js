@@ -1,6 +1,5 @@
 import {
-  breakTime, canPlace, cardName, cards, goalFaceName, goalFaces, goalNames, goalRotation, goalX, goalYs, goldCards, handSize,
-  reachedGoals, roleCounts, rounds, saboteurReward, toolNames, turnTime,
+  canPlace, cardName, cards, goalFaceName, goalFaces, goalNames, goalRotation, goalX, goalYs, handSize, reachedGoals, roleCounts, toolNames, turnTime,
 } from '../public/saboteur.js';
 import { requireThat } from './http.js';
 
@@ -18,31 +17,21 @@ function shuffle(items, random) {
   return items;
 }
 
-// A game is `rounds` rounds. Gold cards come from one shuffled pile for the whole game and stay hidden until the end.
+// One game is one round of gold diggers against saboteurs. Roles come from players + 1 role cards; the spare one is never shown.
 export function startSaboteur(room, random, now) {
-  room.round = 0;
-  room.goldPile = shuffle([...goldCards], random);
-  room.log = [];
-  room.history = [];
-  for (const player of room.players) player.gold = 0;
-  startRound(room, random, now, random(room.players.length));
-}
-
-// Roles are dealt again every round from players + 1 role cards; the spare one is never shown.
-function startRound(room, random, now, first) {
   const count = room.players.length;
   const [saboteurs, diggers] = roleCounts[count];
   const roles = shuffle([...Array(saboteurs).fill('saboteur'), ...Array(diggers).fill('digger')], random);
-  room.round++;
+  const first = random(count);
   room.deck = shuffle(cards.map((_, card) => card), random);
   room.goals = shuffle([...goalFaces], random);
   room.board = [{ x: 0, y: 0, kind: 'start' }, ...goalYs.map((y, goal) => ({ x: goalX, y, kind: 'goal', goal }))];
   const size = handSize(count);
   room.players.forEach((player, seat) => Object.assign(player, {
-    role: roles[seat], hand: room.deck.splice(room.deck.length - size), broken: [], peeks: {}, next: false,
+    role: roles[seat], hand: room.deck.splice(room.deck.length - size), broken: [], peeks: {},
   }));
-  Object.assign(room, { phase: 'play', index: first, result: null, lastCell: null, discarded: 0, deadline: now + turnTime });
-  note(room, `${room.round}라운드 시작 · ${room.players[first].name}부터 · 손패 ${size}장씩`);
+  Object.assign(room, { phase: 'play', index: first, result: null, lastCell: null, discarded: 0, deadline: now + turnTime, log: [] });
+  note(room, `게임 시작 · ${room.players[first].name}부터 · 손패 ${size}장씩`);
 }
 
 const cellAt = (room, x, y) => room.board.find(cell => cell.x === x && cell.y === y);
@@ -111,7 +100,7 @@ function playCard(room, player, seat, input, now, suffix = '') {
   player.hand.splice(player.hand.indexOf(card), 1);
   if (room.deck.length) player.hand.push(room.deck.pop());
   room.turn++;
-  if (found) return endRound(room, seat, now);
+  if (found) return finish(room, 'digger', seat);
   // Without cards nobody can move: a player with an empty hand is skipped, and when every hand is empty the saboteurs win.
   const size = room.players.length;
   for (let step = 1; step <= size; step++) {
@@ -122,7 +111,7 @@ function playCard(room, player, seat, input, now, suffix = '') {
       return;
     }
   }
-  endRound(room, null, now, seat);
+  finish(room, 'saboteur');
 }
 
 // Turns over each goal a path now reaches. A stone keeps the round going; the gold ends it.
@@ -138,100 +127,43 @@ function revealGoals(room) {
   return room.board.some(cell => cell.kind === 'goal' && cell.face === 'gold');
 }
 
-// Takes gold cards worth the amount when the pile allows; the reward is paid in full either way.
-function takeGold(pile, amount) {
-  let left = amount;
-  for (const value of [3, 2, 1]) {
-    while (left >= value && pile.includes(value)) {
-      pile.splice(pile.indexOf(value), 1);
-      left -= value;
-    }
-  }
-}
-
-// finder is the seat that reached the gold, or null when the saboteurs win.
-function endRound(room, finder, now, last = finder) {
-  const size = room.players.length;
-  const gains = Array(size).fill(0);
-  const saboteurs = room.players.filter(player => player.role === 'saboteur');
-  if (finder !== null) {
-    // As many gold cards as there are gold diggers; from the finder (or the digger to a saboteur finder's right),
-    // each digger to the right keeps the biggest card left.
-    const order = Array.from({ length: size }, (_, step) => (finder - step + size) % size).filter(seat => room.players[seat].role === 'digger');
-    const drawn = room.goldPile.splice(Math.max(0, room.goldPile.length - order.length)).sort((a, b) => b - a);
-    drawn.forEach((value, index) => { gains[order[index]] += value; });
-    note(room, `${room.round}라운드 · ${room.players[finder].name}님이 금을 찾았습니다! 광부 승리`);
-  } else {
-    const reward = saboteurReward(saboteurs.length);
-    room.players.forEach((player, seat) => {
-      if (player.role !== 'saboteur') return;
-      takeGold(room.goldPile, reward);
-      gains[seat] = reward;
-    });
-    note(room, `${room.round}라운드 · 카드가 모두 떨어졌습니다. 방해꾼 승리${saboteurs.length ? '' : ' (방해꾼 없음)'}`);
-  }
-  room.players.forEach((player, seat) => { player.gold += gains[seat]; });
-  room.result = {
-    round: room.round, winner: finder !== null ? 'digger' : 'saboteur', finder, gains,
-    roles: room.players.map(player => player.role), goals: [...room.goals],
-  };
-  room.history.push({ round: room.round, winner: room.result.winner });
-  room.first = (last + 1) % size;
-  room.index = null;
-  if (room.round < rounds) {
-    Object.assign(room, { phase: 'roundEnd', deadline: now + breakTime });
-    return;
-  }
-  const best = Math.max(...room.players.map(player => player.gold));
-  const winners = room.players.filter(player => player.gold === best);
+// The whole winning team wins: every gold digger when the gold is reached (whoever reached it), otherwise every saboteur.
+function finish(room, team, finder = null) {
+  const winners = room.players.filter(player => player.role === team);
+  const reason = team === 'digger' ? `${room.players[finder].name}님이 금을 찾았습니다 · 광부 팀 승리!`
+    : winners.length ? '금을 찾지 못하고 카드가 모두 떨어졌습니다 · 방해꾼 팀 승리!'
+      : '카드가 모두 떨어졌지만 방해꾼이 없어 아무도 이기지 못했습니다.';
+  note(room, reason);
+  room.result = { winner: team, finder, goals: [...room.goals] };
   Object.assign(room, {
-    phase: 'over', status: 'finished', deadline: null, winners: winners.map(player => player.id),
-    endReason: `게임 종료 · 금 ${best}개 · ${winners.map(player => player.name).join(' · ')}${winners.length > 1 ? ' 공동 1위' : ' 승리!'}`,
+    phase: 'over', status: 'finished', index: null, deadline: null, winners: winners.map(player => player.id), endReason: reason,
   });
 }
 
-function nextRound(room, random, now) {
-  room.turn++;
-  startRound(room, random, now, room.first);
-}
-
-export function saboteurAction(room, player, input, now, random) {
+export function saboteurAction(room, player, input, now) {
   requireThat(input.turn === room.turn, '방 상태가 바뀌었습니다. 최신 화면에서 다시 선택해 주세요.', 409);
   const seat = room.players.indexOf(player);
-  if (input.action === 'next') {
-    requireThat(room.phase === 'roundEnd', '라운드가 진행 중입니다.');
-    player.next = true;
-    if (room.players.every(candidate => candidate.next || candidate.vacant)) nextRound(room, random, now);
-    return;
-  }
   requireThat(room.phase === 'play' && seat === room.index, '내 차례가 아닙니다.');
   playCard(room, player, seat, input, now);
 }
 
-// When the clock runs out the player passes with their first card; a finished round moves on by itself.
-export function expireSaboteur(room, now, random) {
-  if (room.phase === 'roundEnd') return nextRound(room, random, now);
+// When the clock runs out the player passes with their first card.
+export function expireSaboteur(room, now) {
   const player = room.players[room.index];
   playCard(room, player, room.index, { action: 'discard', card: player.hand[0] }, now, ' (시간 초과)');
 }
 
-// Others' hands, roles, map peeks and gold stay hidden; roles and goals show once a round ends, gold at the end of the game.
+// Others' hands, roles and map peeks stay hidden until the game ends; then every role and goal is shown.
 export function saboteurView(view, id) {
   const over = view.status === 'finished';
-  const revealed = over || view.status === 'playing' && view.phase === 'roundEnd';
   view.deckCount = view.deck?.length ?? 0;
-  view.goldLeft = view.goldPile?.length ?? 0;
   delete view.deck;
-  delete view.goldPile;
-  if (!revealed) delete view.goals;
-  const mine = view.players.findIndex(player => player.id === id);
+  if (!over) delete view.goals;
   for (const player of view.players) {
     player.handCount = player.hand?.length ?? 0;
     if (player.id === id) continue;
     delete player.hand;
     delete player.peeks;
-    if (!revealed) delete player.role;
-    if (!over) delete player.gold;
+    if (!over) delete player.role;
   }
-  if (view.result && !over) view.result.gains = view.result.gains.map((gain, seat) => seat === mine ? gain : null);
 }
