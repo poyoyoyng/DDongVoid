@@ -1,6 +1,7 @@
 // 사보타지 (Saboteur, AMIGO 2004): 3~10 dwarves dig from the start card toward three face-down goal cards; one hides the gold.
 // Rules follow the base game as described on 나무위키 and Wikipedia; the board, cards and roles are shared by server and browser.
-export const rounds = 3;
+// One round decides the game (단판제); the original plays three.
+export const rounds = 1;
 export const turnTime = 60_000;
 export const breakTime = 20_000;
 

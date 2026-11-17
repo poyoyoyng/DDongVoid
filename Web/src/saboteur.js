@@ -18,7 +18,7 @@ function shuffle(items, random) {
   return items;
 }
 
-// A game is three rounds. Gold cards come from one shuffled pile for the whole game and stay hidden until the end.
+// A game is `rounds` rounds. Gold cards come from one shuffled pile for the whole game and stay hidden until the end.
 export function startSaboteur(room, random, now) {
   room.round = 0;
   room.goldPile = shuffle([...goldCards], random);
@@ -186,7 +186,7 @@ function endRound(room, finder, now, last = finder) {
   const winners = room.players.filter(player => player.gold === best);
   Object.assign(room, {
     phase: 'over', status: 'finished', deadline: null, winners: winners.map(player => player.id),
-    endReason: `${rounds}라운드 종료 · 금 ${best}개 · ${winners.map(player => player.name).join(' · ')}${winners.length > 1 ? ' 공동 1위' : ' 승리!'}`,
+    endReason: `게임 종료 · 금 ${best}개 · ${winners.map(player => player.name).join(' · ')}${winners.length > 1 ? ' 공동 1위' : ' 승리!'}`,
   });
 }
 

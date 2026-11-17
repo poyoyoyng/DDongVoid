@@ -83,16 +83,16 @@ test('길이 금에 닿으면 금을 찾은 광부부터 오른쪽으로 광부 
   tunnelTo(room, 6);
   room.players[0].hand[0] = straight;
   play(0, { action: 'path', card: straight, x: 7, y: 0, rot: 0 });
-  assert.equal(room.phase, 'roundEnd');
+  assert.equal(room.status, 'finished', '단판제라 금을 찾으면 게임이 끝난다');
   assert.equal(room.result.winner, 'digger');
   assert.equal(room.board.find(cell => cell.kind === 'goal' && cell.goal === 1).face, 'gold');
   // Two diggers draw two cards (2 and 3): the finder (seat 0) keeps 3, seat 1 to the right gets 2, the saboteur nothing.
   assert.deepEqual(room.result.gains, [3, 2, 0]);
   assert.deepEqual(room.goldPile, [1, 1]);
-  assert.equal(room.first, 1);
-  const view = roomView(room, '0');
-  assert.deepEqual(view.result.gains, [3, null, null], '다른 사람이 받은 금은 게임이 끝날 때까지 숨긴다');
-  assert.equal(view.players[2].role, 'saboteur', '라운드가 끝나면 역할을 공개한다');
+  assert.deepEqual(room.winners, ['0']);
+  const view = roomView(room, '1');
+  assert.deepEqual(view.result.gains, [3, 2, 0], '게임이 끝나면 모두의 금을 공개한다');
+  assert.equal(view.players[2].role, 'saboteur', '게임이 끝나면 역할을 공개한다');
 });
 
 test('돌 목적지는 뒤집혀 길에 맞게 놓이고 라운드는 계속된다', () => {
@@ -176,7 +176,7 @@ test('손패가 없는 사람은 건너뛰고, 시간이 지나면 첫 카드를
   assert.equal(room.index, 2);
 });
 
-test('3라운드가 끝나면 금이 가장 많은 사람이 이기고 다음 라운드는 마지막 사람의 왼쪽부터다', () => {
+test('한 판이 끝나면 게임이 끝나고 금이 가장 많은 사람이 이긴다', () => {
   const { room, play } = table();
   for (let round = 1; round <= rounds; round++) {
     assert.equal(room.round, round);
@@ -196,18 +196,6 @@ test('3라운드가 끝나면 금이 가장 많은 사람이 이기고 다음 �
   const best = Math.max(...room.players.map(player => player.gold));
   assert.deepEqual(room.winners, room.players.filter(player => player.gold === best).map(player => player.id));
   assert.equal(roomView(room, '1').players[0].gold, room.players[0].gold, '게임이 끝나면 모두의 금을 공개한다');
-});
-
-test('라운드가 끝나고 20초가 지나면 다음 라운드가 저절로 시작된다', () => {
-  const { room, play } = table();
-  room.goals = ['stone-up', 'gold', 'stone-down'];
-  tunnelTo(room, 6);
-  room.players[0].hand[0] = straight;
-  play(0, { action: 'path', card: straight, x: 7, y: 0, rot: 0 });
-  assert.equal(room.phase, 'roundEnd');
-  assert.ok(expireRoom(room, room.deadline, () => 0));
-  assert.equal(room.round, 2);
-  assert.equal(room.phase, 'play');
 });
 
 test('방 화면은 고른 길 카드를 놓을 수 있는 칸을 표시하고 게임설명은 모든 카드를 보여 준다', () => {

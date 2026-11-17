@@ -462,7 +462,7 @@ function saboteurGuide() {
   const paths = list.filter(({ card }) => cards[card].type === 'path');
   const actions = list.filter(({ card }) => cards[card].type !== 'path');
   const steps = [
-    ['역할 받기', '역할 카드를 몰래 받아요. 광부인지 방해꾼인지는<br>나만 알아요. 라운드마다 새로 받아요.', `<span class="seotda-cards">${roleArt('digger')}${roleArt('saboteur')}</span>`],
+    ['역할 받기', '역할 카드를 몰래 받아요. 광부인지 방해꾼인지는<br>나만 알아요. 판마다 새로 받아요.', `<span class="seotda-cards">${roleArt('digger')}${roleArt('saboteur')}</span>`],
     ['카드 한 장 쓰기', '길 카드를 광산에 놓거나, 행동 카드를 쓰거나,<br>낼 카드가 없으면 한 장을 버리고 패스해요.', `<span class="seotda-cards">${cardArt(30)}${cardArt(40)}</span>`],
     ['한 장 뽑기', '쓴 만큼 카드 더미에서 한 장을 뽑아요.<br>더미가 떨어지면 남은 손패로만 해요.', `<span class="seotda-cards">${cardBack()}</span>`],
     ['목적지 열기', '시작 카드에서 끊기지 않은 길이 목적지에 닿으면<br>뒤집어요. 금이면 라운드 끝, 돌이면 계속!', `<span class="seotda-cards">${goalBack()}<b class="guide-swap">→</b>${goalArt('gold')}</span>`],
@@ -470,9 +470,9 @@ function saboteurGuide() {
   const roleRows = Object.entries(roleCounts);
   return article('saboteur', {
     eyebrow: '사보타지 게임 룰', title: '사보타지 쉽게 배우기',
-    intro: '광부들은 시작 카드에서 굴을 파서 금이 묻힌 목적지를 찾고, 정체를 숨긴 방해꾼은 몰래 길을 막아요. 3라운드 동안 금을 가장 많이 모은 사람이 이겨요.',
+    intro: '광부들은 시작 카드에서 굴을 파서 금이 묻힌 목적지를 찾고, 정체를 숨긴 방해꾼은 몰래 길을 막아요. 한 판으로 승부하고, 금을 가장 많이 받은 사람이 이겨요.',
     art: startArt() + goalArt('gold') + roleArt('saboteur'),
-    stats: [['3~10명', '역할은 비밀'], ['3라운드', '라운드마다 역할 새로'], ['목적지 3장', '금 1 · 돌 2'], ['60초', '시간이 지나면 패스']],
+    stats: [['3~10명', '역할은 비밀'], ['단판', '한 라운드로 승부'], ['목적지 3장', '금 1 · 돌 2'], ['60초', '시간이 지나면 패스']],
     sections: [
       ['내 차례는 이렇게 해요', stepList(steps,
         '도구(곡괭이 · 랜턴 · 수레)가 <b>하나라도 부서져 있으면</b> 길 카드를 낼 수 없어요. 차례에 <b>60초</b> 안에 고르지 않으면 첫 번째 손패를 버리고 패스해요.')],
@@ -498,7 +498,7 @@ function saboteurGuide() {
             <p class="guide-small">금 카드 28장 · 금 1개 16장 · 금 2개 8장 · 금 3개 4장</p></div>
           <div class="guide-bonus"><p>카드가 모두 떨어질 때까지 금을 못 찾으면</p><strong>방해꾼 승리!</strong>
             <p>방해꾼 1명 → 금 ${saboteurReward(1)}개 · 2~3명 → 각 ${saboteurReward(2)}개 · 4명 → 각 ${saboteurReward(4)}개</p>
-            <p class="guide-small">모은 금은 게임이 끝날 때까지 나만 봐요. 3라운드 뒤 금이 가장 많은 사람이 승리!</p></div>
+            <p class="guide-small">판이 끝나면 모두의 금을 공개하고, 금이 가장 많은 사람이 승리!</p></div>
         </div>`],
     ],
     foot: '게임 선택 → 사보타지 → 방 만들기 · 3~10명이 참가하고 모두 준비 완료를 누르면 시작해요.<br><small class="guide-small">원작 사보타지(Saboteur) · Frederic Moyersoen, AMIGO · 카드 그림은 이 사이트에서 새로 그렸어요.</small>',
