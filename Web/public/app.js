@@ -3,11 +3,13 @@ import { connectSocket, createChat } from './chat.js';
 import { escape, heading, home, lobby, presenceText, rankings, roomList, roomPage, signInPrompt, yachtFace } from './views.js';
 import { guide } from './guide.js';
 import { playSolo, soloMarkup } from './solo.js';
+import { createMusic } from './music.js';
 
 const app = document.querySelector('#app');
 const accountButton = document.querySelector('#account-button');
 const dialog = document.querySelector('#account-dialog');
 const toast = document.querySelector('#toast');
+const music = createMusic(document.querySelector('#music-button'));
 const roomIdPattern = /^[0-9a-f-]{36}$/;
 let user = null;
 let page = null;
@@ -151,6 +153,8 @@ async function navigate() {
   ui = { connected: false, held: Array(5).fill(false), card: null, call: false, power: 0 };
   page = parsePage();
   const { section, key } = page;
+  // The rhythm game needs to be heard on its own.
+  music.update(Boolean(user), section === 'play' && key === 'rhythm');
   const title = section === 'rankings' ? '랭킹' : section === 'guide' ? '게임설명' : section === 'lobby' ? '공용 대기방' : games[key]?.title ?? '대전방';
   document.querySelector('#nav-games').setAttribute('aria-current', section === 'home' || section === 'play' ? 'page' : 'false');
   document.querySelector('#nav-guide').setAttribute('aria-current', section === 'guide' ? 'page' : 'false');

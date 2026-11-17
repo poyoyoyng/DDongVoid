@@ -1,6 +1,7 @@
 import { authenticate, currentUser, findAccount } from './auth.js';
 import { isRoomGame } from './games.js';
 import { errorResponse, json, readBody, requireThat } from './http.js';
+import { music } from './music.js';
 import { startRating } from './ratings.js';
 import { isSoloGame, startSolo } from './scores.js';
 export { GameRoom } from './room.js';
@@ -80,6 +81,7 @@ async function api(request, env, url) {
   const account = await findAccount(request, env.DB);
   requireThat(account, '로그인이 필요합니다.', 401);
   if (method === 'GET' && path === '/api/rankings') return rankings(env.DB, url.searchParams.get('game'));
+  if (method === 'GET' && path === '/api/music') return music(request, env);
   if (path === '/api/lobby/socket' && method === 'GET') {
     return channelRequest(env.LOBBY_CHAT.getByName('lobby'), 'socket', account, request);
   }

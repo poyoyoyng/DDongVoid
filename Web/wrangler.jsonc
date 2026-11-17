@@ -28,6 +28,10 @@
     { "tag": "v2", "new_sqlite_classes": ["AccountPasswords"] },
     { "tag": "v3", "new_sqlite_classes": ["LobbyChat"] }
   ],
+  // Background music stays out of the repository; upload it to this private bucket as the object "bgm".
+  "r2_buckets": [
+    { "binding": "MUSIC", "bucket_name": "ddongvoid-music" }
+  ],
   "ratelimits": [
     { "name": "AUTH_LIMIT", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } },
     { "name": "CHAT_LIMIT", "namespace_id": "1002", "simple": { "limit": 8, "period": 10 } }

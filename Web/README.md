@@ -41,6 +41,20 @@ npm run deploy
 
 GitHub 자동 배포에는 같은 Worker의 Workers Builds를 사용합니다. 운영 브랜치는 `codex/web-production`, 루트 디렉터리는 `Web`, 빌드 명령은 `npm run check`, 배포 명령은 `npm run deploy`로 설정합니다. 빌드 토큰에는 Workers와 D1 편집 권한을 부여합니다. 운영 데이터베이스는 운영 브랜치에서만 마이그레이션합니다.
 
+## 배경음악
+
+로그인한 이용자에게만 배경음악을 반복 재생합니다. 음악 파일은 저장소에 넣지 않고 비공개 R2 버킷 `ddongvoid-music`에 `bgm`이라는 이름으로 올리며, Worker가 `/api/music`에서 로그인을 확인한 뒤 내려 줍니다. 브라우저 정책상 첫 클릭이나 키 입력 뒤에 재생을 시작하고, 상단의 🔊/🔇 버튼으로 끄고 켭니다(브라우저에 기억). 키보드 리듬 화면에서는 멈추고, 버킷에 파일이 없으면 버튼을 숨깁니다.
+
+`wrangler.jsonc`에 버킷이 연결되어 있으므로 처음 배포하기 전에 버킷을 만들어야 합니다. R2를 처음 쓰면 Cloudflare 대시보드의 **R2**에서 먼저 활성화합니다.
+
+```powershell
+npm exec -- wrangler r2 bucket create ddongvoid-music
+# 곡을 바꿀 때도 같은 명령으로 덮어씁니다.
+npm exec -- wrangler r2 object put ddongvoid-music/bgm --file "C:\경로\노래.mp3" --content-type audio/mpeg --remote
+```
+
+로컬 개발 서버에서 들으려면 마지막 명령의 `--remote` 대신 `--local`을 사용합니다. 바꾼 곡은 브라우저 캐시 때문에 최대 1시간 뒤에 반영될 수 있습니다.
+
 ## 웹 게임 상태
 
 - Workers가 정적 화면, 로그인과 게임 API를 제공합니다.
