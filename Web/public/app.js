@@ -345,14 +345,14 @@ function acceptRoom(next) {
     setTimeout(() => token === generation && celebrate('미친 야추!!'), 480);
   }
   // Everyone in the room sees the same line: the revision picks it.
-  if (caught) celebrate(['벌레컷', '꼴이 좋아'][next.revision % 2]);
+  if (caught) celebrate(['벌레컷', '꼴이 좋아'][next.revision % 2], false);
 }
 
-// A big banner and confetti over the whole screen (yacht, a caught ciao bluff).
-function celebrate(text) {
+// A big banner over the whole screen (yacht, a caught ciao bluff), with confetti for yacht.
+function celebrate(text, confetti = true) {
   document.querySelector('.yacht-fanfare')?.remove();
   const colors = ['#ffd166', '#ef476f', '#06d6a0', '#4cc9f0', '#f78c6b'];
-  const pieces = matchMedia('(prefers-reduced-motion: reduce)').matches ? '' : Array.from({ length: 72 }, (_, index) =>
+  const pieces = !confetti || matchMedia('(prefers-reduced-motion: reduce)').matches ? '' : Array.from({ length: 72 }, (_, index) =>
     `<i style="--x:${Math.random() * 100}%;--d:${(Math.random() * 0.4).toFixed(2)}s;--r:${Math.floor(Math.random() * 720 - 360)}deg;background:${colors[index % colors.length]}"></i>`).join('');
   document.body.insertAdjacentHTML('beforeend', `<div class="yacht-fanfare" aria-live="polite"><strong>${escape(text)}</strong>${pieces}</div>`);
   const banner = document.querySelector('.yacht-fanfare');

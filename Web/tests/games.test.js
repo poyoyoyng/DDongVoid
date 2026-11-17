@@ -55,6 +55,23 @@ test('차오차오 비공개 주사위, 동시 응답과 자동 PASS', () => {
   assert.match(room.last, /자동 PASS/);
 });
 
+test('차오차오는 순서 없이 응답하고 먼저 들어온 의심으로 판정한다', () => {
+  const { room, play } = match('ciao', 3);
+  play(0, { action: 'roll' }, () => 2);
+  play(0, { action: 'declare', number: 4 });
+  const revision = room.revision;
+  play(2, { action: 'doubt', revision });
+  assert.match(room.last, /보라 의심 성공/);
+  assert.throws(() => play(1, { action: 'doubt', revision }), /이미 응답했거나/);
+  play(1, { action: 'roll' });
+  play(1, { action: 'declare', number: 2 });
+  play(0, { action: 'pass' });
+  assert.equal(room.phase, 'respond');
+  play(2, { action: 'pass' });
+  assert.equal(room.phase, 'roll');
+  assert.match(room.last, /모두 PASS/);
+});
+
 test('원카드 덱과 상대 패를 감추고 선언, 누적 공격, 무늬 선택을 판정한다', () => {
   const { room, play } = match('onecard');
   assert.equal(new Set([...room.deck, ...room.discard, ...room.players.flatMap(player => player.hand)]).size, 54);
