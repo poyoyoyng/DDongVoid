@@ -344,13 +344,13 @@ function acceptRoom(next) {
   }
 }
 
-// Five of a kind: a YACHT! banner and confetti over the whole screen.
+// Five of a kind: a "미친 야추!!" banner and confetti over the whole screen.
 function celebrateYacht() {
   document.querySelector('.yacht-fanfare')?.remove();
   const colors = ['#ffd166', '#ef476f', '#06d6a0', '#4cc9f0', '#f78c6b'];
-  const pieces = matchMedia('(prefers-reduced-motion: reduce)').matches ? '' : Array.from({ length: 36 }, (_, index) =>
+  const pieces = matchMedia('(prefers-reduced-motion: reduce)').matches ? '' : Array.from({ length: 72 }, (_, index) =>
     `<i style="--x:${Math.random() * 100}%;--d:${(Math.random() * 0.4).toFixed(2)}s;--r:${Math.floor(Math.random() * 720 - 360)}deg;background:${colors[index % colors.length]}"></i>`).join('');
-  document.body.insertAdjacentHTML('beforeend', `<div class="yacht-fanfare" aria-live="polite"><strong>YACHT!</strong>${pieces}</div>`);
+  document.body.insertAdjacentHTML('beforeend', `<div class="yacht-fanfare" aria-live="polite"><strong>미친 야추!!</strong>${pieces}</div>`);
   const banner = document.querySelector('.yacht-fanfare');
   setTimeout(() => banner.remove(), 2200);
 }
