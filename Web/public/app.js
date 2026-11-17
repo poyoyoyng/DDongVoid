@@ -150,7 +150,7 @@ async function navigate() {
   solo?.stop();
   solo = null;
   room = null;
-  ui = { connected: false, held: Array(5).fill(false), card: null, call: false, power: 0, peeked: readPeeked() };
+  ui = { connected: false, held: Array(5).fill(false), card: null, call: false, power: 0, peeked: readPeeked(), sabCard: null, sabRot: 0, sabZoom: 1 };
   page = parsePage();
   const { section, key } = page;
   // The rhythm game needs to be heard on its own.
@@ -309,7 +309,12 @@ function renderRoom() {
     roomResize = new ResizeObserver(fitRoomChat);
     roomResize.observe(content);
   }
+  // A scrolled board (사보타지) keeps its place across redraws.
+  const scroller = content.querySelector('[data-keep-scroll]');
+  const kept = scroller && [scroller.scrollLeft, scroller.scrollTop];
   content.innerHTML = roomPage(room, user.id, ui);
+  const board = kept && content.querySelector('[data-keep-scroll]');
+  if (board) [board.scrollLeft, board.scrollTop] = kept;
   fitRoomChat();
   updateDeadline();
   if (hold !== undefined) app.querySelector('[data-hold="' + hold + '"]')?.focus();
@@ -362,6 +367,10 @@ function acceptRoom(next) {
       }, 500);
     }
     if (room?.index !== next.index || !next.players.find(player => player.id === user.id)?.hand?.includes(ui.card)) ui.card = null;
+  }
+  if (next.game === 'saboteur' && !next.players.find(player => player.id === user.id)?.hand?.includes(ui.sabCard)) {
+    ui.sabCard = null;
+    ui.sabRot = 0;
   }
   room = next;
   renderRoom();
@@ -548,6 +557,20 @@ app.addEventListener('click', async event => {
   if (button.hasAttribute('data-focus-chat')) {
     if (narrowRoom() && app.querySelector('.room-layout')) return toggleChat(true);
     return app.querySelector('[data-chat-input]')?.focus();
+  }
+  if (button.dataset.sabCard !== undefined) {
+    const card = Number(button.dataset.sabCard);
+    ui.sabRot = 0;
+    ui.sabCard = ui.sabCard === card ? null : card;
+    return renderRoom();
+  }
+  if (button.hasAttribute('data-sab-rotate')) {
+    ui.sabRot = 1 - ui.sabRot;
+    return renderRoom();
+  }
+  if (button.dataset.sabZoom) {
+    ui.sabZoom = Math.min(2, Math.max(0, ui.sabZoom + Number(button.dataset.sabZoom)));
+    return renderRoom();
   }
   if (button.dataset.power !== undefined) {
     ui.power = Number(button.dataset.power);

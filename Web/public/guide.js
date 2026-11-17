@@ -1,6 +1,8 @@
 import { cardName, games, powerCosts, powerNames, yachtCategories, yachtScore } from './rules.js';
 import { bankruptLine, baseBet, refillMoney, startMoney, won } from './seotda.js';
 import { cardFace, heading, hwatu, redCard, yachtFace } from './views.js';
+import { cardHelp, cardName as saboteurCardName, cards, handSize, roleCounts, saboteurReward } from './saboteur.js';
+import { cardArt, cardBack, goalArt, goalBack, goldArt, roleArt, startArt } from './saboteur-art.js';
 
 const dice = (values, { held = [], dim = [] } = {}) => `<span class="guide-dice">${values.map((value, index) =>
   `<span class="die-face guide-die${held.includes(index) ? ' held' : ''}${dim.includes(index) ? ' dim' : ''}">${yachtFace(value)}</span>`).join('')}</span>`;
@@ -443,7 +445,67 @@ function seotdaGuide() {
   });
 }
 
-const guides = { dodge: dodgeGuide, rhythm: rhythmGuide, slap: slapGuide, ciao: ciaoGuide, onecard: oneCardGuide, yacht: yachtGuide, omok: omokGuide, seotda: seotdaGuide };
+// Every 사보타지 card with how many of it are in the deck.
+function saboteurCardList() {
+  const counts = new Map();
+  for (const [card, info] of cards.entries()) {
+    const id = JSON.stringify(info);
+    counts.set(id, { card, count: (counts.get(id)?.count ?? 0) + 1 });
+  }
+  return [...counts.values()];
+}
+
+function saboteurGuide() {
+  const list = saboteurCardList();
+  const gallery = items => `<ul class="guide-sab-cards">${items.map(([art, name, text, count]) =>
+    `<li>${art}<b>${name}</b>${count ? `<em>${count}장</em>` : ''}<small>${text}</small></li>`).join('')}</ul>`;
+  const paths = list.filter(({ card }) => cards[card].type === 'path');
+  const actions = list.filter(({ card }) => cards[card].type !== 'path');
+  const steps = [
+    ['역할 받기', '역할 카드를 몰래 받아요. 광부인지 방해꾼인지는<br>나만 알아요. 라운드마다 새로 받아요.', `<span class="seotda-cards">${roleArt('digger')}${roleArt('saboteur')}</span>`],
+    ['카드 한 장 쓰기', '길 카드를 광산에 놓거나, 행동 카드를 쓰거나,<br>낼 카드가 없으면 한 장을 버리고 패스해요.', `<span class="seotda-cards">${cardArt(30)}${cardArt(40)}</span>`],
+    ['한 장 뽑기', '쓴 만큼 카드 더미에서 한 장을 뽑아요.<br>더미가 떨어지면 남은 손패로만 해요.', `<span class="seotda-cards">${cardBack()}</span>`],
+    ['목적지 열기', '시작 카드에서 끊기지 않은 길이 목적지에 닿으면<br>뒤집어요. 금이면 라운드 끝, 돌이면 계속!', `<span class="seotda-cards">${goalBack()}<b class="guide-swap">→</b>${goalArt('gold')}</span>`],
+  ];
+  const roleRows = Object.entries(roleCounts);
+  return article('saboteur', {
+    eyebrow: '사보타지 게임 룰', title: '사보타지 쉽게 배우기',
+    intro: '광부들은 시작 카드에서 굴을 파서 금이 묻힌 목적지를 찾고, 정체를 숨긴 방해꾼은 몰래 길을 막아요. 3라운드 동안 금을 가장 많이 모은 사람이 이겨요.',
+    art: startArt() + goalArt('gold') + roleArt('saboteur'),
+    stats: [['3~10명', '역할은 비밀'], ['3라운드', '라운드마다 역할 새로'], ['목적지 3장', '금 1 · 돌 2'], ['60초', '시간이 지나면 패스']],
+    sections: [
+      ['내 차례는 이렇게 해요', stepList(steps,
+        '도구(곡괭이 · 랜턴 · 수레)가 <b>하나라도 부서져 있으면</b> 길 카드를 낼 수 없어요. 차례에 <b>60초</b> 안에 고르지 않으면 첫 번째 손패를 버리고 패스해요.')],
+      ['인원별 역할과 손패', `<div class="guide-sab-scroll"><table class="guide-sab-table"><thead><tr><th scope="col">인원</th>${roleRows.map(([count]) => `<th scope="col">${count}명</th>`).join('')}</tr></thead>
+        <tbody><tr><th scope="row">방해꾼</th>${roleRows.map(([, [saboteurs]]) => `<td>${saboteurs}</td>`).join('')}</tr>
+        <tr><th scope="row">광부</th>${roleRows.map(([, [, diggers]]) => `<td>${diggers}</td>`).join('')}</tr>
+        <tr><th scope="row">손패</th>${roleRows.map(([count]) => `<td>${handSize(Number(count))}장</td>`).join('')}</tr></tbody></table></div>
+        <p class="guide-small">· 역할 카드는 인원보다 한 장 많이 섞어서 나눠요. 남은 한 장은 아무도 보지 않으니, 방해꾼이 한 명도 없을 수도 있어요.</p>`],
+      ['광산과 길 카드 (40장)', `${gallery([
+        [startArt(), '시작 카드', '사다리가 있는 입구 · 네 방향 모두 길', 0],
+        [goalBack(), '목적지 (뒷면)', '시작 카드에서 7장 오른쪽에 1장 간격으로 3장', 0],
+        [goalArt('gold'), '금 목적지', '여기에 길이 닿으면 광부 승리', 0],
+        [goalArt('stone-up'), '돌 목적지', '꽝! 뒤집힌 채 길은 이어져요', 0],
+        ...paths.map(({ card, count }) => [cardArt(card), saboteurCardName(card), cards[card].dead ? '가운데가 막혀서 지나갈 수 없어요' : '맞닿는 길을 모두 맞춰 놓아요', count]),
+      ])}
+        <p class="guide-small">· 카드는 세로로만 놓고 180°만 돌릴 수 있어요 · 맞닿는 변은 길과 길, 벽과 벽이 맞아야 하고, 시작 카드와 길로 이어져야 해요 · 뒷면 목적지 옆에는 아무 카드나 붙일 수 있어요</p>`],
+      ['행동 카드 (27장)', `${gallery(actions.map(({ card, count }) => [cardArt(card), saboteurCardName(card), cardHelp(card), count]))}
+        <p class="guide-small">· 이미 부서진 도구는 또 부술 수 없어요 · 둘 중 하나 고치기 카드는 한 가지만 고쳐요 · 고치기는 나에게도 쓸 수 있어요</p>`],
+      ['라운드 끝과 금 나누기', `<div class="guide-upper">
+          <div><h4>광부 승리 · 금을 찾으면</h4><p>금 카드를 광부 수만큼 뽑아, 금을 찾은 사람부터 오른쪽(차례 반대 방향)으로 광부들이 가장 큰 카드부터 한 장씩 가져가요.</p>
+            <p class="guide-small">방해꾼이 금에 닿으면 그 오른쪽 광부부터 가져가요.</p>
+            <div class="guide-example"><span class="seotda-cards">${goldArt(3)}${goldArt(2)}${goldArt(1)}</span></div>
+            <p class="guide-small">금 카드 28장 · 금 1개 16장 · 금 2개 8장 · 금 3개 4장</p></div>
+          <div class="guide-bonus"><p>카드가 모두 떨어질 때까지 금을 못 찾으면</p><strong>방해꾼 승리!</strong>
+            <p>방해꾼 1명 → 금 ${saboteurReward(1)}개 · 2~3명 → 각 ${saboteurReward(2)}개 · 4명 → 각 ${saboteurReward(4)}개</p>
+            <p class="guide-small">모은 금은 게임이 끝날 때까지 나만 봐요. 3라운드 뒤 금이 가장 많은 사람이 승리!</p></div>
+        </div>`],
+    ],
+    foot: '게임 선택 → 사보타지 → 방 만들기 · 3~10명이 참가하고 모두 준비 완료를 누르면 시작해요.<br><small class="guide-small">원작 사보타지(Saboteur) · Frederic Moyersoen, AMIGO · 카드 그림은 이 사이트에서 새로 그렸어요.</small>',
+  });
+}
+
+const guides = { dodge: dodgeGuide, rhythm: rhythmGuide, slap: slapGuide, ciao: ciaoGuide, onecard: oneCardGuide, yacht: yachtGuide, omok: omokGuide, seotda: seotdaGuide, saboteur: saboteurGuide };
 
 export function guide(game) {
   const tabs = Object.entries(games).map(([id, item]) =>

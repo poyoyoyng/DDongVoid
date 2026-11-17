@@ -446,6 +446,108 @@ button.omok-cell:hover::after, button.omok-cell:focus-visible::after { content: 
 .seotda-ranks li.mine::before, .seotda-ranks li.mine small { color: #6b4d12; }
 .seotda-ranks li i { margin-left: auto; padding: 0 6px; border-radius: 999px; background: #3b2a06; color: var(--app-gold); font-size: 10px; font-style: normal; }
 .seotda-ranks ul li i { margin-left: 0; justify-self: start; }
+/* 사보타지: upright cards drawn as SVG; the mine scrolls inside its own frame so the cards stay big. */
+.sab-art { display: block; width: 100%; height: auto; aspect-ratio: 2 / 3; border-radius: 6%; }
+.art-saboteur { background: #3a2a1d; }
+.art-mine { position: absolute; inset: 14% 6%; display: grid; grid-template-columns: repeat(4, 1fr); align-items: center; }
+.art-mine .sab-art { box-shadow: 0 3px 0 #0006; }
+.art-mine .sab-art:last-child { transform: rotate(6deg) translateY(-6%); box-shadow: 0 0 0 2px #ffd23f, 0 3px 0 #0006; }
+.sab-status { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; padding: 9px 12px; border-radius: 10px; background: var(--app-inner); color: var(--app-muted); font-size: 13px; }
+.sab-status b { color: var(--app-gold); font-size: 15px; }
+.sab-me { display: grid; grid-template-columns: 84px minmax(0, 1fr); align-items: start; gap: 14px; margin-bottom: 10px; padding: 12px; border: 1px solid #395447; border-radius: 12px; background: var(--app-inner); }
+.sab-me .app-label { margin-top: 0; }
+.sab-me.saboteur { border-color: #8f2a2a; background: #241212; }
+.sab-role-card .sab-art { box-shadow: 0 3px 0 #0008; }
+.sab-role-title { color: #fff; font-size: 22px; font-weight: 900; line-height: 1.2; }
+.sab-me.digger .sab-role-title { color: #9fd0ff; }
+.sab-me.saboteur .sab-role-title { color: #ff8b8b; }
+.sab-gold { color: var(--app-text); font-size: 14px; }
+.sab-gold b { color: var(--app-gold); font-size: 18px; }
+.sab-gold small { color: var(--app-muted); font-size: 11px; }
+.sab-known { color: var(--app-text); font-size: 13px; }
+.sab-known b { color: var(--app-gold); }
+.sab-players { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin: 0 0 6px; padding: 0; list-style: none; }
+.sab-players li { display: flex; align-items: flex-start; gap: 8px; min-width: 0; padding: 8px 10px; border: 1px solid #395447; border-radius: 10px; background: var(--app-inner); font-size: 13px; }
+.sab-players li > div { display: grid; gap: 3px; min-width: 0; }
+.sab-players strong { overflow-wrap: anywhere; }
+.sab-players small { color: var(--app-muted); font-size: 12px; }
+.sab-players .gold { color: var(--app-gold); }
+.sab-players .ready { color: var(--app-mint); }
+.sab-players li.current { border-color: var(--app-mint); background: #31583f; }
+.sab-players li.vacant { opacity: .55; }
+.sab-players li.saboteur { border-color: #8f2a2a; }
+.sab-role-mini { flex: none; width: 34px; }
+.sab-role-name.digger { color: #9fd0ff !important; font-weight: 800; }
+.sab-role-name.saboteur { color: #ff8b8b !important; font-weight: 800; }
+.sab-count { display: inline-flex; align-items: center; gap: 5px; color: var(--app-muted); font-size: 12px; }
+.sab-count .sab-art { width: 13px; border-radius: 2px; }
+.sab-broken { display: flex; gap: 4px; }
+.sab-tool { width: 26px; height: auto; }
+.sab-board-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sab-zoom { display: flex; gap: 4px; }
+.sab-zoom .app-button { min-width: 38px; font-size: 16px; }
+.sab-board { --cell: 58px; max-height: min(72vh, 760px); overflow: auto; padding: 10px; border: 1px solid #3d2b1d; border-radius: 12px;
+  background: radial-gradient(circle at 20% 30%, #3b2a1d 0 2px, transparent 3px) 0 0 / 34px 34px, #1a120c; overscroll-behavior: contain; }
+.sab-board.zoom-0 { --cell: 42px; }
+.sab-board.zoom-2 { --cell: 78px; }
+.sab-grid { display: grid; grid-template-columns: repeat(var(--cols), var(--cell)); gap: 2px; width: max-content; margin-inline: auto; }
+.sab-cell { position: relative; display: block; width: var(--cell); aspect-ratio: 2 / 3; padding: 0; border: 0; border-radius: 6%; background: none; }
+.sab-cell.empty { border: 1px dashed #ffffff12; }
+.sab-cell.last { outline: 3px solid var(--app-gold); outline-offset: 1px; z-index: 1; }
+.sab-cell.unturned { opacity: .5; }
+button.sab-cell.spot { border: 2px solid var(--app-mint); box-shadow: 0 0 0 2px #a7f3ce55, 0 0 14px #a7f3ce88; animation: sab-glow 1.4s ease-in-out infinite; }
+button.sab-cell.spot .sab-art { opacity: .5; transition: opacity .12s; }
+button.sab-cell.spot:hover .sab-art, button.sab-cell.spot:focus-visible .sab-art { opacity: 1; }
+button.sab-cell.target { outline: 3px solid #ff6b6b; outline-offset: 1px; z-index: 1; }
+button.sab-cell.target.map { outline-color: var(--app-gold); }
+button.sab-cell.target:hover { transform: translateY(-2px); }
+@keyframes sab-glow { 50% { box-shadow: 0 0 0 2px #a7f3ce33, 0 0 4px #a7f3ce44; } }
+.sab-peek { position: absolute; right: -3px; top: -6px; padding: 1px 6px; border-radius: 999px; background: #6c6e72; color: #fff; font-size: 11px; font-style: normal; font-weight: 900; box-shadow: 0 2px 0 #0007; }
+.sab-peek.gold { background: var(--app-gold); color: #3b2a06; }
+.sab-hand { display: flex; flex-wrap: wrap; gap: 8px; }
+.sab-card { display: grid; justify-items: center; gap: 4px; width: 78px; padding: 0; border: 0; background: none; color: var(--app-text); font: inherit; transition: transform .12s ease; }
+.sab-card .sab-art { box-shadow: 0 3px 0 #0008; }
+.sab-card small { max-width: 100%; color: var(--app-muted); font-size: 11px; font-weight: 700; line-height: 1.25; text-align: center; }
+.sab-card:hover { transform: translateY(-3px); }
+.sab-card.picked { transform: translateY(-8px); }
+.sab-card.picked .sab-art { box-shadow: 0 0 0 3px var(--app-mint), 0 6px 0 #0008; }
+.sab-card.picked small { color: var(--app-mint); }
+.sab-card.blocked .sab-art { filter: grayscale(.7) brightness(.7); }
+.sab-controls { display: grid; gap: 8px; margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--app-inner); }
+.sab-controls .app-muted, .sab-controls .app-warn { margin: 0; }
+.sab-controls > .app-button.wide { margin-top: 0; }
+.sab-picked { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 12px; }
+.sab-picked-name { color: #fff; font-size: 16px; font-weight: 850; }
+.sab-targets { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+.sab-result { margin-bottom: 10px; padding: 14px; border: 2px solid #2f6db5; border-radius: 12px; background: #13213a; text-align: center; }
+.sab-result.saboteur { border-color: #b33535; background: #2a1414; }
+.sab-result h3 { color: #fff; font-size: 20px; }
+.sab-result > p { color: #c9d6cf; font-size: 13px; }
+.sab-goals { display: flex; justify-content: center; gap: 12px; margin: 10px 0; }
+.sab-goals figure { width: 62px; margin: 0; }
+.sab-goals figcaption { color: var(--app-muted); font-size: 11px; font-weight: 700; }
+.sab-final { display: grid; gap: 4px; max-width: 360px; margin: 10px auto; padding: 0; list-style: none; counter-reset: sab-rank; text-align: left; }
+.sab-final li { counter-increment: sab-rank; display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 8px; background: #0006; }
+.sab-final li::before { content: counter(sab-rank); color: var(--app-muted); font-size: 12px; }
+.sab-final li b { margin-left: auto; color: var(--app-gold); }
+.sab-final li.winner { background: var(--app-gold); color: #3b2a06; }
+.sab-final li.winner b, .sab-final li.winner::before { color: #3b2a06; }
+.sab-log { margin: 12px 0 0; padding: 10px 12px 10px 30px; border-radius: 10px; background: var(--app-inner); color: var(--app-muted); font-size: 12px; line-height: 1.6; }
+.sab-log li:last-child { color: var(--app-peach); }
+.guide-sab-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.guide-sab-cards li { display: grid; justify-items: center; align-content: start; gap: 4px; text-align: center; }
+.guide-sab-cards .sab-art { max-width: 78px; box-shadow: 0 3px 0 #0003; }
+.guide-sab-cards b { font-size: 13px; }
+.guide-sab-cards small { color: var(--g-muted); font-size: 11.5px; line-height: 1.35; }
+.guide-sab-cards em { color: var(--g-gold); font-size: 12px; font-style: normal; font-weight: 800; }
+.guide-demo .sab-art, .guide-example .sab-art { width: 54px; flex: none; }
+.guide-hero-art .sab-art { width: clamp(42px, 5.5vw, 60px); }
+.guide-sab-scroll { overflow-x: auto; }
+.guide-sab-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: center; }
+.guide-sab-table th, .guide-sab-table td { padding: 6px 4px; border-bottom: 1px solid var(--g-line); }
+.guide-sab-table thead th { color: var(--g-muted); font-weight: 700; }
+.guide-sab-table tbody th { color: var(--g-mint); }
+.guide-sab-table tbody th { text-align: left; white-space: nowrap; }
 .card-players { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; }
 .card-players li { display: grid; max-width: 160px; padding: 7px 10px; border-radius: 8px; background: var(--app-inner); font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
 .card-players li.current { background: #304b3b; }
@@ -673,6 +775,12 @@ dialog .form-error { color: #a53745; margin: 0; }
   .seotda-ranks ol { columns: 2; column-gap: 8px; }
   .seotda-ranks ol li { break-inside: avoid; }
   .seotda-ranks ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 8px; }
+  .sab-board { --cell: 46px; padding: 6px; }
+  .sab-board.zoom-0 { --cell: 34px; }
+  .sab-board.zoom-2 { --cell: 64px; }
+  .sab-card { width: 62px; }
+  .sab-me { grid-template-columns: 62px minmax(0, 1fr); gap: 10px; }
+  .sab-players { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .shell { width: calc(100% - 28px); }
   .topbar-inner { gap: 8px; min-height: 61px; grid-template-columns: minmax(0, 1fr) auto auto; }
   .topbar nav { gap: 12px; }

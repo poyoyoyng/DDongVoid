@@ -3,8 +3,9 @@ import { BLACK, WHITE, forbiddenReason, size as omokSize, winningLine } from '..
 import { randomInt, requireThat } from './http.js';
 import { applyMemberAction, isMemberAction } from './room-members.js';
 import { expireSeotda, leaveSeotda, seotdaAction, seotdaView, startSeotda } from './seotda.js';
+import { expireSaboteur, saboteurAction, saboteurView, startSaboteur } from './saboteur.js';
 
-const roomGames = new Set(['slap', 'ciao', 'onecard', 'yacht', 'omok', 'seotda']);
+const roomGames = new Set(['slap', 'ciao', 'onecard', 'yacht', 'omok', 'seotda', 'saboteur']);
 export const isRoomGame = game => roomGames.has(game);
 const current = room => room.players[room.index];
 const integerIn = (value, first, last) => Number.isInteger(value) && value >= first && value <= last;
@@ -51,7 +52,7 @@ export function applyAction(room, account, input, now, roll = randomInt, wallets
       }
       if (player.ready === input.ready) return false;
       player.ready = input.ready;
-      if (room.players.length >= 2 && room.players.every(candidate => candidate.ready)) start(room, roll, now, wallets);
+      if (room.players.length >= (games[room.game].min ?? 2) && room.players.every(candidate => candidate.ready)) start(room, roll, now, wallets);
     } else {
       requireThat(room.status === 'playing', '게임이 진행 중이 아닙니다.', 409);
       requireThat(room.game === 'seotda' || !room.players.some(player => player.vacant), '빈 자리에 참가자가 들어오면 경기를 이어갑니다.', 409);
@@ -63,6 +64,7 @@ export function applyAction(room, account, input, now, roll = randomInt, wallets
       if (room.game === 'yacht') yachtAction(room, player, input, roll);
       if (room.game === 'omok') omokAction(room, player, input);
       if (room.game === 'seotda') seotdaAction(room, player, input, now, roll);
+      if (room.game === 'saboteur') saboteurAction(room, player, input, now, roll);
     }
   }
   room.revision++;
@@ -105,6 +107,9 @@ function start(room, roll, now, wallets) {
       break;
     case 'seotda':
       startSeotda(room, roll, now, wallets);
+      break;
+    case 'saboteur':
+      startSaboteur(room, roll, now);
       break;
   }
 }
@@ -253,6 +258,7 @@ export function expireRoom(room, now, roll = randomInt) {
   if (room.status !== 'playing' || !room.deadline || now < room.deadline) return false;
   if (room.game === 'ciao') resolveCiao(room, null, responders(room));
   else if (room.game === 'seotda') expireSeotda(room, now, roll);
+  else if (room.game === 'saboteur') expireSaboteur(room, now, roll);
   else return false;
   room.revision++;
   return true;
@@ -448,5 +454,6 @@ export function roomView(room, id) {
     }
   }
   if (view.game === 'seotda') seotdaView(view, id);
+  if (view.game === 'saboteur') saboteurView(view, id);
   return view;
 }

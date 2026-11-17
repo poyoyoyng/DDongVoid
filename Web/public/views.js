@@ -1,6 +1,8 @@
 import { canTakeSeat, cardName, isAdmin, cardRank, cardSuit, games, legalCard, powerCosts, powerNames, sum, suits, suitNames, yachtBonus, yachtCategories, yachtScore, yachtTotal, zones } from './rules.js';
 import { BLACK, forbiddenReason, pointName, size as omokSize, winningLine } from './omok.js';
 import { bankruptLine, baseBet, betOptions, cardKind, cardMonth, cardName as hwatuName, handLadder, handOf, isGwang, refillMoney, specialHands, startMoney, won } from './seotda.js';
+import { saboteurStage, saboteurTitle, saboteurView } from './saboteur-view.js';
+import { cardArt as saboteurCard, goalArt, startArt } from './saboteur-art.js';
 
 export const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -15,6 +17,7 @@ const artwork = {
   yacht: '<span class="art-die first">⚄</span><span class="art-die second">⚂</span><span class="art-die third">⚅</span>',
   omok: '<span class="art-goban"><i class="b"></i><i class="w"></i><i class="b"></i><i class="w"></i><i class="b"></i></span>',
   seotda: '<img class="art-hwatu first" src="/assets/hwatu/m3-0.svg" alt=""><img class="art-hwatu second" src="/assets/hwatu/m8-0.svg" alt=""><span class="art-coin">₩</span>',
+  saboteur: `<span class="art-mine">${startArt()}${saboteurCard(30)}${saboteurCard(4)}${goalArt('gold')}</span>`,
 };
 
 export function home() {
@@ -177,12 +180,14 @@ const waitingNotes = {
   yacht: '두 사람 모두 준비 완료를 누르면 시작합니다.',
   omok: '두 사람 모두 준비 완료를 누르면 시작합니다.<br>흑이 먼저 두고, 흑과 백은 한 판씩 번갈아 맡아요.',
   seotda: `2~4명이 참가하고 모두 준비하면 시작합니다.<br>판마다 기본 판돈 ${won(baseBet)}을 내고, 패를 한 장씩 두 번 받으며 베팅해요.`,
+  saboteur: '3~10명이 참가하고 모두 준비하면 시작합니다.<br>역할은 비밀! 광부는 금을 향해 굴을 파고, 방해꾼은 몰래 막아요. 3라운드 동안 모은 금으로 승부해요.',
 };
 
 function stage(room) {
   if (room.status === 'finished') return 'GAME OVER';
   if (room.status !== 'playing') return 'WAITING ROOM';
   if (room.game === 'seotda') return (room.stage === 1 ? '첫째 장' : '둘째 장') + ' 베팅';
+  if (room.game === 'saboteur') return saboteurStage(room);
   return room.game === 'slap' ? 'ROUND ' + room.turn : room.game === 'yacht' ? `ROUND ${room.turn} / 12` : 'TURN ' + room.turn;
 }
 
@@ -197,6 +202,7 @@ function roomTitle(room, me) {
     return { slap: '졌어요… 얼얼하다', yacht: '아쉽게 졌어요' }[room.game] ?? '게임이 끝났어요';
   }
   if (room.paused) return '빈 자리 대기 중';
+  if (room.game === 'saboteur' && room.phase === 'roundEnd') return saboteurTitle(room);
   const actual = room.players[room.index];
   const mine = actual.id === me?.id;
   if (room.game === 'slap') return me ? (mine ? '내 공격 차례!' : '내 수비 차례!') : nameOf(room, actual.id) + '의 공격 차례';
@@ -219,7 +225,8 @@ export function roomPage(room, user, ui) {
   const me = room.players.find(player => player.id === user);
   const playing = room.status === 'playing';
   const finished = room.status === 'finished';
-  const gameView = { slap: slapView, ciao: ciaoView, onecard: cardView, yacht: yachtView, omok: omokView, seotda: seotdaView }[room.game];
+  const gameView = { slap: slapView, ciao: ciaoView, onecard: cardView, yacht: yachtView, omok: omokView, seotda: seotdaView,
+    saboteur: (room, me, ui) => room.status === 'waiting' ? waitingSeats(room, me) : saboteurView(room, me, ui) }[room.game];
   const winnerNames = room.winners.map(id => nameOf(room, id)).join(' · ');
   const main = [
     me && !playing ? action(me.ready ? '준비 취소' : finished ? '다시 하기 · 준비 완료' : '준비 완료',
