@@ -93,6 +93,8 @@ async function api(request, env, url) {
   requireThat(account, '로그인이 필요합니다.', 401);
   if (method === 'GET' && path === '/api/rankings') return rankings(env.DB, url.searchParams.get('game'));
   if (method === 'GET' && path === '/api/music') return music(request, env);
+  const musicPath = /^\/api\/music\/([a-z0-9-]+)$/.exec(path);
+  if (method === 'GET' && musicPath) return music(request, env, musicPath[1]);
   if (path === '/api/lobby/socket' && method === 'GET') {
     return channelRequest(env.LOBBY_CHAT.getByName('lobby'), 'socket', account, request);
   }

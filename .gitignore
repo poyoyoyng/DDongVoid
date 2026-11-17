@@ -27,3 +27,5 @@ Web/.wrangler/
 Web/.dev.vars*
 Web/.env*
 Web/public/assets/slap/
+Web/public/api/music.mp3
+Web/public/api/music-files/

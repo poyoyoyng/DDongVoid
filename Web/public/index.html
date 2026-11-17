@@ -21,11 +21,38 @@
         <a href="#rankings/dodge" id="nav-rankings">랭킹</a>
       </nav>
       <div class="topbar-actions">
-        <button class="button button-small button-outline" id="music-button" type="button" aria-label="배경음악" hidden></button>
         <button class="button button-small button-outline" id="account-button" type="button">로그인</button>
       </div>
     </div>
   </header>
+  <section class="shell music-player" id="music-player" aria-label="배경음악">
+    <div class="music-bar">
+      <div class="music-now">
+        <span class="music-note" aria-hidden="true">♫</span>
+        <div class="music-track-info">
+          <span class="music-eyebrow">현재 곡 <span id="music-position">1 / 5</span></span>
+          <p class="music-title" id="music-title">Circles</p>
+          <p class="music-artist" id="music-artist">Post Malone</p>
+        </div>
+      </div>
+      <div class="music-controls" role="group" aria-label="음악 재생">
+        <button class="button button-small button-primary" id="music-play" type="button" disabled><span aria-hidden="true">▶</span> 시작</button>
+        <button class="button button-small button-outline" id="music-pause" type="button" disabled><span aria-hidden="true">Ⅱ</span> 일시정지</button>
+        <button class="button button-small button-outline" id="music-next" type="button" disabled>다음 곡 <span aria-hidden="true">⏭</span></button>
+      </div>
+      <label class="music-volume" for="music-volume"><span>소리</span>
+        <input id="music-volume" type="range" min="0" max="100" step="1" value="35" aria-label="음악 소리 조절">
+        <output id="music-volume-value" for="music-volume">35%</output>
+      </label>
+    </div>
+    <div class="music-bottom">
+      <p class="music-status" id="music-status" role="status">로그인하면 음악을 재생할 수 있어요.</p>
+      <details class="music-playlist" id="music-playlist">
+        <summary>재생 목록 <span id="music-count">5곡</span></summary>
+        <ol id="music-tracks" aria-label="곡 선택"></ol>
+      </details>
+    </div>
+  </section>
   <main class="shell main" id="app" aria-busy="true">
     <p class="loading" role="status">게임을 불러오는 중…</p>
   </main>

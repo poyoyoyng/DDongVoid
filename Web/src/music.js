@@ -1,11 +1,44 @@
 import { HttpError } from './http.js';
+import { musicTracks } from '../public/music-library.js';
 
-// The background track sits in a private R2 bucket under this key and is served only to signed-in players.
+// Retained for installations that optionally serve Circles from R2.
 export const musicKey = 'bgm';
 
 // Audio elements fetch in byte ranges, so a Range request gets the matching 206 slice.
-export async function music(request, env) {
-  if (!env.MUSIC) throw new HttpError(404, '배경음악이 설정되지 않았습니다.');
+export async function music(request, env, trackId = 'circles') {
+  if (!musicTracks.some(track => track.id === trackId)) throw new HttpError(404, '음악을 찾을 수 없습니다.');
+  if (!env.MUSIC || trackId !== 'circles') {
+    if (!env.ASSETS) throw new HttpError(404, '배경음악이 설정되지 않았습니다.');
+    // /api/* always runs the Worker first. Only this authenticated handler can read the asset.
+    const path = trackId === 'circles' ? '/api/music.mp3' : `/api/music-files/${trackId}.mp3`;
+    const asset = await env.ASSETS.fetch(new Request(new URL(path, request.url), request));
+    if (asset.status === 404 || (asset.ok && !asset.headers.get('Content-Type')?.startsWith('audio/'))) {
+      throw new HttpError(404, '배경음악 파일이 없습니다.');
+    }
+    const headers = new Headers(asset.headers);
+    headers.set('Cache-Control', 'private, max-age=3600');
+    headers.set('Accept-Ranges', 'bytes');
+    // Workers static assets return the full file even when Range is requested.
+    const requestedRange = request.headers.get('Range');
+    const ifRange = request.headers.get('If-Range');
+    if (asset.status === 200 && requestedRange && (!ifRange || ifRange === asset.headers.get('ETag'))) {
+      const blob = await asset.blob();
+      const match = /^bytes=(\d*)-(\d*)$/.exec(requestedRange);
+      const suffix = match && match[1] === '';
+      const start = match ? suffix ? Math.max(blob.size - Number(match[2]), 0) : Number(match[1]) : -1;
+      const end = match ? suffix || match[2] === '' ? blob.size - 1 : Math.min(Number(match[2]), blob.size - 1) : -1;
+      if (!match || (!match[1] && !match[2]) || !Number.isSafeInteger(start) || !Number.isSafeInteger(end)
+          || start < 0 || start >= blob.size || end < start) {
+        headers.set('Content-Range', `bytes */${blob.size}`);
+        headers.set('Content-Length', '0');
+        return new Response(null, { status: 416, headers });
+      }
+      headers.set('Content-Range', `bytes ${start}-${end}/${blob.size}`);
+      headers.set('Content-Length', String(end - start + 1));
+      return new Response(blob.slice(start, end + 1), { status: 206, headers });
+    }
+    return new Response(asset.body, { status: asset.status, headers });
+  }
   const ranged = request.headers.has('Range');
   let object;
   try {

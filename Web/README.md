@@ -45,17 +45,29 @@ GitHub 자동 배포에는 같은 Worker의 Workers Builds를 사용합니다. �
 
 ## 배경음악
 
-로그인한 이용자에게만 배경음악을 반복 재생합니다. 음악 파일은 저장소에 넣지 않고 비공개 R2 버킷 `ddongvoid-music`에 `bgm`이라는 이름으로 올리며, Worker가 `/api/music`에서 로그인을 확인한 뒤 내려 줍니다. 브라우저 정책상 첫 클릭이나 키 입력 뒤에 재생을 시작하고, 상단의 🔊/🔇 버튼으로 끄고 켭니다(브라우저에 기억). 키보드 리듬 화면에서는 멈추고, 버킷에 파일이 없으면 버튼을 숨깁니다.
+로그인한 이용자에게만 배경음악을 재생합니다. R2나 결제수단 등록 없이 기존 Workers 정적 자산에 MP3를 함께 배포합니다. 홈페이지 상단 플레이어에서 현재 곡과 가수를 확인하고 시작, 일시정지, 다음 곡, 재생 목록 선택과 볼륨 조절을 할 수 있습니다. 다섯 곡을 순서대로 재생한 뒤 처음부터 반복하고, 선택 곡·볼륨·일시정지 설정은 브라우저에 기억합니다. 키보드 리듬 화면에서는 BGM이 자동으로 멈추고, 화면을 나가면 이전 재생 상태로 돌아옵니다. 브라우저 정책상 첫 클릭이나 시작 버튼을 누른 뒤 음악이 나올 수 있습니다.
 
-`wrangler.jsonc`에 버킷이 연결되어 있으므로 처음 배포하기 전에 버킷을 만들어야 합니다. R2를 처음 쓰면 Cloudflare 대시보드의 **R2**에서 먼저 활성화합니다.
+`Web` 폴더에서 음원을 배포 자산에 복사한 뒤 배포합니다. 파일은 Git에서 제외됩니다.
 
 ```powershell
-npm exec -- wrangler r2 bucket create ddongvoid-music
-# 곡을 바꿀 때도 같은 명령으로 덮어씁니다.
-npm exec -- wrangler r2 object put ddongvoid-music/bgm --file "C:\경로\노래.mp3" --content-type audio/mpeg --remote
+New-Item -ItemType Directory -Path public/api -Force
+Copy-Item -LiteralPath "C:\경로\노래.mp3" -Destination public/api/music.mp3
+npm run deploy
 ```
 
-로컬 개발 서버에서 들으려면 마지막 명령의 `--remote` 대신 `--local`을 사용합니다. 바꾼 곡은 브라우저 캐시 때문에 최대 1시간 뒤에 반영될 수 있습니다.
+곡 목록은 `public/music-library.js`에서 관리합니다. 현재 배포하는 음원 파일은 다음과 같습니다.
+
+| 곡 | 로컬 배포 파일 |
+| --- | --- |
+| Post Malone — Circles | `public/api/music.mp3` |
+| 아이유 — 미리 메리 크리스마스 | `public/api/music-files/iu-merry-christmas.mp3` |
+| Wham! — Last Christmas | `public/api/music-files/last-christmas.mp3` |
+| Kelly Clarkson — Underneath The Tree | `public/api/music-files/underneath-the-tree.mp3` |
+| Mariah Carey — All I Want For Christmas Is You | `public/api/music-files/all-i-want-for-christmas.mp3` |
+
+로컬 개발 서버에서도 같은 파일을 사용합니다. `/api/*`는 항상 Worker를 먼저 거치므로 음원 파일 주소로 직접 접근해도 로그인 검사를 통과해야 하며, 파일 자체는 `/api/music/곡ID`에서만 제공합니다. 기존 `/api/music` 주소는 Circles를 제공합니다. 바꾼 곡은 브라우저 캐시 때문에 최대 1시간 뒤에 반영될 수 있습니다.
+
+음원을 유지하려면 이후 배포에도 위 MP3 파일을 모두 포함해야 합니다. GitHub 자동 배포에는 이 로컬 파일이 전달되지 않으므로, 자동 배포 후 음악이 사라지면 음원이 있는 로컬에서 다시 배포합니다. 필요하면 선택적으로 `MUSIC` R2 바인딩을 추가해 기존 R2 음원(`bgm`)을 Circles에 사용할 수도 있습니다.
 
 ## 웹 게임 상태
 
