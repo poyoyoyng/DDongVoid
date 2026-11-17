@@ -82,17 +82,33 @@ export function createChat(host, title, accountId, send, { members = false } = {
     if (pinned || own && !next) log.scrollTop = log.scrollHeight;
   }
 
+  // A desktop Korean IME may still be composing the last syllable when Enter submits. Clearing the field then
+  // lets the IME write that syllable back, so a submit during composition waits for the composition to end.
+  let composing = false;
+  let submitAfterComposition = false;
+  input.addEventListener('compositionstart', () => { composing = true; });
+  input.addEventListener('compositionend', () => {
+    composing = false;
+    if (!submitAfterComposition) return;
+    submitAfterComposition = false;
+    // Some browsers also submit on the Enter that ended the composition; then the field is already empty here.
+    setTimeout(() => { if (input.value.trim()) form.requestSubmit(); });
+  });
+
   form.addEventListener('submit', async event => {
     event.preventDefault();
+    if (composing) { submitAfterComposition = true; return; }
     const draft = input.value;
     if (button.disabled || !draft.trim()) return;
     button.disabled = true;
     error.hidden = true;
+    input.value = '';
     try {
       const { chatMessage } = await send(draft);
       append(chatMessage);
-      if (input.value === draft) input.value = '';
     } catch (failure) {
+      // Give the unsent message back unless a new one was started meanwhile.
+      if (!input.value) input.value = draft;
       error.textContent = failure.message;
       error.hidden = false;
     } finally {
