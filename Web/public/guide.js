@@ -485,7 +485,7 @@ function saboteurGuide() {
         [startArt(), '시작 카드', '사다리가 있는 입구 · 네 방향 모두 길', 0],
         [goalBack(), '목적지 (뒷면)', '시작 카드에서 7장 오른쪽에 1장 간격으로 3장', 0],
         [goalArt('gold'), '금 목적지', '여기에 길이 닿으면 광부 승리', 0],
-        [goalArt('stone-up'), '돌 목적지', '꽝! 뒤집힌 채 길은 이어져요', 0],
+        [goalArt('stone-up'), '돌 목적지', '꽝! 돌이 나와도 라운드는 계속돼요', 0],
         ...paths.map(({ card, count }) => [cardArt(card), saboteurCardName(card), cards[card].dead ? '가운데가 막혀서 지나갈 수 없어요' : '맞닿는 길을 모두 맞춰 놓아요', count]),
       ])}
         <p class="guide-small">· 카드는 세로로만 놓고 180°만 돌릴 수 있어요 · 맞닿는 변은 길과 길, 벽과 벽이 맞아야 하고, 시작 카드와 길로 이어져야 해요 · 뒷면 목적지 옆에는 아무 카드나 붙일 수 있어요</p>`],

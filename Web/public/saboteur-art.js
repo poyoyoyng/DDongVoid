@@ -54,15 +54,19 @@ export const startArt = label => svg(rock('#2e2016') + tunnels(N | E | S | W, fa
 
 const nuggets = `<path d="M16 54 Q18 44 26 46 Q30 38 37 43 Q45 41 45 50 Q49 56 42 60 H19 Q13 59 16 54 Z" fill="#c8901a"/>
   <path d="M19 52 Q21 46 27 48 Q30 42 36 46 Q43 45 42 52 Q44 56 39 57 H22 Q17 56 19 52 Z" fill="#ffd23f"/>
-  <circle cx="26" cy="50" r="2.4" fill="#fff3b0"/><circle cx="35" cy="48" r="2" fill="#fff3b0"/><circle cx="31" cy="54" r="1.6" fill="#fff3b0"/>
-  <path d="M14 30 l1.6 4 4 1.6 -4 1.6 -1.6 4 -1.6 -4 -4 -1.6 4 -1.6 Z M47 27 l1.2 3 3 1.2 -3 1.2 -1.2 3 -1.2 -3 -3 -1.2 3 -1.2 Z M44 66 l1 2.4 2.4 1 -2.4 1 -1 2.4 -1 -2.4 -2.4 -1 2.4 -1 Z" fill="#fff6c2"/>`;
+  <circle cx="26" cy="50" r="2.4" fill="#fff3b0"/><circle cx="35" cy="48" r="2" fill="#fff3b0"/><circle cx="31" cy="54" r="1.6" fill="#fff3b0"/>`;
+const sparkles = `<path d="M12 16 l1.6 4 4 1.6 -4 1.6 -1.6 4 -1.6 -4 -4 -1.6 4 -1.6 Z M48 18 l1.2 3 3 1.2 -3 1.2 -1.2 3 -1.2 -3 -3 -1.2 3 -1.2 Z M46 70 l1 2.4 2.4 1 -2.4 1 -1 2.4 -1 -2.4 -2.4 -1 2.4 -1 Z M13 70 l.8 2 2 .8 -2 .8 -.8 2 -.8 -2 -2 -.8 2 -.8 Z" fill="#fff6c2"/>`;
 const stone = `<path d="M18 52 L23 41 L34 38 L43 45 L42 56 L31 60 L20 58 Z" fill="#6c6e72"/>
   <path d="M22 50 L25 43 L33 41 L38 46 L33 50 Z" fill="#9a9da2"/><path d="M33 52 L40 49 L39 55 L33 57 Z" fill="#55575b"/>`;
+// The heap or lump is drawn large in the middle of the card.
+const centered = shape => `<g transform="translate(30 45) scale(1.4) translate(-31 -49)">${shape}</g>`;
+const plain = (base, frame) => `<rect width="60" height="90" rx="5" fill="${base}"/>
+  <rect x="1" y="1" width="58" height="88" rx="4.5" fill="none" stroke="${frame}" stroke-width="2"/>`;
 
-export function goalArt(face, rot = 0, label = '') {
-  if (face === 'gold') return svg(rock('#2e2016') + tunnels(N | E | S | W, false) + nuggets, label);
-  const open = rotate(face === 'stone-up' ? N | W : S | W, rot);
-  return svg(rock() + tunnels(open, false) + stone, label);
+// A turned goal shows only what was found there, gold or stone, without tunnels.
+export function goalArt(face, label = '') {
+  if (face === 'gold') return svg(plain('#2e2016', '#c9a54a') + '<circle cx="30" cy="45" r="25" fill="#ffd23f" opacity=".14"/>' + centered(nuggets) + sparkles, label);
+  return svg(plain('#2a1c13', '#120b07') + centered(stone), label);
 }
 
 // The goal cards' own back: a dark blue card with a golden question mark.

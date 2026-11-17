@@ -23,9 +23,9 @@ function cellArt(room, cell, me) {
   if (cell.kind === 'start') return startArt('시작 카드');
   if (cell.kind === 'path') return cardArt(cell.card, cell.rot, cardName(cell.card));
   const name = goalNames[cell.goal] + ' 목적지';
-  if (cell.face) return goalArt(cell.face, cell.rot, name + ' · ' + goalFaceName(cell.face));
+  if (cell.face) return goalArt(cell.face, name + ' · ' + goalFaceName(cell.face));
   // Once the round is over every goal is shown, the unturned ones dimmed.
-  if (room.goals) return goalArt(room.goals[cell.goal], 0, name + ' · ' + goalFaceName(room.goals[cell.goal]));
+  if (room.goals) return goalArt(room.goals[cell.goal], name + ' · ' + goalFaceName(room.goals[cell.goal]));
   const peek = me?.peeks?.[cell.goal];
   return goalBack(name + (peek ? ' · 지도로 본 카드: ' + goalFaceName(peek) : ' · 뒷면')) +
     (peek ? `<em class="sab-peek ${peek === 'gold' ? 'gold' : ''}">${goalFaceName(peek)}</em>` : '');
@@ -155,7 +155,7 @@ function result(room, me) {
     <h3>${outcome.round}라운드 · ${outcome.winner === 'digger' ? '광부 승리!' : '방해꾼 승리!'}</h3>
     <p>${finder ? `${escape(finder.name)}님이 금을 찾았어요. 광부들이 금 카드를 한 장씩 나눠 가졌어요.`
       : '카드가 모두 떨어질 때까지 금을 찾지 못했어요. 방해꾼들이 금을 가져가요.'}</p>
-    <div class="sab-goals">${goalNames.map((name, goal) => `<figure>${goalArt(outcome.goals[goal], 0, name + ' 목적지 · ' + goalFaceName(outcome.goals[goal]))}
+    <div class="sab-goals">${goalNames.map((name, goal) => `<figure>${goalArt(outcome.goals[goal], name + ' 목적지 · ' + goalFaceName(outcome.goals[goal]))}
       <figcaption>${name} · ${goalFaceName(outcome.goals[goal])}</figcaption></figure>`).join('')}</div>
     ${room.history?.length ? `<p class="app-muted">${room.history.map(entry => `${entry.round}R ${entry.winner === 'digger' ? '광부' : '방해꾼'}`).join(' · ')}</p>` : ''}
     ${standings}
