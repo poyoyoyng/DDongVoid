@@ -433,7 +433,7 @@ function seotdaGuide() {
       ['돈과 랭킹', `<div class="guide-upper">
           <div><h4>모두 ${won(startMoney)}으로 시작</h4><p>딴 돈과 잃은 돈은 계정에 남고, 섯다 랭킹은 보유 금액 순이에요.</p>
             <p class="guide-small">한 판에 걸 수 있는 돈은 그 판 참가자 중 잔액이 가장 적은 사람의 잔액까지예요.</p></div>
-          <div class="guide-bonus"><p>잔액이 ${won(bankruptLine)}보다 적으면</p><strong>파산 · ${won(refillMoney)} 지원</strong>
+          <div class="guide-bonus"><p>잔액이 ${won(bankruptLine)} 이하가 되면</p><strong>파산 · ${won(refillMoney)} 지원</strong>
             <p>다음 판을 시작할 때 ${won(refillMoney)}으로 다시 채워요.</p><p class="guide-small">파산 횟수는 랭킹에 표시돼요.</p></div>
         </div>`],
     ],

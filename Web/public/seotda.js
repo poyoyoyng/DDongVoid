@@ -2,7 +2,7 @@
 export const deckSize = 20;
 export const startMoney = 10_000_000;
 export const baseBet = 10_000;
-// Below bankruptLine a player goes bankrupt and gets refillMoney at the next hand.
+// At or below bankruptLine a player goes bankrupt and gets refillMoney at the next hand.
 export const bankruptLine = 100_000;
 export const refillMoney = 3_000_000;
 export const turnTime = 30_000;

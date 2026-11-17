@@ -143,7 +143,7 @@ test('혼자 남으면 패를 보지 않고 바로 판돈을 가져간다', () =
   assert.deepEqual(room.settlement.money.map(entry => entry.delta), [2 * baseBet, -baseBet, -baseBet]);
 });
 
-test('한 판에 걸 수 있는 돈은 가장 적은 잔액까지이고, 10만원 미만이면 파산해서 300만원을 받는다', () => {
+test('한 판에 걸 수 있는 돈은 가장 적은 잔액까지이고, 10만원 이하면 파산해서 300만원을 받는다', () => {
   const capped = table(2, [startMoney, 115_000]).room;
   assert.equal(capped.cap, 115_000);
   capped.cap = 15_000; // a small cap keeps the all-in hand short
@@ -157,11 +157,11 @@ test('한 판에 걸 수 있는 돈은 가장 적은 잔액까지이고, 10만�
   assert.equal(capped.status, 'finished', '둘 다 최대로 걸면 남은 장을 바로 받고 공개한다');
   assert.deepEqual(capped.settlement.money.map(entry => entry.delta), [15_000, -15_000]);
 
-  const { room } = table(2, [99_999, startMoney]);
+  const { room } = table(2, [bankruptLine, startMoney]);
   assert.equal(room.players[0].balance, refillMoney);
   assert.equal(room.stakes['0'].refill, true);
   assert.equal(room.cap, refillMoney);
-  assert.equal(table(2, [bankruptLine, startMoney]).room.stakes['0'].refill, false);
+  assert.equal(table(2, [bankruptLine + 1, startMoney]).room.stakes['0'].refill, false);
 });
 
 test('시간이 지나면 체크할 수 있을 때는 체크, 아니면 다이한다', () => {
