@@ -416,6 +416,24 @@ button.omok-cell:hover::after, button.omok-cell:focus-visible::after { content: 
 .seotda-hand p b { color: var(--app-gold); font-size: 20px; }
 .seotda-log { margin: 12px 0 0; padding: 10px 12px 10px 30px; border-radius: 10px; background: var(--app-inner); color: var(--app-muted); font-size: 12px; line-height: 1.6; }
 .seotda-log li:last-child { color: var(--app-peach); }
+.seotda-actions { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.seotda-actions .app-button:disabled { background: #27332f; color: #e9f1ed; opacity: .4; }
+.seotda-layout { display: grid; grid-template-columns: minmax(0, 1fr) 168px; align-items: start; gap: 12px; }
+.seotda-ranks { padding: 10px 8px; border-radius: 12px; background: var(--app-inner); font-size: 12.5px; }
+.seotda-ranks h3 { margin: 0 4px 6px; color: var(--app-mint); font-size: 13px; }
+.seotda-ranks h4 { margin: 10px 4px 4px; color: var(--app-mint); font-size: 12px; }
+.seotda-ranks > p { margin: 0 4px 6px; color: var(--app-muted); font-size: 11px; }
+.seotda-ranks ol, .seotda-ranks ul { margin: 0; padding: 0; list-style: none; }
+.seotda-ranks ol { counter-reset: ladder; }
+.seotda-ranks ol li { counter-increment: ladder; display: flex; align-items: center; gap: 6px; padding: 2px 6px; border-radius: 6px; color: #c9d8cf; }
+.seotda-ranks ol li::before { content: counter(ladder); min-width: 16px; color: var(--app-muted); font-size: 10px; text-align: right; }
+.seotda-ranks ol li.group { margin-top: 5px; border-top: 1px solid #2c3d34; padding-top: 4px; }
+.seotda-ranks ul li { display: grid; padding: 3px 6px; border-radius: 6px; color: #c9d8cf; }
+.seotda-ranks ul small { color: var(--app-muted); font-size: 10.5px; }
+.seotda-ranks li.mine { background: var(--app-gold); color: #3b2a06; font-weight: 800; }
+.seotda-ranks li.mine::before, .seotda-ranks li.mine small { color: #6b4d12; }
+.seotda-ranks li i { margin-left: auto; padding: 0 6px; border-radius: 999px; background: #3b2a06; color: var(--app-gold); font-size: 10px; font-style: normal; }
+.seotda-ranks ul li i { margin-left: 0; justify-self: start; }
 .card-players { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; }
 .card-players li { display: grid; max-width: 160px; padding: 7px 10px; border-radius: 8px; background: var(--app-inner); font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
 .card-players li.current { background: #304b3b; }
@@ -627,6 +645,10 @@ dialog .form-error { color: #a53745; margin: 0; }
   .chat-open .chat-backdrop { opacity: 1; pointer-events: auto; }
 }
 @media (max-width: 610px) {
+  .seotda-layout { grid-template-columns: minmax(0, 1fr); }
+  .seotda-ranks ol { columns: 2; column-gap: 8px; }
+  .seotda-ranks ol li { break-inside: avoid; }
+  .seotda-ranks ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 8px; }
   .shell { width: calc(100% - 28px); }
   .topbar-inner { gap: 8px; min-height: 61px; grid-template-columns: minmax(0, 1fr) auto auto; }
   .topbar nav { gap: 12px; }
@@ -675,7 +697,6 @@ dialog .form-error { color: #a53745; margin: 0; }
   .yacht-sheet { grid-template-columns: minmax(0, 1fr); }
   .yacht-tray { grid-template-columns: minmax(0, 1fr); }
   .yacht-roll { display: flex; justify-content: center; align-items: center; }
-  .seotda-actions { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }

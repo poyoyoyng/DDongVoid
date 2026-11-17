@@ -1,6 +1,6 @@
 import { canTakeSeat, cardName, isAdmin, cardRank, cardSuit, games, legalCard, powerCosts, powerNames, sum, suits, suitNames, yachtBonus, yachtCategories, yachtScore, yachtTotal, zones } from './rules.js';
 import { BLACK, forbiddenReason, pointName, size as omokSize, winningLine } from './omok.js';
-import { baseBet, betOptions, cardKind, cardMonth, cardName as hwatuName, handOf, isGwang, startMoney, won } from './seotda.js';
+import { baseBet, betOptions, cardKind, cardMonth, cardName as hwatuName, handLadder, handOf, isGwang, specialHands, startMoney, won } from './seotda.js';
 
 export const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -570,30 +570,53 @@ function seotdaSeat(room, player, seat, me) {
     <small>${lines.join('<br>')}</small></li>`;
 }
 
+// Every betting button is always shown in one color; the ones that cannot be used right now are disabled and dark.
 function seotdaControls(room, me) {
   const actor = room.players[room.index];
   const timer = `<strong data-deadline="${room.deadline}"></strong>`;
-  if (actor.id !== me?.id || me.folded) return `<p class="app-muted">${nameOf(room, actor.id)}님이 베팅하고 있어요 · 남은 시간 ${timer}</p>`;
+  const waiting = `<p class="app-muted">${nameOf(room, actor.id)}님이 베팅하고 있어요 · 남은 시간 ${timer}</p>`;
+  if (!me || me.folded) return waiting;
+  const turn = actor.id === me.id;
   const options = betOptions(room, me);
-  const bet = (label, kind) => options[kind] ? action(`${label}<small>${won(options[kind])}</small>`, { action: 'bet', kind }, 'primary') : '';
-  return `<p class="app-warn">내 차례 · 남은 시간 ${timer} · 시간이 지나면 ${options.toCall ? '다이' : '체크'}</p>
+  const button = (label, amount, data, usable) => action(`${label}<small>${turn && usable ? amount : '—'}</small>`, data, 'primary', !turn || !usable);
+  return `${turn ? `<p class="app-warn">내 차례 · 남은 시간 ${timer} · 시간이 지나면 ${options.toCall ? '다이' : '체크'}</p>` : waiting}
     <div class="app-row seotda-actions">
-      ${action('다이<small>포기</small>', { action: 'die' })}
-      ${options.toCall ? action(`콜<small>${won(options.toCall)}</small>`, { action: 'call' }) : action('체크<small>0원</small>', { action: 'check' })}
-      ${bet('삥', 'ping')}${bet('따당', 'ddadang')}${bet('하프', 'half')}
+      ${button('다이', '포기', { action: 'die' }, true)}
+      ${button('체크', '0원', { action: 'check' }, !options.toCall)}
+      ${button('콜', won(options.toCall), { action: 'call' }, options.toCall > 0)}
+      ${['삥', '따당', '하프'].map((label, index) => {
+        const kind = ['ping', 'ddadang', 'half'][index];
+        return button(label, won(options[kind] ?? 0), { action: 'bet', kind }, Boolean(options[kind]));
+      }).join('')}
     </div>`;
+}
+
+// The hand ladder beside the table marks where my two cards stand.
+function seotdaLadder(me) {
+  const hand = me?.cards?.length === 2 ? handOf(me.cards) : null;
+  const groups = new Set([910, 806, 9]);
+  return `<aside class="seotda-ranks" aria-label="족보 순서">
+    <h3>족보 순서</h3>
+    ${hand ? '' : '<p>두 장을 받으면 내 족보를 표시해요.</p>'}
+    <ol>${handLadder.map(({ rank, name }) => `<li class="${groups.has(rank) ? 'group' : ''}${hand?.rank === rank ? ' mine' : ''}"
+      ${hand?.rank === rank ? 'aria-current="true"' : ''}>${name}${hand?.rank === rank ? ' <i>내 패</i>' : ''}</li>`).join('')}</ol>
+    <h4>특수 패</h4>
+    <ul>${specialHands.map(([name, cards, effect]) => `<li class="${hand?.special === name ? 'mine' : ''}">
+      <b>${name}</b>${hand?.special === name ? ' <i>내 패</i>' : ''}<small>${cards} · ${effect}</small></li>`).join('')}</ul>
+  </aside>`;
 }
 
 function seotdaView(room, me) {
   const seats = `<ul class="seotda-seats">${room.players.map((player, seat) => seotdaSeat(room, player, seat, me)).join('')}</ul>`;
-  if (room.status === 'waiting') return seats + (room.log?.length ? `<p class="app-muted">지난 판 · ${escape(room.log.at(-1))}</p>` : '');
+  const layout = main => `<div class="seotda-layout"><div class="seotda-main">${main}</div>${seotdaLadder(me)}</div>`;
+  if (room.status === 'waiting') return layout(seats + (room.log?.length ? `<p class="app-muted">지난 판 · ${escape(room.log.at(-1))}</p>` : ''));
   const mine = me?.cards?.length ? `<div class="seotda-hand"><span class="seotda-cards big">${me.cards.map(card => hwatu(card)).join('')}</span>
     <p>내 패 · <b>${me.cards.length === 2 ? handOf(me.cards).name : cardMonth(me.cards[0]) + '월'}</b>${me.folded ? ' · 다이' : ''}</p></div>` : '';
-  return `<div class="seotda-table">
+  return layout(`<div class="seotda-table">
       <p>판돈 <b>${won(room.pot)}</b></p>
       <p class="app-muted">기본 판돈 ${won(baseBet)} · 이번 판 최대 ${won(room.cap)}${room.status === 'playing' && room.currentBet ? ' · 이번 베팅 ' + won(room.currentBet) : ''}</p>
     </div>
     ${seats}${mine}
     ${room.status === 'playing' && !room.paused ? seotdaControls(room, me) : ''}
-    ${room.log?.length ? `<ol class="seotda-log">${room.log.map(line => '<li>' + escape(line) + '</li>').join('')}</ol>` : ''}`;
+    ${room.log?.length ? `<ol class="seotda-log">${room.log.map(line => '<li>' + escape(line) + '</li>').join('')}</ol>` : ''}`);
 }

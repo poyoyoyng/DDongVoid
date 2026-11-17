@@ -34,6 +34,19 @@ export function handOf(cards) {
   return hand;
 }
 
+// Every hand from best to worst, with the rank handOf gives it.
+export const handLadder = [
+  [1000, '38광땡'], [990, '18광땡'], [980, '13광땡'], [910, '장땡'],
+  ...Array.from({ length: 9 }, (_, step) => [909 - step, 9 - step + '땡']),
+  ...pairs.map(([, , name], step) => [806 - step, name]),
+  ...Array.from({ length: 10 }, (_, step) => [9 - step, step ? step === 9 ? '망통' : 9 - step + '끗' : '갑오']),
+].map(([rank, name]) => ({ rank, name }));
+
+export const specialHands = [
+  ['암행어사', '4·7 열끗', '13·18광땡을 잡음'], ['땡잡이', '3광·7 열끗', '1~9땡을 잡음'],
+  ['구사', '4·9', '알리 이하면 재경기'], ['멍텅구리 구사', '4·9 열끗', '9땡 이하면 재경기'],
+];
+
 // Picks the winners among the hands still in. 암행어사 catches 13·18광땡, 땡잡이 catches 1~9땡.
 // 구사 calls a regame when the best hand is 알리 or lower, 멍텅구리 구사 when it is 9땡 or lower.
 export function showdown(entries, allowRegame = true) {
