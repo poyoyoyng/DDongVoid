@@ -1,4 +1,4 @@
-import { escape } from './views.js';
+import { escape, rankTag } from './views.js';
 import {
   bounds, cardHelp, cardName, cards, goalFaceName, goalNames, goalX, goalYs, placements, roleNames, toolNames,
 } from './saboteur.js';
@@ -83,7 +83,7 @@ function seatList(room, me, revealed) {
     const lines = revealed ? [room.winners.includes(player.id) ? '<b class="gold">승리</b>' : '패배'] : [];
     return `<li class="${current ? 'current' : ''}${player.vacant ? ' vacant' : ''}${role ? ' ' + role : ''}">
       ${role ? `<span class="sab-role-mini">${roleArt(role, roleNames[role])}</span>` : ''}
-      <div><strong>${current ? '▶ ' : ''}${escape(player.name)}${player.id === me?.id ? ' (나)' : ''}</strong>
+      <div><strong>${current ? '▶ ' : ''}${escape(player.name)}${player.id === me?.id ? ' (나)' : ''}${rankTag(room, player)}</strong>
         <span class="sab-count">${cardBack()}${player.handCount}장</span>
         ${player.broken?.length ? `<span class="sab-broken">${player.broken.map(tool => brokenTool(tool, toolNames[tool] + ' 부서짐')).join('')}</span>` : ''}
         ${role ? `<small class="sab-role-name ${role}">${roleNames[role]}</small>` : ''}

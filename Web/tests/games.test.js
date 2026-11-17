@@ -249,6 +249,21 @@ test('방 참가자 목록에 게임별 순위와 점수를 보여 준다', () =
   assert.match(money, /3위 · 1,732만원/);
 });
 
+test('게임 화면에도 닉네임 옆에 순위와 점수를 보여 준다', () => {
+  const ranks = new Map([['0', { rank: 1, mmr: 1016, money: 5_000_000 }], ['1', { rank: 2, mmr: 984, money: 3_000_000 }]]);
+  for (const game of ['slap', 'ciao', 'onecard', 'yacht', 'omok', 'seotda', 'saboteur']) {
+    const room = createRoom('room', game, '테스트', players[0], now);
+    applyAction(room, players[1], { action: 'join' }, now);
+    const page = roomPage(roomView(room, '0'), '0', { connected: true, held: [], ranks });
+    assert.equal(page.match(/class="rank-tag"/g)?.length, 2, game);
+  }
+  const { room } = match('onecard');
+  const page = roomPage(roomView(room, '0'), '0', { connected: true, held: [], card: null, ranks });
+  assert.match(page, /\(나\) <span class="rank-tag">1위 · 1,016점<\/span>/);
+  assert.match(page, /rank-tag">2위 · 984점/);
+  assert.doesNotMatch(roomPage(roomView(room, '0'), '0', { connected: true, held: [], card: null }), /rank-tag/);
+});
+
 test('포요용은 입장하지 않은 방도 삭제할 수 있고 다른 사람은 방장만 삭제할 수 있다', () => {
   const room = createRoom('room', 'slap', '테스트', players[0], now);
   applyAction(room, players[1], { action: 'join' }, now);

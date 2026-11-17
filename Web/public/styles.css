@@ -272,6 +272,7 @@ tbody tr:last-child > * { border-bottom: 0; }
 .participants li > span:not(.player-color), .participants small { color: var(--muted); }
 .participants li > .ready { color: #26734c !important; }
 .participants li > .rank-badge { color: #3d5f8f; font-variant-numeric: tabular-nums; }
+.app-panel .rank-tag { color: var(--app-gold); font-size: 11px; font-weight: 600; white-space: nowrap; }
 .kick-button { margin-left: auto; padding: 2px 9px; border: 1px solid #e7b9a8; border-radius: 6px; background: #fff; color: #b5532f; font: inherit; font-size: 12px; cursor: pointer; }
 .kick-button:hover { background: #fdeee8; }
 .player-color { display: inline-block; width: 12px; height: 12px; border: 1px solid #211b334a; border-radius: 50%; background: var(--player); flex: none; }

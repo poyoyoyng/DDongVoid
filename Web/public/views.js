@@ -153,11 +153,13 @@ const nameOf = (room, id) => escape(room.players.find(player => player.id === id
 const pawn = (seat, label, kind = '') => `<i class="pawn seat-${seat} ${kind}" title="${escape(label)}"></i>`;
 
 // Each member's place on this game's ranking board: money in 섯다, points in the others.
-function rankBadge(room, rank) {
-  if (!rank) return '';
+function rankText(room, rank) {
   const score = room.game === 'seotda' ? won(rank.money) : rank.mmr.toLocaleString('ko-KR') + '점';
-  return `<span class="rank-badge">${rank.rank}위 · ${score}</span>`;
+  return rank.rank + '위 · ' + score;
 }
+const rankBadge = (room, rank) => rank ? `<span class="rank-badge">${rankText(room, rank)}</span>` : '';
+// The game screens show the same place beside each player's name.
+export const rankTag = (room, player) => player?.ranking ? ` <span class="rank-tag">${rankText(room, player.ranking)}</span>` : '';
 
 function roomRoster(room, user, ranks) {
   const active = room.players.filter(player => !player.vacant).length;
@@ -226,12 +228,14 @@ function roomTitle(room, me) {
 function waitingSeats(room, me) {
   return `<p class="app-muted">방장 · ${nameOf(room, room.hostId)}</p>
     <ul class="app-seats">${room.players.map((player, index) => `<li>${pawn(index, player.name)}
-      <strong>P${index + 1}  ${escape(player.name)}${player.id === me?.id ? ' (나)' : ''}</strong>
+      <strong>P${index + 1}  ${escape(player.name)}${player.id === me?.id ? ' (나)' : ''}${rankTag(room, player)}</strong>
       <span class="${player.ready ? 'ready' : ''}">${player.ready ? '준비 완료 ✓' : '준비 대기'}</span></li>`).join('')}</ul>
     <p class="app-muted">참가자 ${room.players.length}/${games[room.game].max}</p>`;
 }
 
-export function roomPage(room, user, ui) {
+export function roomPage(state, user, ui) {
+  // Each seat carries its ranking, so every game view can show it beside the name.
+  const room = ui.ranks ? { ...state, players: state.players.map(player => ({ ...player, ranking: ui.ranks.get(player.id) })) } : state;
   const me = room.players.find(player => player.id === user);
   const playing = room.status === 'playing';
   const finished = room.status === 'finished';
@@ -308,7 +312,7 @@ function fighterCard(room, player, seat, me, right) {
   const [pose, caption, description = caption] = player ? fighterState(room, player, me) : ['idle', '참가자 대기', '참가자를 기다리고 있어요'];
   const hp = player?.hp ?? 6;
   const gauge = player?.gauge ?? 0;
-  const name = player ? `P${seat + 1}  ${escape(player.name)}${player.id === me?.id ? ' (나)' : ''}` : `P${seat + 1}  —`;
+  const name = player ? `P${seat + 1}  ${escape(player.name)}${player.id === me?.id ? ' (나)' : ''}${rankTag(room, player)}` : `P${seat + 1}  —`;
   return `<div class="fighter seat-${seat}${player ? '' : ' no-player'}" title="${escape(description)}">
     <strong>${name}</strong>
     <div class="fighter-stats" role="img" aria-label="체력 ${hp}/6 · 기력 ${gauge}/3">
@@ -387,7 +391,7 @@ function ciaoView(room, me) {
   const players = room.players.map((player, index) => {
     const left = player.reserve + (player.position === null ? 0 : 1);
     return `<div class="ciao-player seat-${index}">
-      <strong>${playing && player.id === speaker.id ? '▶ ' : ''}P${index + 1}  ${escape(player.name)}${player.id === me?.id ? ' (나)' : ''}</strong>
+      <strong>${playing && player.id === speaker.id ? '▶ ' : ''}P${index + 1}  ${escape(player.name)}${player.id === me?.id ? ' (나)' : ''}${rankTag(room, player)}</strong>
       <div class="ciao-reserve"><span>남은 말</span>${player.position !== null ? pawn(index, '이동 중인 말', 'active') : ''}${
         Array.from({ length: player.reserve }, () => pawn(index, '대기 중인 말')).join('')}
         <span>${left}개 · 도착 ${player.goals.length}/3 · ${sum(player.goals)}점 · 추락 ${player.fallen}</span></div></div>`;
@@ -423,7 +427,7 @@ function cardView(room, me, ui) {
   const choose = own && ui.card !== null && me.hand.includes(ui.card);
   const chips = room.players.map(player => {
     const current = playing && player.id === actual.id;
-    return `<li class="${current ? 'current' : ''}">${current ? '▶ ' : ''}${escape(player.name)}${player.id === me?.id ? ' (나)' : ''}
+    return `<li class="${current ? 'current' : ''}">${current ? '▶ ' : ''}${escape(player.name)}${player.id === me?.id ? ' (나)' : ''}${rankTag(room, player)}
       <small>${player.count}장${player.count === 1 ? ' · 원카드' : ''}</small></li>`;
   }).join('');
   const hand = me && playing ? `<div class="hand">${[...me.hand].sort((a, b) => a - b).map(card => `<button type="button"
@@ -486,7 +490,7 @@ function yachtVersus(room, me) {
     const caption = !player ? '상대를 기다리는 중…' :
       waiting ? (player.ready ? '준비 완료 ✓' : '준비 대기') : yachtTotal(player.scores) + '점';
     return `<div class="yacht-player seat-${index} ${current ? 'current' : ''}">
-      <strong>${escape(label)}${player && player.id === me?.id ? ' (나)' : ''}</strong>
+      <strong>${escape(label)}${player && player.id === me?.id ? ' (나)' : ''}${rankTag(room, player)}</strong>
       <span class="${waiting ? 'waiting-score' : ''}">${caption}</span></div>`;
   });
   return `<div class="yacht-versus">${plates.join('<span class="yacht-vs">VS</span>')}</div>`;
@@ -524,7 +528,7 @@ function omokVersus(room, me) {
     const current = room.status === 'playing' ? seat === room.index : room.winners.includes(player?.id);
     const caption = !player ? '상대를 기다리는 중…' : waiting ? (player.ready ? '준비 완료 ✓' : '준비 대기') : black ? '흑 · 먼저 둠' : '백';
     return `<div class="omok-player${current ? ' current' : ''}"><span class="stone-icon ${black ? 'black' : 'white'}"></span>
-      <div><strong>${escape(player?.name ?? '빈 자리')}${player && player.id === me?.id ? ' (나)' : ''}</strong><small>${caption}</small></div></div>`;
+      <div><strong>${escape(player?.name ?? '빈 자리')}${player && player.id === me?.id ? ' (나)' : ''}${rankTag(room, player)}</strong><small>${caption}</small></div></div>`;
   });
   return `${waiting && room.match ? '<p class="app-muted">이번 판은 흑과 백을 바꿔서 둡니다.</p>' : ''}
     <div class="omok-versus">${plates.join('<span class="yacht-vs">VS</span>')}</div>`;
@@ -593,7 +597,7 @@ function seotdaSeat(room, player, seat, me, ui) {
   }
   const highlight = playing ? seat === room.index : room.winners.includes(player.id);
   return `<li class="seotda-seat seat-${seat}${highlight ? ' current' : ''}${player.folded || player.vacant ? ' folded' : ''}">
-    <strong>${playing && seat === room.index ? '▶ ' : ''}${escape(player.name)}${player.id === me?.id ? ' (나)' : ''}</strong>
+    <strong>${playing && seat === room.index ? '▶ ' : ''}${escape(player.name)}${player.id === me?.id ? ' (나)' : ''}${rankTag(room, player)}</strong>
     <span class="seotda-cards">${cards.map(card => hwatu(card)).join('')}</span>
     <small>${lines.join('<br>')}</small></li>`;
 }
