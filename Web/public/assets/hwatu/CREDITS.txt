@@ -1,0 +1,5 @@
+Hwatu card pictures (m<month>-<variant>.svg; variant 0 = 광/열끗, 1 = 띠, or 열끗 for August)
+Source: https://commons.wikimedia.org/wiki/Category:SVG_Hwatu (Hwatu_<Month>_<Hikari|Tane|Tanzaku>.svg)
+Author: Spenĉjo, extracted from Hwatu overview.svg by Marcus Richert, based on Louie Mantia, Jr.'s Hanafuda graphics
+License: CC BY-SA 4.0 https://creativecommons.org/licenses/by-sa/4.0/
+Files are unmodified apart from the names.

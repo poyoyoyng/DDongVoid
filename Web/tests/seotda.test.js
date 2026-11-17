@@ -3,7 +3,7 @@ import test from 'node:test';
 import { applyAction, createRoom, expireRoom, roomView } from '../src/games.js';
 import { canTakeSeat } from '../public/rules.js';
 import { bankruptLine, baseBet, handOf, refillMoney, showdown, startMoney, turnTime, won } from '../public/seotda.js';
-import { roomPage } from '../public/views.js';
+import { peekKey, roomPage } from '../public/views.js';
 
 const card = (month, picture = true) => (month - 1) * 2 + (picture ? 0 : 1);
 const players = ['민트', '고양이', '보라'].map((name, index) => ({ id: String(index), name }));
@@ -213,4 +213,24 @@ test('구사 재경기는 판돈을 그대로 두고 남은 사람에게 새로 
   assert.equal(room.pot, 4 * baseBet);
   assert.equal(room.players[0].cards.length, 1);
   assert.match(room.log.at(-1), /구사 · 재경기/);
+});
+
+test('내 패는 열기 전까지 뒷면이고, 두 장을 모두 열어야 족보표에 내 패를 표시한다', () => {
+  const { room, play } = table();
+  setHands(room, [[card(9), card(9, false)], [card(2), card(7, false)]]);
+  const page = peeked => roomPage(roomView(room, '0'), '0', { connected: true, peeked: new Set(peeked) });
+  let html = page([]);
+  assert.equal((html.match(/data-peek=/g) ?? []).length, 1);
+  assert.match(html, /패를 열어 보세요/);
+  assert.doesNotMatch(html, /class="[^"]*mine/);
+  html = page([peekKey(room, 0)]);
+  assert.doesNotMatch(html, /data-peek=/);
+  assert.match(html, /9월/);
+  play(0, { action: 'check' });
+  play(1, { action: 'check' });
+  html = page([peekKey(room, 0)]);
+  assert.equal((html.match(/data-peek="room:1:0:1"/g) ?? []).length, 1, '새로 받은 둘째 장만 가려진다');
+  assert.doesNotMatch(html, /class="[^"]*mine/);
+  html = page([peekKey(room, 0), peekKey(room, 1)]);
+  assert.match(html, /mine"\s+aria-current="true">9땡/);
 });

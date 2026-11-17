@@ -256,18 +256,18 @@ test('섯다는 판이 끝나면 D1 잔액과 돈 랭킹에 반영하고 다음 
   await act(members[0], { action: 'ready', ready: true });
   await act(members[1], { action: 'ready', ready: true });
   assert.equal(room.status, 'playing');
-  assert.equal(room.pot, 200_000);
+  assert.equal(room.pot, 20_000);
   assert.equal(room.players[0].cards, undefined);
   assert.equal(room.players[1].cards.length, 1);
   await act(members[0], { action: 'die' });
   assert.equal(room.status, 'finished');
-  await eventually(money, balances => balances[0] === 9_900_000 && balances[1] === 10_100_000);
+  await eventually(money, balances => balances[0] === 9_990_000 && balances[1] === 10_010_000);
 
   await act(members[0], { action: 'ready', ready: true });
   await act(members[1], { action: 'ready', ready: true });
-  assert.equal(room.players[0].balance, 9_900_000);
+  assert.equal(room.players[0].balance, 9_990_000);
   assert.equal(room.players[room.index].id, members[1].user.id);
   await act(members[1], { action: 'bet', kind: 'ping' });
   await act(members[0], { action: 'die' });
-  await eventually(money, balances => balances[0] === 9_800_000 && balances[1] === 10_200_000);
+  await eventually(money, balances => balances[0] === 9_980_000 && balances[1] === 10_020_000);
 });

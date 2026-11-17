@@ -150,7 +150,7 @@ async function navigate() {
   solo?.stop();
   solo = null;
   room = null;
-  ui = { connected: false, held: Array(5).fill(false), card: null, call: false, power: 0 };
+  ui = { connected: false, held: Array(5).fill(false), card: null, call: false, power: 0, peeked: readPeeked() };
   page = parsePage();
   const { section, key } = page;
   // The rhythm game needs to be heard on its own.
@@ -270,8 +270,33 @@ async function beginSolo() {
   }
 }
 
+// The 섯다 cards I have opened stay open for this tab, even after a reload.
+const peekStore = 'seotda-peeked';
+
+function readPeeked() {
+  try {
+    return new Set(JSON.parse(sessionStorage.getItem(peekStore)) ?? []);
+  } catch {
+    return new Set();
+  }
+}
+
+function peek(key, flip) {
+  ui.peeked.add(key);
+  ui.flipped = flip ? key : null;
+  try { sessionStorage.setItem(peekStore, JSON.stringify([...ui.peeked].slice(-40))); } catch { /* Kept for this page only. */ }
+  renderRoom();
+  ui.flipped = null;
+}
+
 function renderRoom() {
   if (!room || !user) return;
+  // A card being dragged open would be thrown away by a redraw, so the redraw waits until it is let go.
+  if (ui.dragging) {
+    ui.renderPending = true;
+    return;
+  }
+  ui.renderPending = false;
   const previous = document.activeElement;
   const hold = previous?.dataset.hold;
   let content = app.querySelector('#room-content');
@@ -473,9 +498,50 @@ async function sendAction(data) {
   }
 }
 
+// A face-down 섯다 card opens at once on a tap, or slides its back off as it is dragged; past half its height it stays open.
+let drag = null;
+
+app.addEventListener('pointerdown', event => {
+  const peel = event.target.closest('[data-peek]');
+  if (!peel || event.button > 0) return;
+  event.preventDefault();
+  peel.setPointerCapture(event.pointerId);
+  drag = { peel, key: peel.dataset.peek, pointer: event.pointerId, x: event.clientX, y: event.clientY, moved: 0 };
+  ui.dragging = true;
+  peel.classList.add('dragging');
+});
+
+app.addEventListener('pointermove', event => {
+  if (drag?.pointer !== event.pointerId) return;
+  const dx = event.clientX - drag.x;
+  const dy = event.clientY - drag.y;
+  drag.moved = Math.hypot(dx, dy);
+  drag.peel.querySelector('.peel-cover').style.transform = `translate(${dx}px, ${dy}px) rotate(${dx / 14}deg)`;
+});
+
+function endDrag(event, cancelled) {
+  if (drag?.pointer !== event.pointerId) return;
+  const { peel, key, moved } = drag;
+  drag = null;
+  ui.dragging = false;
+  const tapped = moved < 6;
+  if (!cancelled && (tapped || moved > peel.querySelector('.peel-card').offsetHeight * .5)) return peek(key, tapped);
+  peel.classList.remove('dragging');
+  peel.querySelector('.peel-cover').style.transform = '';
+  if (ui.renderPending) renderRoom();
+}
+
+app.addEventListener('pointerup', event => endDrag(event, false));
+app.addEventListener('pointercancel', event => endDrag(event, true));
+
 app.addEventListener('click', async event => {
   const button = event.target.closest('button');
   if (!button) return;
+  // Pointer presses are handled above; a keyboard press arrives only as a click.
+  if (button.dataset.peek) {
+    if (!event.detail) peek(button.dataset.peek, true);
+    return;
+  }
   if (button.hasAttribute('data-account')) return showAccount();
   if (button.hasAttribute('data-reload')) return navigate();
   if (button.hasAttribute('data-chat-toggle')) return toggleChat();

@@ -542,16 +542,25 @@ function omokView(room, me) {
 }
 
 // Card pictures are public/assets/hwatu/m<month>-<variant>.svg; the month and kind are written below each one.
+const hwatuImage = card => `<img src="/assets/hwatu/m${cardMonth(card)}-${card % 2}.svg" alt="" draggable="false">`;
 export const hwatu = (card, classes = '') => card == null ? `<span class="hwatu back ${classes}" aria-hidden="true"><i></i><small>&nbsp;</small></span>`
   : `<span class="hwatu${isGwang(card) ? ' gwang' : ''} ${classes}" title="${hwatuName(card)}" role="img" aria-label="${hwatuName(card)}">
-    <img src="/assets/hwatu/m${cardMonth(card)}-${card % 2}.svg" alt="" draggable="false"><small>${cardMonth(card)}${cardKind(card)}</small></span>`;
+    ${hwatuImage(card)}<small>${cardMonth(card)}${cardKind(card)}</small></span>`;
+
+// While a hand is on, each of my cards stays face down until I open it; ui.peeked holds the opened ones (app.js).
+export const peekKey = (room, index) => `${room.id}:${room.match}:${room.regames ?? 0}:${index}`;
+const openedCards = (room, me, ui) => me?.cards?.map((card, index) =>
+  room.status !== 'playing' || ui?.peeked?.has(peekKey(room, index)) ? card : null) ?? [];
+
+const peelCard = (card, key) => `<button type="button" class="hwatu peel" data-peek="${key}" aria-label="내 패 열기 · 누르면 바로 열리고 끌면 조금씩 보여요">
+  <span class="peel-card">${hwatuImage(card)}<i class="peel-cover"></i></span><small>열어 보기</small></button>`;
 
 // Each seat shows its cards, what it has bet this hand and what is left; others' cards stay face down until the showdown.
-function seotdaSeat(room, player, seat, me) {
+function seotdaSeat(room, player, seat, me, ui) {
   const playing = room.status === 'playing';
   const stake = room.stakes?.[player.id];
   const shown = room.status === 'finished' ? room.reveal?.find(entry => entry.id === player.id) : null;
-  const cards = shown?.cards ?? player.cards ?? Array(player.cardCount ?? 0).fill(null);
+  const cards = shown?.cards ?? (player === me ? openedCards(room, me, ui) : player.cards ?? Array(player.cardCount ?? 0).fill(null));
   const delta = room.status === 'finished' ? room.settlement?.money.find(entry => entry.id === player.id)?.delta : undefined;
   const lines = [];
   if (room.status === 'waiting' || !stake) {
@@ -594,12 +603,12 @@ function seotdaControls(room, me) {
 }
 
 // The hand ladder beside the table marks where my two cards stand.
-function seotdaLadder(me) {
-  const hand = me?.cards?.length === 2 ? handOf(me.cards) : null;
+function seotdaLadder(opened) {
+  const hand = opened.length === 2 && opened.every(card => card != null) ? handOf(opened) : null;
   const groups = new Set([910, 806, 9]);
   return `<aside class="seotda-ranks" aria-label="족보 순서">
     <h3>족보 순서</h3>
-    ${hand ? '' : '<p>두 장을 받으면 내 족보를 표시해요.</p>'}
+    ${hand ? '' : '<p>두 장을 받아 모두 열면 내 족보를 표시해요.</p>'}
     <ol>${handLadder.map(({ rank, name }) => `<li class="${groups.has(rank) ? 'group' : ''}${hand?.rank === rank ? ' mine' : ''}"
       ${hand?.rank === rank ? 'aria-current="true"' : ''}>${name}${hand?.rank === rank ? ' <i>내 패</i>' : ''}</li>`).join('')}</ol>
     <h4>특수 패</h4>
@@ -608,12 +617,18 @@ function seotdaLadder(me) {
   </aside>`;
 }
 
-function seotdaView(room, me) {
-  const seats = `<ul class="seotda-seats">${room.players.map((player, seat) => seotdaSeat(room, player, seat, me)).join('')}</ul>`;
-  const layout = main => `<div class="seotda-layout"><div class="seotda-main">${main}</div>${seotdaLadder(me)}</div>`;
+function seotdaView(room, me, ui) {
+  const opened = openedCards(room, me, ui);
+  const seats = `<ul class="seotda-seats">${room.players.map((player, seat) => seotdaSeat(room, player, seat, me, ui)).join('')}</ul>`;
+  const layout = main => `<div class="seotda-layout"><div class="seotda-main">${main}</div>${seotdaLadder(opened)}</div>`;
   if (room.status === 'waiting') return layout(seats + (room.log?.length ? `<p class="app-muted">지난 판 · ${escape(room.log.at(-1))}</p>` : ''));
-  const mine = me?.cards?.length ? `<div class="seotda-hand"><span class="seotda-cards big">${me.cards.map(card => hwatu(card)).join('')}</span>
-    <p>내 패 · <b>${me.cards.length === 2 ? handOf(me.cards).name : cardMonth(me.cards[0]) + '월'}</b>${me.folded ? ' · 다이' : ''}</p></div>` : '';
+  const closed = opened.filter(card => card == null).length;
+  const handName = closed ? (opened.some(card => card != null) ? '나머지 한 장을 열어 보세요' : '패를 열어 보세요')
+    : opened.length === 2 ? handOf(opened).name : cardMonth(opened[0]) + '월';
+  const mine = me?.cards?.length ? `<div class="seotda-hand"><span class="seotda-cards big">${me.cards.map((card, index) =>
+      opened[index] == null ? peelCard(card, peekKey(room, index)) : hwatu(card, ui?.flipped === peekKey(room, index) ? 'flip-in' : '')).join('')}</span>
+    <div><p>내 패 · <b class="${closed ? 'closed' : ''}">${handName}</b>${me.folded ? ' · 다이' : ''}</p>
+      ${closed ? '<p class="app-muted">카드를 누르면 바로 열리고, 끌면 조금씩 보여요.</p>' : ''}</div></div>` : '';
   return layout(`<div class="seotda-table">
       <p>판돈 <b>${won(room.pot)}</b></p>
       <p class="app-muted">기본 판돈 ${won(baseBet)} · 이번 판 최대 ${won(room.cap)}${room.status === 'playing' && room.currentBet ? ' · 이번 베팅 ' + won(room.currentBet) : ''}</p>
