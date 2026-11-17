@@ -377,7 +377,9 @@ function acceptRoom(next) {
   if (rolled) animateYachtRoll();
   if (rolled && next.dice[0] > 0 && next.dice.every(die => die === next.dice[0])) {
     const token = generation;
-    setTimeout(() => token === generation && celebrate('미친 야추!!'), 480);
+    // One of the lines at random; the revision picks it so everyone in the room sees the same one.
+    const line = ['미친 야추!!', '게임 쉽다~', '이게 실력이야ㅋ'][next.revision % 3];
+    setTimeout(() => token === generation && celebrate(line), 480);
   }
   // Everyone in the room sees the same line: the revision picks it.
   if (caught) celebrate(['벌레컷', '꼴이 좋아'][next.revision % 2], false);
