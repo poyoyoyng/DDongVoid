@@ -152,11 +152,19 @@ const action = (label, data, classes = '', disabled = false) =>
 const nameOf = (room, id) => escape(room.players.find(player => player.id === id)?.name ?? '');
 const pawn = (seat, label, kind = '') => `<i class="pawn seat-${seat} ${kind}" title="${escape(label)}"></i>`;
 
-function roomRoster(room, user) {
+// Each member's place on this game's ranking board: money in 섯다, points in the others.
+function rankBadge(room, rank) {
+  if (!rank) return '';
+  const score = room.game === 'seotda' ? won(rank.money) : rank.mmr.toLocaleString('ko-KR') + '점';
+  return `<span class="rank-badge">${rank.rank}위 · ${score}</span>`;
+}
+
+function roomRoster(room, user, ranks) {
   const active = room.players.filter(player => !player.vacant).length;
   const playerMarkup = (person, index, isPlayer) => `
     <li>${isPlayer ? `<span class="player-color p${index}"></span>` : ''}
       <strong>${escape(person.name)}${person.id === user ? ' <small>나</small>' : ''}</strong>
+      ${rankBadge(room, ranks?.get(person.id))}
       ${person.id === room.hostId ? '<span>방장</span>' : ''}
       ${isPlayer && room.status !== 'playing' && person.ready ? '<span class="ready">준비 완료</span>' : ''}
       ${isPlayer && room.status !== 'playing' && room.hostId === user && person.id !== user
@@ -258,7 +266,7 @@ export function roomPage(room, user, ui) {
       ${main ? `<div class="app-actions">${main}</div>` : ''}
       ${minor ? `<div class="app-minor">${minor}</div>` : ''}
     </section>
-    ${roomRoster(room, user)}`;
+    ${roomRoster(room, user, ui.ranks)}`;
 }
 
 const slapDamage = [1, 2, 5];

@@ -344,6 +344,23 @@ function fitRoomChat() {
   aside.style.height = beside ? Math.max(panel.offsetHeight, 360) + 'px' : '';
 }
 
+async function loadRanks(delay) {
+  const token = generation;
+  const game = room.game;
+  if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+  if (token !== generation) return;
+  try {
+    const { rows } = await api('/rankings?game=' + game);
+    if (token !== generation) return;
+    ui.ranks = new Map(rows.map(row => [row.id, row]));
+    // Someone missing from the board is remembered as unranked, so the board is not read again for them.
+    for (const person of [...room.players, ...room.spectators]) if (!ui.ranks.has(person.id)) ui.ranks.set(person.id, null);
+    renderRoom();
+  } catch {
+    // The room plays on without ranks; they come back with the next change.
+  }
+}
+
 function acceptRoom(next) {
   if (!next || room && next.revision <= room.revision) return;
   const rolled = next.game === 'yacht' && room && next.rollCount > (room.rollCount ?? 0) && next.rollsUsed > 0;
@@ -372,8 +389,14 @@ function acceptRoom(next) {
     ui.sabCard = null;
     ui.sabRot = 0;
   }
+  const previous = room;
   room = next;
   renderRoom();
+  // Results reach the ranking board a moment after a game ends, so the board is read again a little later.
+  const members = [...next.players, ...next.spectators].filter(person => !person.vacant);
+  if (!previous || previous.status !== next.status || members.some(person => !ui.ranks?.has(person.id))) {
+    void loadRanks(next.status === 'finished' && previous ? 1500 : 0);
+  }
   if (rolled) animateYachtRoll();
   if (rolled && next.dice[0] > 0 && next.dice.every(die => die === next.dice[0])) {
     const token = generation;

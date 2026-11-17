@@ -235,6 +235,20 @@ test('방장은 시작 전 참가자만 강퇴할 수 있고 강퇴된 사람도
   assert.doesNotMatch(roomPage(roomView(room, '0'), '0', { connected: true, held: [] }), /kick-button/);
 });
 
+test('방 참가자 목록에 게임별 순위와 점수를 보여 준다', () => {
+  const room = createRoom('room', 'yacht', '테스트', players[0], now);
+  applyAction(room, players[1], { action: 'join' }, now);
+  applyAction(room, players[2], { action: 'watch' }, now);
+  const ranks = new Map([['0', { rank: 1, mmr: 1016 }], ['1', { rank: 2, mmr: 984 }], ['2', null]]);
+  const page = roomPage(roomView(room, '0'), '0', { connected: true, held: [], ranks });
+  assert.match(page, /1위 · 1,016점/);
+  assert.match(page, /2위 · 984점/);
+  assert.equal(page.match(/rank-badge/g).length, 2);
+  const seotda = createRoom('room', 'seotda', '테스트', players[0], now);
+  const money = roomPage(roomView(seotda, '0'), '0', { connected: true, held: [], ranks: new Map([['0', { rank: 3, money: 17_320_000 }]]) });
+  assert.match(money, /3위 · 1,732만원/);
+});
+
 test('포요용은 입장하지 않은 방도 삭제할 수 있고 다른 사람은 방장만 삭제할 수 있다', () => {
   const room = createRoom('room', 'slap', '테스트', players[0], now);
   applyAction(room, players[1], { action: 'join' }, now);

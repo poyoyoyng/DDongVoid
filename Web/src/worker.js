@@ -21,12 +21,12 @@ async function rankings(db, game) {
     )`;
   const sql = game === 'seotda' ? `
     WITH ${totals}, board AS (
-      SELECT name, COALESCE(wallets.balance, ${startMoney}) AS money, COALESCE(wallets.bankruptcies, 0) AS bankruptcies,
+      SELECT accounts.id AS id, name, COALESCE(wallets.balance, ${startMoney}) AS money, COALESCE(wallets.bankruptcies, 0) AS bankruptcies,
         COALESCE(wins, 0) AS wins, COALESCE(draws, 0) AS draws, COALESCE(losses, 0) AS losses
       FROM accounts LEFT JOIN totals ON totals.account_id = accounts.id
         LEFT JOIN wallets ON wallets.account_id = accounts.id
     )
-    SELECT name, money, bankruptcies, wins, draws, losses, RANK() OVER (ORDER BY money DESC) AS rank
+    SELECT id, name, money, bankruptcies, wins, draws, losses, RANK() OVER (ORDER BY money DESC) AS rank
     FROM board ORDER BY rank, name LIMIT 1000
   ` : isSoloGame(game) ? `
     WITH board AS (
@@ -36,12 +36,12 @@ async function rankings(db, game) {
     SELECT name, score, RANK() OVER (ORDER BY score DESC) AS rank FROM board ORDER BY rank, name LIMIT 1000
   ` : `
     WITH ${totals}, board AS (
-      SELECT name, CAST(ROUND(COALESCE(ratings.rating, ${startRating})) AS INTEGER) AS mmr, COALESCE(ratings.streak, 0) AS streak,
+      SELECT accounts.id AS id, name, CAST(ROUND(COALESCE(ratings.rating, ${startRating})) AS INTEGER) AS mmr, COALESCE(ratings.streak, 0) AS streak,
         COALESCE(wins, 0) AS wins, COALESCE(draws, 0) AS draws, COALESCE(losses, 0) AS losses
       FROM accounts LEFT JOIN totals ON totals.account_id = accounts.id
         LEFT JOIN ratings ON ratings.account_id = accounts.id AND ratings.game = ?1
     )
-    SELECT name, mmr, streak, wins, draws, losses, RANK() OVER (ORDER BY mmr DESC, wins DESC, draws DESC, losses ASC) AS rank
+    SELECT id, name, mmr, streak, wins, draws, losses, RANK() OVER (ORDER BY mmr DESC, wins DESC, draws DESC, losses ASC) AS rank
     FROM board ORDER BY rank, name LIMIT 1000
   `;
   return json({ rows: (await db.prepare(sql).bind(game).all()).results });
