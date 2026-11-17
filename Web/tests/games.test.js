@@ -209,7 +209,7 @@ test('관전자는 대기 중 빈 자리에 앉거나 관전석으로 돌아갈 
   assert.equal(room.status, 'deleted');
 });
 
-test('방장은 시작 전 참가자만 강퇴할 수 있고 강퇴된 사람은 다시 들어올 수 없다', () => {
+test('방장은 시작 전 참가자만 강퇴할 수 있고 강퇴된 사람도 다시 들어올 수 있다', () => {
   const room = createRoom('room', 'onecard', '테스트', players[0], now);
   applyAction(room, players[1], { action: 'join' }, now);
   applyAction(room, players[2], { action: 'watch' }, now);
@@ -223,8 +223,10 @@ test('방장은 시작 전 참가자만 강퇴할 수 있고 강퇴된 사람은
   applyAction(room, players[0], { action: 'kick', target: '1' }, now);
   assert.deepEqual(room.players.map(player => player.id), ['0']);
   assert.deepEqual(room.spectators.map(spectator => spectator.id), ['2']);
-  assert.throws(() => applyAction(room, players[1], { action: 'join' }, now), /강퇴/);
-  assert.throws(() => applyAction(room, players[1], { action: 'watch' }, now), /강퇴/);
+  applyAction(room, players[1], { action: 'watch' }, now);
+  applyAction(room, players[1], { action: 'join' }, now);
+  assert.deepEqual(room.players.map(player => player.id), ['0', '1']);
+  applyAction(room, players[0], { action: 'kick', target: '1' }, now);
   applyAction(room, players[2], { action: 'join' }, now);
   applyAction(room, players[0], { action: 'ready', ready: true }, now);
   applyAction(room, players[2], { action: 'ready', ready: true }, now);

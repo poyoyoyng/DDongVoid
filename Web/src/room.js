@@ -3,7 +3,7 @@ import { chatHistory, closeLiveSocket, openLiveSocket, openSockets, postChat } f
 import { applyAction, createRoom, expireRoom, roomView } from './games.js';
 import { errorResponse, json, readBody, requireThat } from './http.js';
 import { extendsStreak, ratingChanges, startRating, streakBonus } from './ratings.js';
-import { isKicked, isRoomMember, kickedMessage } from './room-members.js';
+import { isRoomMember } from './room-members.js';
 import { refillMoney, startMoney } from '../public/seotda.js';
 
 const retryDelay = 5000;
@@ -243,7 +243,7 @@ export class GameRoom extends DurableObject {
         return json({ room: next.status !== 'deleted' && isRoomMember(next, account.id)
           ? roomView(next, account.id) : null });
       }
-      requireThat(isRoomMember(room, account.id), isKicked(room, account.id) ? kickedMessage : '이 방에 입장하지 않았습니다.', 403);
+      requireThat(isRoomMember(room, account.id), '이 방에 입장하지 않았습니다.', 403);
       if (path === '/chat') {
         const sockets = this.ctx.getWebSockets().filter(socket => isRoomMember(room, socket.deserializeAttachment()));
         return postChat(this.ctx, account, body, sockets);

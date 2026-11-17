@@ -3,8 +3,6 @@ import { requireThat } from './http.js';
 
 const memberActions = new Set(['join', 'watch', 'spectate', 'leave', 'delete', 'kick']);
 export const isMemberAction = action => memberActions.has(action);
-export const kickedMessage = '방장에게 강퇴되어 이 방에 다시 들어갈 수 없습니다.';
-export const isKicked = (room, id) => (room.kicked ?? []).includes(id);
 export const isRoomMember = (room, id) =>
   room.players.some(player => !player.vacant && player.id === id) || (room.spectators ?? []).some(spectator => spectator.id === id);
 
@@ -62,7 +60,6 @@ export function applyMemberAction(room, account, input, player, now) {
   room.hostId ??= room.players[0]?.id;
   const { id, name } = account;
   const spectator = room.spectators.some(entry => entry.id === id);
-  if (input.action === 'join' || input.action === 'watch') requireThat(!isKicked(room, id), kickedMessage, 403);
   if (input.action === 'join') {
     if (player) return false;
     requireThat(canTakeSeat(room), '지금은 빈 참가 자리가 없습니다. 관전으로 입장할 수 있습니다.', 409);
@@ -77,13 +74,12 @@ export function applyMemberAction(room, account, input, player, now) {
     if (player || spectator) return false;
     room.spectators.push({ id, name });
   } else if (input.action === 'kick') {
-    // Before a game starts the host may send a participant out of the room for good; spectators stay.
+    // Before a game starts the host may send a participant out of the room; they can come back like anyone else.
     requireThat(room.hostId === id, '방장만 참가자를 강퇴할 수 있습니다.', 403);
     requireThat(room.status !== 'playing', '경기 중에는 강퇴할 수 없습니다.');
     const target = room.players.find(entry => !entry.vacant && entry.id === input.target);
     requireThat(target && target.id !== id, '강퇴할 참가자를 찾을 수 없습니다.');
     room.players = room.players.filter(entry => entry !== target);
-    room.kicked = [...(room.kicked ?? []), target.id];
     resetReady(room);
   } else if (input.action === 'delete') {
     requireThat(isAdmin(account) || (room.game !== 'slap' && room.hostId === id), '방장만 이 방을 삭제할 수 있습니다.', 403);
