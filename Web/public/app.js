@@ -317,6 +317,8 @@ function fitRoomChat() {
 function acceptRoom(next) {
   if (!next || room && next.revision <= room.revision) return;
   const rolled = next.game === 'yacht' && room && next.rollCount > (room.rollCount ?? 0) && next.rollsUsed > 0;
+  const caught = next.game === 'ciao' && room && room.match === next.match && room.phase === 'respond' &&
+    next.phase !== 'respond' && next.last?.includes(' 의심 성공 ');
   if (!room || room.match !== next.match || room.seatEpoch !== next.seatEpoch ||
       room.index !== next.index || room.rollsUsed !== next.rollsUsed) {
     ui.held = next.held ? [...next.held] : Array(5).fill(false);
@@ -340,17 +342,19 @@ function acceptRoom(next) {
   if (rolled) animateYachtRoll();
   if (rolled && next.dice[0] > 0 && next.dice.every(die => die === next.dice[0])) {
     const token = generation;
-    setTimeout(() => token === generation && celebrateYacht(), 480);
+    setTimeout(() => token === generation && celebrate('미친 야추!!'), 480);
   }
+  // Everyone in the room sees the same line: the revision picks it.
+  if (caught) celebrate(['벌레컷', '꼴이 좋아'][next.revision % 2]);
 }
 
-// Five of a kind: a "미친 야추!!" banner and confetti over the whole screen.
-function celebrateYacht() {
+// A big banner and confetti over the whole screen (yacht, a caught ciao bluff).
+function celebrate(text) {
   document.querySelector('.yacht-fanfare')?.remove();
   const colors = ['#ffd166', '#ef476f', '#06d6a0', '#4cc9f0', '#f78c6b'];
   const pieces = matchMedia('(prefers-reduced-motion: reduce)').matches ? '' : Array.from({ length: 72 }, (_, index) =>
     `<i style="--x:${Math.random() * 100}%;--d:${(Math.random() * 0.4).toFixed(2)}s;--r:${Math.floor(Math.random() * 720 - 360)}deg;background:${colors[index % colors.length]}"></i>`).join('');
-  document.body.insertAdjacentHTML('beforeend', `<div class="yacht-fanfare" aria-live="polite"><strong>미친 야추!!</strong>${pieces}</div>`);
+  document.body.insertAdjacentHTML('beforeend', `<div class="yacht-fanfare" aria-live="polite"><strong>${escape(text)}</strong>${pieces}</div>`);
   const banner = document.querySelector('.yacht-fanfare');
   setTimeout(() => banner.remove(), 2200);
 }
