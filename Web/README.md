@@ -45,7 +45,7 @@ GitHub 자동 배포에는 같은 Worker의 Workers Builds를 사용합니다. �
 
 ## 배경음악
 
-로그인한 이용자에게만 배경음악을 재생합니다. R2나 결제수단 등록 없이 기존 Workers 정적 자산에 MP3를 함께 배포합니다. 홈페이지 상단 플레이어에서 현재 곡과 가수를 확인하고 시작, 일시정지, 다음 곡, 재생 목록 선택과 볼륨 조절을 할 수 있습니다. 다섯 곡을 순서대로 재생한 뒤 처음부터 반복하고, 선택 곡·볼륨·일시정지 설정은 브라우저에 기억합니다. 키보드 리듬 화면에서는 BGM이 자동으로 멈추고, 화면을 나가면 이전 재생 상태로 돌아옵니다. 브라우저 정책상 첫 클릭이나 시작 버튼을 누른 뒤 음악이 나올 수 있습니다.
+로그인한 이용자에게만 배경음악을 재생합니다. R2나 결제수단 등록 없이 기존 Workers 정적 자산에 MP3를 함께 배포합니다. 홈페이지 상단 플레이어에서 현재 곡과 가수를 확인하고 시작, 일시정지, 다음 곡, 재생 목록 선택과 볼륨 조절을 할 수 있습니다. 현재 시간과 전체 길이를 표시하고, 진행 막대를 움직여 재생 위치를 바꿀 수 있습니다. 볼륨 표시는 0~100%이며 실제 출력에는 0.3을 곱합니다. 여섯 곡을 순서대로 재생한 뒤 처음부터 반복하고, 선택 곡·볼륨·일시정지 설정은 브라우저에 기억합니다. 키보드 리듬 화면에서는 BGM이 자동으로 멈추고, 화면을 나가면 이전 재생 상태로 돌아옵니다. 브라우저 정책상 첫 클릭이나 시작 버튼을 누른 뒤 음악이 나올 수 있습니다.
 
 `Web` 폴더에서 음원을 배포 자산에 복사한 뒤 배포합니다. 파일은 Git에서 제외됩니다.
 
@@ -59,11 +59,12 @@ npm run deploy
 
 | 곡 | 로컬 배포 파일 |
 | --- | --- |
-| Post Malone — Circles | `public/api/music.mp3` |
-| 아이유 — 미리 메리 크리스마스 | `public/api/music-files/iu-merry-christmas.mp3` |
-| Wham! — Last Christmas | `public/api/music-files/last-christmas.mp3` |
 | Kelly Clarkson — Underneath The Tree | `public/api/music-files/underneath-the-tree.mp3` |
 | Mariah Carey — All I Want For Christmas Is You | `public/api/music-files/all-i-want-for-christmas.mp3` |
+| Post Malone — Circles | `public/api/music.mp3` |
+| Ariana Grande — Santa Tell Me | `public/api/music-files/santa-tell-me.mp3` |
+| 아이유 — 미리 메리 크리스마스 | `public/api/music-files/iu-merry-christmas.mp3` |
+| Wham! — Last Christmas | `public/api/music-files/last-christmas.mp3` |
 
 로컬 개발 서버에서도 같은 파일을 사용합니다. `/api/*`는 항상 Worker를 먼저 거치므로 음원 파일 주소로 직접 접근해도 로그인 검사를 통과해야 하며, 파일 자체는 `/api/music/곡ID`에서만 제공합니다. 기존 `/api/music` 주소는 Circles를 제공합니다. 바꾼 곡은 브라우저 캐시 때문에 최대 1시간 뒤에 반영될 수 있습니다.
 

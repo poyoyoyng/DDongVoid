@@ -104,8 +104,8 @@ test('정적 자산이 전체 파일을 반환해도 지정 구간과 잘못된 
   }
 });
 
-test('목록의 다섯 곡을 각각의 비공개 자산에서 읽는다', async () => {
-  assert.equal(musicTracks.length, 5);
+test('목록의 여섯 곡을 각각의 비공개 자산에서 읽는다', async () => {
+  assert.equal(musicTracks.length, 6);
   for (const track of musicTracks) {
     const response = await music(request(), { ASSETS: {
       fetch: async input => {

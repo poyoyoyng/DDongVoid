@@ -78,7 +78,13 @@ test('재생, 일시정지, 다음 곡, 목록 선택과 마지막 곡 순환이
   assert.equal(audio.getAttribute('src'), '/api/music/all-i-want-for-christmas');
   assert.equal(get('title').textContent, 'All I Want For Christmas Is You');
   assert.equal(track(1).attributes.get('aria-current'), 'true');
-  track(4).fire('click');
+  track(3).fire('click');
+  await settle();
+  assert.equal(get('title').textContent, 'Santa Tell Me');
+  get('next').fire('click');
+  await settle();
+  assert.equal(get('title').textContent, '미리 메리 크리스마스');
+  track(5).fire('click');
   await settle();
   assert.equal(get('title').textContent, 'Last Christmas');
   audio.paused = true;
@@ -92,7 +98,7 @@ test('볼륨과 선택 곡을 기억하고 리듬 게임 및 로그아웃에서 
   const { audio, controller, get, storage } = setup(context, {
     'ddongvoid-music-track': 'last-christmas', 'ddongvoid-music-volume': '0.7',
   });
-  assert.ok(Math.abs(audio.volume - .49) < 1e-12);
+  assert.ok(Math.abs(audio.volume - .21) < 1e-12);
   assert.equal(get('title').textContent, 'Last Christmas');
   controller.update(true, false);
   await settle();
@@ -190,11 +196,11 @@ test('전체 길이가 없거나 로그아웃한 동안에는 탐색하지 않�
   assert.equal(get('seek').disabled, true);
 });
 
-test('볼륨 표시는 0~100%를 유지하고 실제 출력은 0.7배로 조절한다', context => {
+test('볼륨 표시는 0~100%를 유지하고 실제 출력은 0.3배로 조절한다', context => {
   const { audio, get, storage } = setup(context, { 'ddongvoid-music-volume': '0.8' });
   assert.equal(get('volume-value').textContent, '80%');
-  assert.ok(Math.abs(audio.volume - .56) < 1e-12);
-  for (const [setting, output] of [[0, 0], [50, .35], [100, .7]]) {
+  assert.ok(Math.abs(audio.volume - .24) < 1e-12);
+  for (const [setting, output] of [[0, 0], [50, .15], [100, .3]]) {
     get('volume').value = String(setting);
     get('volume').fire('input');
     assert.equal(audio.volume, output);

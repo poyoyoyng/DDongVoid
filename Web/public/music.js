@@ -1,7 +1,7 @@
 import { musicTracks } from './music-library.js';
 
 const storageKey = 'ddongvoid-music';
-const volumeGain = .7;
+const volumeGain = .3;
 function read(key) {
   try { return localStorage.getItem(key); } catch { return null; }
 }
