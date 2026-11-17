@@ -159,6 +159,8 @@ function roomRoster(room, user) {
       <strong>${escape(person.name)}${person.id === user ? ' <small>나</small>' : ''}</strong>
       ${person.id === room.hostId ? '<span>방장</span>' : ''}
       ${isPlayer && room.status !== 'playing' && person.ready ? '<span class="ready">준비 완료</span>' : ''}
+      ${isPlayer && room.status !== 'playing' && room.hostId === user && person.id !== user
+        ? `<button class="kick-button" type="button" data-action="${escape(JSON.stringify({ action: 'kick', target: person.id }))}">강퇴</button>` : ''}
     </li>`;
   return `<section class="panel room-roster">
     <div class="room-roster-group">

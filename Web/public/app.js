@@ -646,6 +646,8 @@ app.addEventListener('click', async event => {
   if (button.dataset.action) {
     const action = JSON.parse(button.dataset.action);
     if (action.action === 'delete' && !window.confirm('이 방을 삭제할까요?')) return;
+    if (action.action === 'kick' &&
+      !window.confirm(`${room.players.find(player => player.id === action.target)?.name ?? ''}님을 강퇴할까요? 이 방에 다시 들어올 수 없습니다.`)) return;
     if (action.action === 'resign' && !window.confirm('기권하면 이번 판은 패배로 기록됩니다. 기권할까요?')) return;
     if (action.action === 'spectate' && room.game === 'seotda' && room.status === 'playing' &&
       !window.confirm('지금 관전석으로 이동하면 이번 판은 다이로 처리되고 건 돈을 잃습니다. 이동할까요?')) return;
