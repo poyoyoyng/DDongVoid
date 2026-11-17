@@ -714,3 +714,9 @@ dialog .form-error { color: #a53745; margin: 0; }
   *, *::before, *::after { transition: none !important; }
   .hero-sun::before, .hero-cloud, .hero-card, .hero-die, .hero-star { animation: none; }
 }
+
+/* Music playback timeline. */
+.music-timeline { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.music-timeline input { flex: 1; min-width: 0; width: auto; height: 32px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; accent-color: #8262d9; cursor: pointer; }
+.music-time { min-width: 40px; color: var(--muted); font-size: 12px; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#music-duration { text-align: right; }

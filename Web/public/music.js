@@ -1,19 +1,25 @@
 import { musicTracks } from './music-library.js';
 
 const storageKey = 'ddongvoid-music';
+const volumeGain = .5;
 function read(key) {
   try { return localStorage.getItem(key); } catch { return null; }
 }
 function remember(key, value) {
   try { localStorage.setItem(key, String(value)); } catch {}
 }
+function clock(seconds) {
+  const whole = Math.max(0, Math.floor(seconds));
+  return Math.floor(whole / 60) + ':' + String(whole % 60).padStart(2, '0');
+}
 
 export function createMusic(player) {
   const audio = new Audio();
-  audio.preload = 'none';
+  audio.preload = 'metadata';
   const savedVolume = read(storageKey + '-volume');
-  audio.volume = savedVolume !== null && Number.isFinite(Number(savedVolume))
+  let volumeLevel = savedVolume !== null && Number.isFinite(Number(savedVolume))
     ? Math.max(0, Math.min(1, Number(savedVolume))) : .35;
+  audio.volume = volumeLevel * volumeGain;
   let index = Math.max(0, musicTracks.findIndex(track => track.id === read(storageKey + '-track')));
   let enabled = read(storageKey) !== 'off';
   let signedIn = false;
@@ -22,6 +28,8 @@ export function createMusic(player) {
   let loading = false;
   let attempting = false;
   let revision = 0;
+  let duration = 0;
+  let seekPreview = null;
   const title = player.querySelector('#music-title');
   const artist = player.querySelector('#music-artist');
   const position = player.querySelector('#music-position');
@@ -31,6 +39,9 @@ export function createMusic(player) {
   const next = player.querySelector('#music-next');
   const volume = player.querySelector('#music-volume');
   const volumeValue = player.querySelector('#music-volume-value');
+  const seek = player.querySelector('#music-seek');
+  const elapsed = player.querySelector('#music-elapsed');
+  const totalTime = player.querySelector('#music-duration');
   const list = player.querySelector('#music-tracks');
   player.querySelector('#music-count').textContent = musicTracks.length + '곡';
   const trackButtons = musicTracks.map((track, trackIndex) => {
@@ -56,6 +67,16 @@ export function createMusic(player) {
   });
   const wanted = () => signedIn && enabled && !quiet && !failed;
 
+  function renderProgress() {
+    const current = duration > 0 ? Math.max(0, Math.min(duration, seekPreview ?? audio.currentTime)) : 0;
+    elapsed.textContent = clock(current);
+    totalTime.textContent = duration > 0 ? clock(duration) : '--:--';
+    seek.max = String(duration);
+    seek.value = String(current);
+    seek.disabled = !signedIn || quiet || failed || duration <= 0;
+    seek.setAttribute('aria-valuetext', `${elapsed.textContent} / ${totalTime.textContent}`);
+  }
+
   function render() {
     const track = musicTracks[index];
     title.textContent = track.title;
@@ -66,9 +87,10 @@ export function createMusic(player) {
     play.disabled = !signedIn || quiet || (playing && !failed);
     pause.disabled = !signedIn || !enabled || quiet;
     next.disabled = !signedIn || quiet;
-    volume.value = String(Math.round(audio.volume * 100));
+    volume.value = String(Math.round(volumeLevel * 100));
     volumeValue.textContent = volume.value + '%';
     volume.setAttribute('aria-valuetext', volumeValue.textContent);
+    renderProgress();
     for (const [trackIndex, button] of trackButtons.entries()) {
       button.disabled = !signedIn || quiet;
       button.setAttribute('aria-current', String(trackIndex === index));
@@ -83,17 +105,19 @@ export function createMusic(player) {
   }
 
   function sync() {
+    const src = '/api/music/' + musicTracks[index].id;
+    if (signedIn && !failed && audio.getAttribute('src') !== src) {
+      revision++;
+      attempting = false;
+      loading = enabled && !quiet;
+      duration = 0;
+      seekPreview = null;
+      audio.src = src;
+    }
     if (!wanted()) {
       audio.pause();
       render();
       return;
-    }
-    const src = '/api/music/' + musicTracks[index].id;
-    if (audio.getAttribute('src') !== src) {
-      revision++;
-      attempting = false;
-      loading = true;
-      audio.src = src;
     }
     if (audio.paused && !attempting) {
       attempting = true;
@@ -143,10 +167,35 @@ export function createMusic(player) {
   });
   next.addEventListener('click', () => choose((index + 1) % musicTracks.length));
   volume.addEventListener('input', () => {
-    audio.volume = Number(volume.value) / 100;
-    remember(storageKey + '-volume', audio.volume);
+    volumeLevel = Number(volume.value) / 100;
+    audio.volume = volumeLevel * volumeGain;
+    remember(storageKey + '-volume', volumeLevel);
     render();
   });
+  seek.addEventListener('input', () => {
+    if (seek.disabled) return;
+    const value = Number(seek.value);
+    if (!Number.isFinite(value)) return;
+    seekPreview = Math.max(0, Math.min(duration, value));
+    renderProgress();
+  });
+  seek.addEventListener('change', () => {
+    const value = seekPreview ?? Number(seek.value);
+    seekPreview = null;
+    if (!seek.disabled && Number.isFinite(value)) {
+      audio.currentTime = Math.max(0, Math.min(duration, value));
+    }
+    renderProgress();
+  });
+  seek.addEventListener('pointercancel', () => { seekPreview = null; renderProgress(); });
+  for (const event of ['loadedmetadata', 'durationchange']) {
+    audio.addEventListener(event, () => {
+      duration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+      renderProgress();
+    });
+  }
+  audio.addEventListener('timeupdate', renderProgress);
+  audio.addEventListener('emptied', () => { duration = 0; seekPreview = null; renderProgress(); });
   audio.addEventListener('ended', () => {
     if (wanted()) choose((index + 1) % musicTracks.length);
   });
@@ -176,6 +225,8 @@ export function createMusic(player) {
         audio.removeAttribute('src');
         audio.load();
         loading = false;
+        duration = 0;
+        seekPreview = null;
       }
       if (!signedIn && isSignedIn) failed = false;
       signedIn = isSignedIn;

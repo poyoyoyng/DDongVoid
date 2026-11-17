@@ -21,12 +21,13 @@ function setup(context, saved = {}) {
   globalThis.Audio = class extends Element {
     paused = true;
     currentTime = 0;
+    duration = NaN;
     playCalls = 0;
     rejectPlay = null;
     constructor() { super(); audio = this; }
     getAttribute(key) { return this.attributes.get(key) ?? null; }
     removeAttribute(key) { this.attributes.delete(key); }
-    set src(value) { this.attributes.set('src', value); this.currentTime = 0; this.paused = true; }
+    set src(value) { this.attributes.set('src', value); this.currentTime = 0; this.duration = NaN; this.paused = true; }
     play() {
       this.playCalls++;
       if (this.rejectPlay) return Promise.reject(this.rejectPlay);
@@ -64,7 +65,7 @@ test('재생, 일시정지, 다음 곡, 목록 선택과 마지막 곡 순환이
   assert.equal(audio.playCalls, 0);
   get('play').fire('click');
   await settle();
-  assert.equal(audio.getAttribute('src'), '/api/music/circles');
+  assert.equal(audio.getAttribute('src'), '/api/music/underneath-the-tree');
   audio.currentTime = 42;
   get('pause').fire('click');
   assert.equal(audio.paused, true);
@@ -74,16 +75,16 @@ test('재생, 일시정지, 다음 곡, 목록 선택과 마지막 곡 순환이
   assert.equal(audio.currentTime, 42);
   get('next').fire('click');
   await settle();
-  assert.equal(audio.getAttribute('src'), '/api/music/iu-merry-christmas');
-  assert.equal(get('title').textContent, '미리 메리 크리스마스');
+  assert.equal(audio.getAttribute('src'), '/api/music/all-i-want-for-christmas');
+  assert.equal(get('title').textContent, 'All I Want For Christmas Is You');
   assert.equal(track(1).attributes.get('aria-current'), 'true');
   track(4).fire('click');
   await settle();
-  assert.equal(get('title').textContent, 'All I Want For Christmas Is You');
+  assert.equal(get('title').textContent, 'Last Christmas');
   audio.paused = true;
   audio.fire('ended');
   await settle();
-  assert.equal(get('title').textContent, 'Circles');
+  assert.equal(get('title').textContent, 'Underneath The Tree');
   assert.equal(audio.paused, false);
 });
 
@@ -91,7 +92,7 @@ test('볼륨과 선택 곡을 기억하고 리듬 게임 및 로그아웃에서 
   const { audio, controller, get, storage } = setup(context, {
     'ddongvoid-music-track': 'last-christmas', 'ddongvoid-music-volume': '0.7',
   });
-  assert.equal(audio.volume, .7);
+  assert.equal(audio.volume, .35);
   assert.equal(get('title').textContent, 'Last Christmas');
   controller.update(true, false);
   await settle();
@@ -132,6 +133,72 @@ test('브라우저 자동재생 거부 후 시작 버튼으로 재시도하고 �
   assert.match(get('status').textContent, /불러오지 못/);
   get('next').fire('click');
   await settle();
-  assert.equal(audio.getAttribute('src'), '/api/music/iu-merry-christmas');
+  assert.equal(audio.getAttribute('src'), '/api/music/all-i-want-for-christmas');
   assert.equal(audio.paused, false);
+});
+
+test('재생 시간과 전체 길이를 표시하고 일시정지 상태에서 원하는 위치로 이동한다', async context => {
+  const { audio, controller, get } = setup(context, { 'ddongvoid-music': 'off' });
+  controller.update(true, false);
+  assert.equal(audio.preload, 'metadata');
+  assert.equal(get('seek').disabled, true);
+  assert.equal(get('duration').textContent, '--:--');
+  audio.duration = 229.8;
+  audio.fire('loadedmetadata');
+  assert.equal(get('duration').textContent, '3:49');
+  assert.equal(get('seek').disabled, false);
+  assert.equal(get('seek').max, '229.8');
+  audio.currentTime = 83.4;
+  audio.fire('timeupdate');
+  assert.equal(get('elapsed').textContent, '1:23');
+  get('seek').value = '125';
+  get('seek').fire('input');
+  assert.equal(get('elapsed').textContent, '2:05');
+  audio.currentTime = 84;
+  audio.fire('timeupdate');
+  assert.equal(get('seek').value, '125');
+  get('seek').fire('change');
+  assert.equal(audio.currentTime, 125);
+  assert.equal(audio.paused, true);
+  assert.equal(audio.playCalls, 0);
+  get('play').fire('click');
+  await settle();
+  get('seek').value = '20';
+  get('seek').fire('input');
+  get('seek').fire('change');
+  assert.equal(audio.currentTime, 20);
+  assert.equal(audio.paused, false);
+  get('next').fire('click');
+  await settle();
+  assert.equal(get('elapsed').textContent, '0:00');
+  assert.equal(get('duration').textContent, '--:--');
+  assert.equal(get('seek').disabled, true);
+});
+
+test('전체 길이가 없거나 로그아웃한 동안에는 탐색하지 않는다', context => {
+  const { audio, controller, get } = setup(context);
+  controller.update(true, false);
+  audio.duration = Infinity;
+  audio.fire('durationchange');
+  assert.equal(get('seek').disabled, true);
+  audio.duration = 240;
+  audio.fire('loadedmetadata');
+  controller.update(true, true);
+  assert.equal(get('seek').disabled, true);
+  controller.update(false, false);
+  assert.equal(get('duration').textContent, '--:--');
+  assert.equal(get('seek').disabled, true);
+});
+
+test('볼륨 표시는 0~100%를 유지하고 실제 출력만 절반으로 줄인다', context => {
+  const { audio, get, storage } = setup(context, { 'ddongvoid-music-volume': '0.8' });
+  assert.equal(get('volume-value').textContent, '80%');
+  assert.equal(audio.volume, .4);
+  for (const [setting, output] of [[0, 0], [50, .25], [100, .5]]) {
+    get('volume').value = String(setting);
+    get('volume').fire('input');
+    assert.equal(audio.volume, output);
+    assert.equal(get('volume-value').textContent, setting + '%');
+    assert.equal(storage.get('ddongvoid-music-volume'), String(setting / 100));
+  }
 });

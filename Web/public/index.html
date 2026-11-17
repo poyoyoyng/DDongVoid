@@ -31,8 +31,8 @@
         <span class="music-note" aria-hidden="true">♫</span>
         <div class="music-track-info">
           <span class="music-eyebrow">현재 곡 <span id="music-position">1 / 5</span></span>
-          <p class="music-title" id="music-title">Circles</p>
-          <p class="music-artist" id="music-artist">Post Malone</p>
+          <p class="music-title" id="music-title">Underneath The Tree</p>
+          <p class="music-artist" id="music-artist">Kelly Clarkson</p>
         </div>
       </div>
       <div class="music-controls" role="group" aria-label="음악 재생">
@@ -44,6 +44,11 @@
         <input id="music-volume" type="range" min="0" max="100" step="1" value="35" aria-label="음악 소리 조절">
         <output id="music-volume-value" for="music-volume">35%</output>
       </label>
+    </div>
+    <div class="music-timeline">
+      <span class="music-time" id="music-elapsed" aria-label="현재 재생 시간">0:00</span>
+      <input id="music-seek" type="range" min="0" max="0" step="0.1" value="0" aria-label="음악 재생 위치" disabled>
+      <span class="music-time" id="music-duration" aria-label="전체 재생 시간">--:--</span>
     </div>
     <div class="music-bottom">
       <p class="music-status" id="music-status" role="status">로그인하면 음악을 재생할 수 있어요.</p>
