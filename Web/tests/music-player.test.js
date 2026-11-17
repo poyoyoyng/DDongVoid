@@ -61,6 +61,8 @@ const settle = async () => { await new Promise(resolve => setImmediate(resolve))
 test('재생, 일시정지, 다음 곡, 목록 선택과 마지막 곡 순환이 작동한다', async context => {
   const { audio, controller, get, track } = setup(context, { 'ddongvoid-music': 'off' });
   assert.equal(get('play').disabled, true);
+  assert.equal(get('volume-value').textContent, '50%');
+  assert.equal(audio.volume, .1);
   controller.update(true, false);
   assert.equal(audio.playCalls, 0);
   get('play').fire('click');

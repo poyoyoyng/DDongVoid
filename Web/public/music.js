@@ -18,7 +18,7 @@ export function createMusic(player) {
   audio.preload = 'metadata';
   const savedVolume = read(storageKey + '-volume');
   let volumeLevel = savedVolume !== null && Number.isFinite(Number(savedVolume))
-    ? Math.max(0, Math.min(1, Number(savedVolume))) : .35;
+    ? Math.max(0, Math.min(1, Number(savedVolume))) : .5;
   audio.volume = volumeLevel * volumeGain;
   let index = Math.max(0, musicTracks.findIndex(track => track.id === read(storageKey + '-track')));
   let enabled = read(storageKey) !== 'off';
