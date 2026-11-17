@@ -1,7 +1,7 @@
 import { cardName, games, powerCosts, powerNames, yachtCategories, yachtScore } from './rules.js';
 import { bankruptLine, baseBet, refillMoney, startMoney, won } from './seotda.js';
 import { cardFace, heading, hwatu, redCard, yachtFace } from './views.js';
-import { cardHelp, cardName as saboteurCardName, cards, handSize, roleCounts } from './saboteur.js';
+import { cardHelp, cardName as saboteurCardName, cards, handSize, saboteurCounts } from './saboteur.js';
 import { cardArt, cardBack, goalArt, goalBack, roleArt, startArt } from './saboteur-art.js';
 
 const dice = (values, { held = [], dim = [] } = {}) => `<span class="guide-dice">${values.map((value, index) =>
@@ -467,7 +467,7 @@ function saboteurGuide() {
     ['한 장 뽑기', '쓴 만큼 카드 더미에서 한 장을 뽑아요.<br>더미가 떨어지면 남은 손패로만 해요.', `<span class="seotda-cards">${cardBack()}</span>`],
     ['목적지 열기', '시작 카드에서 끊기지 않은 길이 목적지에 닿으면<br>뒤집어요. 금이면 라운드 끝, 돌이면 계속!', `<span class="seotda-cards">${goalBack()}<b class="guide-swap">→</b>${goalArt('gold')}</span>`],
   ];
-  const roleRows = Object.entries(roleCounts);
+  const roleRows = Object.entries(saboteurCounts).map(([count, saboteurs]) => [Number(count), saboteurs]);
   return article('saboteur', {
     eyebrow: '사보타지 게임 룰', title: '사보타지 쉽게 배우기',
     intro: '광부들은 시작 카드에서 굴을 파서 금이 묻힌 목적지를 찾고, 정체를 숨긴 방해꾼은 몰래 길을 막아요. 광부 팀과 방해꾼 팀이 한 판으로 승부하는 팀전이에요.',
@@ -477,10 +477,10 @@ function saboteurGuide() {
       ['내 차례는 이렇게 해요', stepList(steps,
         '도구(곡괭이 · 랜턴 · 수레)가 <b>하나라도 부서져 있으면</b> 길 카드를 낼 수 없어요. 차례에 <b>60초</b> 안에 고르지 않으면 첫 번째 손패를 버리고 패스해요.')],
       ['인원별 역할과 손패', `<div class="guide-sab-scroll"><table class="guide-sab-table"><thead><tr><th scope="col">인원</th>${roleRows.map(([count]) => `<th scope="col">${count}명</th>`).join('')}</tr></thead>
-        <tbody><tr><th scope="row">방해꾼</th>${roleRows.map(([, [saboteurs]]) => `<td>${saboteurs}</td>`).join('')}</tr>
-        <tr><th scope="row">광부</th>${roleRows.map(([, [, diggers]]) => `<td>${diggers}</td>`).join('')}</tr>
-        <tr><th scope="row">손패</th>${roleRows.map(([count]) => `<td>${handSize(Number(count))}장</td>`).join('')}</tr></tbody></table></div>
-        <p class="guide-small">· 역할 카드는 인원보다 한 장 많이 섞어서 나누고 남은 한 장은 아무도 보지 않아요. 3명일 때는 남는 카드 없이 언제나 방해꾼 1명, 광부 2명이에요.</p>`],
+        <tbody><tr><th scope="row">방해꾼</th>${roleRows.map(([, saboteurs]) => `<td>${saboteurs}</td>`).join('')}</tr>
+        <tr><th scope="row">광부</th>${roleRows.map(([count, saboteurs]) => `<td>${count - saboteurs}</td>`).join('')}</tr>
+        <tr><th scope="row">손패</th>${roleRows.map(([count]) => `<td>${handSize(count)}장</td>`).join('')}</tr></tbody></table></div>
+        <p class="guide-small">· 방해꾼은 언제나 표의 수만큼 나오고 나머지는 모두 광부예요. 누가 방해꾼인지는 게임이 끝날 때 공개돼요.</p>`],
       ['광산과 길 카드 (40장)', `${gallery([
         [startArt(), '시작 카드', '사다리가 있는 입구 · 네 방향 모두 길', 0],
         [goalBack(), '목적지 (뒷면)', '시작 카드에서 7장 오른쪽에 1장 간격으로 3장', 0],
@@ -496,8 +496,7 @@ function saboteurGuide() {
             <p class="guide-small">방해꾼이 실수로 금까지 길을 이어도 광부 팀이 이겨요.</p>
             <div class="guide-example"><span class="seotda-cards">${roleArt('digger')}${goalArt('gold')}</span></div></div>
           <div class="guide-bonus"><p>카드 더미와 모든 손패가 떨어질 때까지 금을 못 찾으면</p><strong>방해꾼 팀 승리!</strong>
-            <p>방해꾼 <b>전원</b>이 이겨요. 게임이 끝나면 모두의 역할을 공개해요.</p>
-            <p class="guide-small">4명일 때는 남은 한 장이 방해꾼이면 방해꾼이 없을 수 있어요. 그때 금을 못 찾으면 아무도 이기지 못해요.</p></div>
+            <p>방해꾼 <b>전원</b>이 이겨요. 게임이 끝나면 모두의 역할을 공개해요.</p></div>
         </div>
         <p class="guide-small">· 원작은 3라운드 동안 금 카드를 나눠 갖지만, 여기서는 한 판 팀전으로 승부하고 랭킹은 이긴 팀 전원이 승리로 기록돼요.</p>`],
     ],

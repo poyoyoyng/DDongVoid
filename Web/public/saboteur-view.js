@@ -17,7 +17,6 @@ const teamNames = { digger: '광부 팀', saboteur: '방해꾼 팀' };
 
 // The finished game's headline: which team won, and whether I was on it.
 export function saboteurTitle(room, me) {
-  if (!room.winners.length) return '아무도 이기지 못했어요';
   const team = teamNames[room.result.winner] + ' 승리!';
   return me ? team + (room.winners.includes(me.id) ? ' 이겼어요!' : ' 졌어요…') : team;
 }
@@ -147,15 +146,14 @@ function result(room) {
   const finder = outcome.finder !== null ? room.players[outcome.finder] : null;
   const team = role => room.players.filter(player => player.role === role).map(player => escape(player.name)).join(', ') || '없음';
   return `<section class="sab-result ${outcome.winner}">
-    <h3>${room.winners.length ? teamNames[outcome.winner] + ' 승리!' : '승자 없음'}</h3>
+    <h3>${teamNames[outcome.winner]} 승리!</h3>
     <p>${finder ? `${escape(finder.name)}님의 길이 금에 닿았어요. 광부 팀 모두 이겼어요!`
-      : room.winners.length ? '카드가 모두 떨어질 때까지 금을 찾지 못했어요. 방해꾼 팀 모두 이겼어요!'
-        : '금을 찾지 못했지만 이번 판에는 방해꾼이 없었어요.'}</p>
+      : '카드가 모두 떨어질 때까지 금을 찾지 못했어요. 방해꾼 팀 모두 이겼어요!'}</p>
     <div class="sab-goals">${goalNames.map((name, goal) => `<figure>${goalArt(outcome.goals[goal], name + ' 목적지 · ' + goalFaceName(outcome.goals[goal]))}
       <figcaption>${name} · ${goalFaceName(outcome.goals[goal])}</figcaption></figure>`).join('')}</div>
     <ul class="sab-teams">
       <li class="digger${outcome.winner === 'digger' ? ' won' : ''}">${roleArt('digger')}<div><b>광부 팀</b><span>${team('digger')}</span></div></li>
-      <li class="saboteur${outcome.winner === 'saboteur' && room.winners.length ? ' won' : ''}">${roleArt('saboteur')}<div><b>방해꾼 팀</b><span>${team('saboteur')}</span></div></li>
+      <li class="saboteur${outcome.winner === 'saboteur' ? ' won' : ''}">${roleArt('saboteur')}<div><b>방해꾼 팀</b><span>${team('saboteur')}</span></div></li>
     </ul>
   </section>`;
 }

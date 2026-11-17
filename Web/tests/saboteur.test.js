@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { applyAction, createRoom, expireRoom, roomView } from '../src/games.js';
 import {
-  E, N, S, W, cards, handSize, placements, roleCounts, turnTime,
+  E, N, S, W, cards, handSize, placements, saboteurCounts, turnTime,
 } from '../public/saboteur.js';
 import { roomPage } from '../public/views.js';
 import { guide } from '../public/guide.js';
@@ -44,9 +44,8 @@ test('카드 구성은 길 40장(막다른 길 9장), 행동 27장이다', () =>
   assert.deepEqual([count('break'), count('fix', 1), count('fix', 2), count('map'), count('rockfall')], [9, 6, 3, 6, 3]);
 });
 
-test('인원별 역할은 인원보다 한 장 많고(3명은 방해꾼 1·광부 2 그대로) 손패는 6·5·4장이다', () => {
-  for (let count = 4; count <= 10; count++) assert.equal(roleCounts[count][0] + roleCounts[count][1], count + 1);
-  assert.deepEqual(roleCounts[3], [1, 2]);
+test('방해꾼은 규칙대로 3·4명 1, 5·6명 2, 7~9명 3, 10명 4명이고 손패는 6·5·4장이다', () => {
+  assert.deepEqual([3, 4, 5, 6, 7, 8, 9, 10].map(count => saboteurCounts[count]), [1, 1, 2, 2, 3, 3, 3, 4]);
   assert.deepEqual([3, 5, 6, 7, 8, 10].map(handSize), [6, 6, 5, 5, 4, 4]);
 });
 
@@ -149,18 +148,29 @@ test('다른 사람의 손패·역할·카드 더미는 보이지 않는다', ()
   assert.ok(view.players[1].hand.length && view.players[1].role);
 });
 
-test('카드가 모두 떨어지면 방해꾼 팀 모두 이기고, 방해꾼이 없으면 아무도 이기지 못한다', () => {
-  for (const saboteurs of [2, 0]) {
-    const { room, play } = table(5);
-    room.players.forEach((player, seat) => {
-      player.role = seat < saboteurs ? 'saboteur' : 'digger';
-      player.hand = seat === 0 ? [straight] : [];
-    });
-    room.deck = [];
-    play(0, { action: 'discard', card: straight });
-    assert.equal(room.status, 'finished');
-    assert.equal(room.result.winner, 'saboteur');
-    assert.deepEqual(room.winners, saboteurs ? ['0', '1'] : []);
+test('카드가 모두 떨어지면 방해꾼 팀 모두 이긴다', () => {
+  const { room, play } = table(5);
+  room.players.forEach((player, seat) => {
+    player.role = seat < 2 ? 'saboteur' : 'digger';
+    player.hand = seat === 0 ? [straight] : [];
+  });
+  room.deck = [];
+  play(0, { action: 'discard', card: straight });
+  assert.equal(room.status, 'finished');
+  assert.equal(room.result.winner, 'saboteur');
+  assert.deepEqual(room.winners, ['0', '1']);
+});
+
+test('인원마다 언제나 규칙의 방해꾼 수만큼 나오고 나머지는 광부다', () => {
+  for (let count = 3; count <= 5; count++) {
+    for (let trial = 0; trial < 50; trial++) {
+      const room = createRoom('room', 'saboteur', '역할', players[0], now);
+      for (let index = 1; index < count; index++) applyAction(room, players[index], { action: 'join' }, now);
+      for (let index = 0; index < count; index++) applyAction(room, players[index], { action: 'ready', ready: true }, now);
+      const roles = room.players.map(player => player.role);
+      assert.equal(roles.filter(role => role === 'saboteur').length, saboteurCounts[count]);
+      assert.equal(roles.filter(role => role === 'digger').length, count - saboteurCounts[count]);
+    }
   }
 });
 

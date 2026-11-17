@@ -1,5 +1,5 @@
 import {
-  canPlace, cardName, cards, goalFaceName, goalFaces, goalNames, goalRotation, goalX, goalYs, handSize, reachedGoals, roleCounts, toolNames, turnTime,
+  canPlace, cardName, cards, goalFaceName, goalFaces, goalNames, goalRotation, goalX, goalYs, handSize, reachedGoals, saboteurCounts, toolNames, turnTime,
 } from '../public/saboteur.js';
 import { requireThat } from './http.js';
 
@@ -17,11 +17,11 @@ function shuffle(items, random) {
   return items;
 }
 
-// One game is one round of gold diggers against saboteurs. Roles come from roleCounts; a spare role card is never shown.
+// One game is one round of gold diggers against saboteurs, with exactly saboteurCounts saboteurs.
 export function startSaboteur(room, random, now) {
   const count = room.players.length;
-  const [saboteurs, diggers] = roleCounts[count];
-  const roles = shuffle([...Array(saboteurs).fill('saboteur'), ...Array(diggers).fill('digger')], random);
+  const saboteurs = saboteurCounts[count];
+  const roles = shuffle([...Array(saboteurs).fill('saboteur'), ...Array(count - saboteurs).fill('digger')], random);
   const first = random(count);
   room.deck = shuffle(cards.map((_, card) => card), random);
   room.goals = shuffle([...goalFaces], random);
@@ -131,8 +131,7 @@ function revealGoals(room) {
 function finish(room, team, finder = null) {
   const winners = room.players.filter(player => player.role === team);
   const reason = team === 'digger' ? `${room.players[finder].name}님이 금을 찾았습니다 · 광부 팀 승리!`
-    : winners.length ? '금을 찾지 못하고 카드가 모두 떨어졌습니다 · 방해꾼 팀 승리!'
-      : '카드가 모두 떨어졌지만 방해꾼이 없어 아무도 이기지 못했습니다.';
+    : '금을 찾지 못하고 카드가 모두 떨어졌습니다 · 방해꾼 팀 승리!';
   note(room, reason);
   room.result = { winner: team, finder, goals: [...room.goals] };
   Object.assign(room, {
