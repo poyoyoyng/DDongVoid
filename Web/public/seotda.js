@@ -1,7 +1,10 @@
 // 섯다 uses 20 hwatu cards, two for each month 1~10. Card = (month - 1) * 2 + variant; variant 0 is the month's picture card.
 export const deckSize = 20;
 export const startMoney = 10_000_000;
-export const baseBet = 100_000;
+export const baseBet = 10_000;
+// Below bankruptLine a player goes bankrupt and gets refillMoney at the next hand.
+export const bankruptLine = 100_000;
+export const refillMoney = 3_000_000;
 export const turnTime = 30_000;
 
 export const cardMonth = card => (card >> 1) + 1;

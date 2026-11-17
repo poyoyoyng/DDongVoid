@@ -4,7 +4,7 @@ import { applyAction, createRoom, expireRoom, roomView } from './games.js';
 import { errorResponse, json, readBody, requireThat } from './http.js';
 import { extendsStreak, ratingChanges, startRating, streakBonus } from './ratings.js';
 import { isRoomMember } from './room-members.js';
-import { startMoney } from '../public/seotda.js';
+import { refillMoney, startMoney } from '../public/seotda.js';
 
 const retryDelay = 5000;
 
@@ -98,9 +98,9 @@ export class GameRoom extends DurableObject {
           statements.push(db.prepare(`
             INSERT INTO wallets (account_id, balance, bankruptcies)
             SELECT ?1, ?2 + ?3, ?4 WHERE NOT EXISTS (SELECT 1 FROM match_results WHERE room_id = ?5 AND match_no = ?6)
-            ON CONFLICT (account_id) DO UPDATE SET balance = CASE WHEN ?4 THEN ?2 ELSE wallets.balance END + ?3,
+            ON CONFLICT (account_id) DO UPDATE SET balance = CASE WHEN ?4 THEN ?7 ELSE wallets.balance END + ?3,
               bankruptcies = wallets.bankruptcies + ?4
-          `).bind(id, startMoney, delta, refill ? 1 : 0, result.id, result.match));
+          `).bind(id, startMoney, delta, refill ? 1 : 0, result.id, result.match, refillMoney));
         }
       } else {
         const entry = id => ratings.get(result.game + ':' + id) ?? { rating: startRating, streak: 0 };

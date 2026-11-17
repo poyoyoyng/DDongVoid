@@ -1,5 +1,5 @@
 import { cardName, games, powerCosts, powerNames, yachtCategories, yachtScore } from './rules.js';
-import { baseBet, startMoney, won } from './seotda.js';
+import { bankruptLine, baseBet, refillMoney, startMoney, won } from './seotda.js';
 import { cardFace, heading, hwatu, redCard, yachtFace } from './views.js';
 
 const dice = (values, { held = [], dim = [] } = {}) => `<span class="guide-dice">${values.map((value, index) =>
@@ -433,11 +433,13 @@ function seotdaGuide() {
       ['돈과 랭킹', `<div class="guide-upper">
           <div><h4>모두 ${won(startMoney)}으로 시작</h4><p>딴 돈과 잃은 돈은 계정에 남고, 섯다 랭킹은 보유 금액 순이에요.</p>
             <p class="guide-small">한 판에 걸 수 있는 돈은 그 판 참가자 중 잔액이 가장 적은 사람의 잔액까지예요.</p></div>
-          <div class="guide-bonus"><p>잔액이 ${won(baseBet)}보다 적으면</p><strong>파산 · ${won(startMoney)} 지원</strong>
-            <p>다음 판을 시작할 때 다시 ${won(startMoney)}을 받아요.</p><p class="guide-small">파산 횟수는 랭킹에 표시돼요.</p></div>
+          <div class="guide-bonus"><p>잔액이 ${won(bankruptLine)}보다 적으면</p><strong>파산 · ${won(refillMoney)} 지원</strong>
+            <p>다음 판을 시작할 때 ${won(refillMoney)}으로 다시 채워요.</p><p class="guide-small">파산 횟수는 랭킹에 표시돼요.</p></div>
         </div>`],
     ],
-    foot: '게임 선택 → 섯다 → 방 만들기 · 2~4명이 참가하고 모두 준비 완료를 누르면 시작해요.',
+    foot: '게임 선택 → 섯다 → 방 만들기 · 2~4명이 참가하고 모두 준비 완료를 누르면 시작해요.<br><small class="guide-small">화투 그림: ' +
+      '<a href="https://commons.wikimedia.org/wiki/Category:SVG_Hwatu" target="_blank" rel="noopener">Spenĉjo · Marcus Richert · Louie Mantia, Jr. (Wikimedia Commons)</a>, ' +
+      '<a href="https://creativecommons.org/licenses/by-sa/4.0/deed.ko" target="_blank" rel="noopener">CC BY-SA 4.0</a></small>',
   });
 }
 

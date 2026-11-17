@@ -1,6 +1,6 @@
 import { canTakeSeat, cardName, isAdmin, cardRank, cardSuit, games, legalCard, powerCosts, powerNames, sum, suits, suitNames, yachtBonus, yachtCategories, yachtScore, yachtTotal, zones } from './rules.js';
 import { BLACK, forbiddenReason, pointName, size as omokSize, winningLine } from './omok.js';
-import { baseBet, betOptions, cardKind, cardMonth, cardName as hwatuName, handLadder, handOf, isGwang, specialHands, startMoney, won } from './seotda.js';
+import { bankruptLine, baseBet, betOptions, cardKind, cardMonth, cardName as hwatuName, handLadder, handOf, isGwang, refillMoney, specialHands, startMoney, won } from './seotda.js';
 
 export const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -132,7 +132,7 @@ export function rankings(game, rows) {
 }
 
 function moneyRankings(game, rows) {
-  return heading('랭킹', `섯다는 보유 금액 순입니다. 모두 ${won(startMoney)}에서 시작하고, 잔액이 ${won(baseBet)}보다 적으면 파산해서 ${won(startMoney)}을 다시 받아요.`) + `
+  return heading('랭킹', `섯다는 보유 금액 순입니다. 모두 ${won(startMoney)}에서 시작하고, 잔액이 ${won(bankruptLine)}보다 적으면 파산해서 ${won(refillMoney)}을 다시 받아요.`) + `
     ${rankingTabs(game)}
     <section class="panel rankings">
       <h2>${games[game].title}</h2>
@@ -556,7 +556,7 @@ function seotdaSeat(room, player, seat, me) {
   const lines = [];
   if (room.status === 'waiting' || !stake) {
     lines.push(player.ready ? '준비 완료 ✓' : '준비 대기');
-    if (player.balance != null) lines.push(player.balance < baseBet ? '파산 · 다음 판 ' + won(startMoney) + ' 지원' : '잔액 ' + won(player.balance));
+    if (player.balance != null) lines.push(player.balance < bankruptLine ? '파산 · 다음 판 ' + won(refillMoney) + ' 지원' : '잔액 ' + won(player.balance));
   } else {
     if (shown) lines.push('<b>' + escape(shown.hand) + '</b>');
     else if (player.vacant) lines.push('관전석으로 이동 · 다이');

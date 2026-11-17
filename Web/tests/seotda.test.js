@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { applyAction, createRoom, expireRoom, roomView } from '../src/games.js';
 import { canTakeSeat } from '../public/rules.js';
-import { baseBet, handOf, showdown, startMoney, turnTime, won } from '../public/seotda.js';
+import { bankruptLine, baseBet, handOf, refillMoney, showdown, startMoney, turnTime, won } from '../public/seotda.js';
 import { roomPage } from '../public/views.js';
 
 const card = (month, picture = true) => (month - 1) * 2 + (picture ? 0 : 1);
@@ -71,7 +71,7 @@ test('구사는 알리 이하, 멍텅구리 구사는 9땡 이하에서 재경�
 
 test('금액은 만원 단위로 읽기 쉽게 표시한다', () => {
   assert.equal(won(startMoney), '1,000만원');
-  assert.equal(won(baseBet), '10만원');
+  assert.equal(won(baseBet), '1만원');
   assert.equal(won(-400_000), '-40만원');
   assert.equal(won(105_000_000), '1억 500만원');
   assert.equal(won(12_345_000), '1,234만 5,000원');
@@ -93,14 +93,14 @@ test('기본 판돈을 내고 두 번 베팅한 뒤 이긴 사람이 판돈을 �
   assert.equal(room.pot, 4 * baseBet);
   play(0, { action: 'check' });
   play(1, { action: 'bet', kind: 'half' });
-  assert.equal(room.currentBet, 200_000);
+  assert.equal(room.currentBet, 20_000);
   play(0, { action: 'call' });
   assert.equal(room.status, 'finished');
   assert.deepEqual(room.winners, ['0']);
-  assert.equal(room.pot, 800_000);
-  assert.deepEqual(room.settlement.money, [{ id: '0', delta: 400_000, refill: false }, { id: '1', delta: -400_000, refill: false }]);
+  assert.equal(room.pot, 80_000);
+  assert.deepEqual(room.settlement.money, [{ id: '0', delta: 40_000, refill: false }, { id: '1', delta: -40_000, refill: false }]);
   assert.deepEqual(room.settlement.outcomes.map(entry => entry.outcome), ['W', 'L']);
-  assert.equal(room.players[0].balance, startMoney + 400_000);
+  assert.equal(room.players[0].balance, startMoney + 40_000);
   assert.deepEqual(room.reveal.map(entry => entry.hand), ['9땡', '갑오']);
 
   // The next hand starts from the other seat.
@@ -140,26 +140,28 @@ test('혼자 남으면 패를 보지 않고 바로 판돈을 가져간다', () =
   assert.equal(room.status, 'finished');
   assert.deepEqual(room.winners, ['0']);
   assert.equal(room.reveal, null);
-  assert.deepEqual(room.settlement.money.map(entry => entry.delta), [200_000, -baseBet, -baseBet]);
+  assert.deepEqual(room.settlement.money.map(entry => entry.delta), [2 * baseBet, -baseBet, -baseBet]);
 });
 
-test('한 판에 걸 수 있는 돈은 가장 적은 잔액까지이고, 파산한 사람은 1,000만원을 다시 받는다', () => {
-  const capped = table(2, [startMoney, 150_000]).room;
-  assert.equal(capped.cap, 150_000);
+test('한 판에 걸 수 있는 돈은 가장 적은 잔액까지이고, 10만원 미만이면 파산해서 300만원을 받는다', () => {
+  const capped = table(2, [startMoney, 115_000]).room;
+  assert.equal(capped.cap, 115_000);
+  capped.cap = 15_000; // a small cap keeps the all-in hand short
   const play = (index, input) => applyAction(capped, players[index],
     { turn: capped.turn, revision: capped.revision, match: capped.match, seatEpoch: capped.seatEpoch, ...input }, now);
   setHands(capped, [[card(1), card(1, false)], [card(2), card(3)]]);
   play(0, { action: 'bet', kind: 'half' });
-  assert.equal(capped.currentBet, 50_000);
+  assert.equal(capped.currentBet, 5_000);
   assert.match(capped.log.at(-1), /최대/);
   play(1, { action: 'call' });
   assert.equal(capped.status, 'finished', '둘 다 최대로 걸면 남은 장을 바로 받고 공개한다');
-  assert.deepEqual(capped.settlement.money.map(entry => entry.delta), [150_000, -150_000]);
+  assert.deepEqual(capped.settlement.money.map(entry => entry.delta), [15_000, -15_000]);
 
-  const { room } = table(2, [30_000, startMoney]);
-  assert.equal(room.players[0].balance, startMoney);
+  const { room } = table(2, [99_999, startMoney]);
+  assert.equal(room.players[0].balance, refillMoney);
   assert.equal(room.stakes['0'].refill, true);
-  assert.equal(room.cap, startMoney);
+  assert.equal(room.cap, refillMoney);
+  assert.equal(table(2, [bankruptLine, startMoney]).room.stakes['0'].refill, false);
 });
 
 test('시간이 지나면 체크할 수 있을 때는 체크, 아니면 다이한다', () => {

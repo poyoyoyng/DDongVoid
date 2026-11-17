@@ -1,4 +1,4 @@
-import { baseBet, betOptions, deckSize, handOf, showdown, startMoney, turnTime, won } from '../public/seotda.js';
+import { bankruptLine, baseBet, betOptions, deckSize, handOf, refillMoney, showdown, turnTime, won } from '../public/seotda.js';
 import { requireThat } from './http.js';
 
 const stale = '방 상태가 바뀌었습니다. 최신 화면에서 다시 선택해 주세요.';
@@ -24,16 +24,16 @@ function shuffle(cards, random) {
   return cards;
 }
 
-// wallets holds each player's balance from D1. Anyone below the base bet goes bankrupt and starts again from 1,000만원.
+// wallets holds each player's balance from D1. Anyone below 10만원 goes bankrupt and starts again from 300만원.
 export function startSeotda(room, random, now, wallets) {
   requireThat(wallets && room.players.every(player => wallets.has(player.id)), '잔액을 확인하지 못했습니다. 준비를 다시 눌러 주세요.', 409);
   room.stakes = {};
   room.log = [];
   for (const player of room.players) {
-    const refill = wallets.get(player.id) < baseBet;
-    Object.assign(player, { balance: refill ? startMoney : wallets.get(player.id), cards: [], folded: false, roundBet: 0 });
+    const refill = wallets.get(player.id) < bankruptLine;
+    Object.assign(player, { balance: refill ? refillMoney : wallets.get(player.id), cards: [], folded: false, roundBet: 0 });
     room.stakes[player.id] = { paid: baseBet, refill };
-    if (refill) note(room, player.name + ' · 파산해서 ' + won(startMoney) + ' 지원');
+    if (refill) note(room, player.name + ' · 파산해서 ' + won(refillMoney) + ' 지원');
   }
   Object.assign(room, {
     pot: baseBet * room.players.length,
