@@ -44,8 +44,9 @@ test('카드 구성은 길 40장(막다른 길 9장), 행동 27장이다', () =>
   assert.deepEqual([count('break'), count('fix', 1), count('fix', 2), count('map'), count('rockfall')], [9, 6, 3, 6, 3]);
 });
 
-test('인원별 역할은 인원보다 한 장 많고 손패는 6·5·4장이다', () => {
-  for (let count = 3; count <= 10; count++) assert.equal(roleCounts[count][0] + roleCounts[count][1], count + 1);
+test('인원별 역할은 인원보다 한 장 많고(3명은 방해꾼 1·광부 2 그대로) 손패는 6·5·4장이다', () => {
+  for (let count = 4; count <= 10; count++) assert.equal(roleCounts[count][0] + roleCounts[count][1], count + 1);
+  assert.deepEqual(roleCounts[3], [1, 2]);
   assert.deepEqual([3, 5, 6, 7, 8, 10].map(handSize), [6, 6, 5, 5, 4, 4]);
 });
 
@@ -56,7 +57,8 @@ test('2명으로는 시작하지 않고 3명이 모두 준비하면 역할과 �
   applyAction(room, players[1], { action: 'ready', ready: true }, now);
   assert.equal(room.status, 'waiting');
   const { room: started } = table(3);
-  assert.ok(started.players.every(player => player.hand.length === 6 && ['digger', 'saboteur'].includes(player.role)));
+  assert.ok(started.players.every(player => player.hand.length === 6));
+  assert.deepEqual(started.players.map(player => player.role).sort(), ['digger', 'digger', 'saboteur'], '3명이면 언제나 광부 2명, 방해꾼 1명');
   assert.equal(started.deck.length, cards.length - 18);
   assert.equal(started.board.length, 4);
 });

@@ -17,7 +17,7 @@ function shuffle(items, random) {
   return items;
 }
 
-// One game is one round of gold diggers against saboteurs. Roles come from players + 1 role cards; the spare one is never shown.
+// One game is one round of gold diggers against saboteurs. Roles come from roleCounts; a spare role card is never shown.
 export function startSaboteur(room, random, now) {
   const count = room.players.length;
   const [saboteurs, diggers] = roleCounts[count];

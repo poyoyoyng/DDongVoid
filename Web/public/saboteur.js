@@ -33,7 +33,8 @@ export const cards = [
 ];
 
 // [saboteurs, gold diggers]: one more role card than players, and the spare stays face down.
-export const roleCounts = { 3: [1, 3], 4: [1, 4], 5: [2, 4], 6: [2, 5], 7: [3, 5], 8: [3, 6], 9: [3, 7], 10: [4, 7] };
+// Three players always get exactly 1 saboteur and 2 diggers (no spare), so a game never runs without a saboteur.
+export const roleCounts = { 3: [1, 2], 4: [1, 4], 5: [2, 4], 6: [2, 5], 7: [3, 5], 8: [3, 6], 9: [3, 7], 10: [4, 7] };
 export const handSize = count => count <= 5 ? 6 : count <= 7 ? 5 : 4;
 
 // The start card sits at 0,0; the goals stand 7 cards to its right, one card apart.

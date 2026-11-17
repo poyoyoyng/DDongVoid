@@ -480,7 +480,7 @@ function saboteurGuide() {
         <tbody><tr><th scope="row">방해꾼</th>${roleRows.map(([, [saboteurs]]) => `<td>${saboteurs}</td>`).join('')}</tr>
         <tr><th scope="row">광부</th>${roleRows.map(([, [, diggers]]) => `<td>${diggers}</td>`).join('')}</tr>
         <tr><th scope="row">손패</th>${roleRows.map(([count]) => `<td>${handSize(Number(count))}장</td>`).join('')}</tr></tbody></table></div>
-        <p class="guide-small">· 역할 카드는 인원보다 한 장 많이 섞어서 나눠요. 남은 한 장은 아무도 보지 않으니, 방해꾼이 한 명도 없을 수도 있어요.</p>`],
+        <p class="guide-small">· 역할 카드는 인원보다 한 장 많이 섞어서 나누고 남은 한 장은 아무도 보지 않아요. 3명일 때는 남는 카드 없이 언제나 방해꾼 1명, 광부 2명이에요.</p>`],
       ['광산과 길 카드 (40장)', `${gallery([
         [startArt(), '시작 카드', '사다리가 있는 입구 · 네 방향 모두 길', 0],
         [goalBack(), '목적지 (뒷면)', '시작 카드에서 7장 오른쪽에 1장 간격으로 3장', 0],
@@ -497,7 +497,7 @@ function saboteurGuide() {
             <div class="guide-example"><span class="seotda-cards">${roleArt('digger')}${goalArt('gold')}</span></div></div>
           <div class="guide-bonus"><p>카드 더미와 모든 손패가 떨어질 때까지 금을 못 찾으면</p><strong>방해꾼 팀 승리!</strong>
             <p>방해꾼 <b>전원</b>이 이겨요. 게임이 끝나면 모두의 역할을 공개해요.</p>
-            <p class="guide-small">3명일 때는 역할 카드 4장 중 방해꾼 1장이 남아 방해꾼이 없을 수 있어요. 그때 금을 못 찾으면 아무도 이기지 못해요.</p></div>
+            <p class="guide-small">4명일 때는 남은 한 장이 방해꾼이면 방해꾼이 없을 수 있어요. 그때 금을 못 찾으면 아무도 이기지 못해요.</p></div>
         </div>
         <p class="guide-small">· 원작은 3라운드 동안 금 카드를 나눠 갖지만, 여기서는 한 판 팀전으로 승부하고 랭킹은 이긴 팀 전원이 승리로 기록돼요.</p>`],
     ],
