@@ -261,17 +261,13 @@ async function beginSolo() {
     if (token !== generation) return;
     solo?.stop();
     paint(heading(games[game].title) + soloMarkup(game));
-    solo = playSolo(game, run, data => api('/solo/finish', data), () => {
-      solo.stop();
-      solo = null;
-      showSoloStart(game);
-      app.querySelector('[data-start-solo]').focus();
-    });
+    // 한 판 더 starts the next run right away instead of going back to the start screen.
+    solo = playSolo(game, run, data => api('/solo/finish', data), beginSolo);
   } catch (error) {
     if (token !== generation) return;
     if (error.status === 401) return signedOut();
     message(error.message);
-    const button = app.querySelector('[data-start-solo]');
+    const button = app.querySelector('[data-start-solo], [data-restart]');
     if (button) button.disabled = false;
   }
 }

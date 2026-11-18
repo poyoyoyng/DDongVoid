@@ -193,7 +193,11 @@ export function playSolo(game, run, save, restart) {
   listen(cover, 'click', event => {
     if (event.target.closest('[data-resume]')) togglePause(false);
     if (event.target.closest('[data-retry-score]')) void saveScore();
-    if (event.target.closest('[data-restart]')) restart();
+    const again = event.target.closest('[data-restart]');
+    if (again && !again.disabled) {
+      again.disabled = true;
+      restart();
+    }
   });
   if (mode.tap) listen(canvas, 'pointerdown', event => {
     const rect = canvas.getBoundingClientRect();
