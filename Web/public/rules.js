@@ -33,6 +33,14 @@ export const yachtCategories = [
 export const sum = values => values.reduce((total, value) => total + (value ?? 0), 0);
 export const yachtBonus = scores => sum(scores.slice(0, 6)) >= 63 ? 35 : 0;
 export const yachtTotal = scores => sum(scores) + yachtBonus(scores);
+// The bonus fails once even five of every empty upper face cannot close the gap.
+export function yachtBonusStatus(scores) {
+  const upper = Array.from({ length: 6 }, (_, index) => scores[index]);
+  const total = sum(upper);
+  if (total >= 63) return '성공';
+  const reach = total + upper.reduce((best, score, index) => best + (score == null ? 5 * (index + 1) : 0), 0);
+  return reach < 63 ? '실패' : (63 - total) + '점 남음';
+}
 
 export function yachtScore(category, dice) {
   if (dice.length !== 5 || dice.some(die => die < 1 || die > 6)) return 0;

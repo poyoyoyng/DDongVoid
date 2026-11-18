@@ -1,4 +1,4 @@
-import { canTakeSeat, cardName, isAdmin, cardRank, cardSuit, games, legalCard, powerCosts, powerNames, sum, suits, suitNames, yachtBonus, yachtCategories, yachtScore, yachtTotal, zones } from './rules.js';
+import { canTakeSeat, cardName, isAdmin, cardRank, cardSuit, games, legalCard, powerCosts, powerNames, sum, suits, suitNames, yachtBonusStatus, yachtCategories, yachtScore, yachtTotal, zones } from './rules.js';
 import { BLACK, forbiddenReason, pointName, size as omokSize, winningLine } from './omok.js';
 import { bankruptLine, baseBet, betOptions, cardKind, cardMonth, cardName as hwatuName, handLadder, handOf, isGwang, refillMoney, specialHands, startMoney, won } from './seotda.js';
 import { saboteurStage, saboteurTitle, saboteurView } from './saboteur-view.js';
@@ -477,7 +477,7 @@ function yachtTable(room, me, canScore, upper) {
         '<td>' + (player.scores[index] ?? (player.id === me?.id && canScore
           ? action(yachtScore(index, room.dice) + '점', { action: 'score', category: index }, 'score-pick')
           : '—')) + '</td>').join('')}</tr>`).join('')}
-    ${upper ? summary('상단 소계 / 63', scores => sum(scores.slice(0, 6))) + summary('보너스 +35', yachtBonus) :
+    ${upper ? summary('상단 소계 / 63', scores => sum(scores.slice(0, 6))) + summary('보너스 +35', yachtBonusStatus) :
       summary('총점', yachtTotal, 'total')}
   </tbody></table>`;
 }

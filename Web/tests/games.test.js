@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { applyAction, createRoom, expireRoom, roomView } from '../src/games.js';
-import { games, legalCard, yachtScore, yachtTotal } from '../public/rules.js';
+import { games, legalCard, yachtBonusStatus, yachtScore, yachtTotal } from '../public/rules.js';
 import { applySoloInput, makeSolo, replayScore, stepSolo } from '../public/solo-model.js';
 import { roomPage } from '../public/views.js';
 
@@ -110,6 +110,10 @@ test('야추 고정 주사위, 족보와 상단 보너스를 계산한다', () =
   assert.equal(yachtScore(9, [5, 4, 3, 2, 2]), 15);
   assert.equal(yachtScore(10, [6, 5, 4, 3, 2]), 30);
   assert.equal(yachtTotal([3, 6, 9, 12, 15, 18, 50]), 148);
+  assert.equal(yachtBonusStatus(Array(12).fill(null)), '63점 남음');
+  assert.equal(yachtBonusStatus([3, 6, 9, 12, 15, null]), '18점 남음');
+  assert.equal(yachtBonusStatus([3, 6, 9, 12, 15, 18]), '성공');
+  assert.equal(yachtBonusStatus([0, 0, 0, 0, 0, null]), '실패');
   play(0, { action: 'roll', held: Array(5).fill(false) }, () => 5);
   play(0, { action: 'roll', held: [true, false, true, false, true] }, () => 2);
   assert.deepEqual(room.dice, [6, 3, 6, 3, 6]);
