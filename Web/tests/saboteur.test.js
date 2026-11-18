@@ -72,6 +72,15 @@ test('길은 맞닿는 변이 모두 맞고 시작 카드와 이어져야 하며
   assert.ok(!at(placements(room.board, cross, 0)).includes('2,0'), '막다른 길 너머로는 이어지지 않는다');
 });
 
+test('광산은 세로 5줄이고 시작 카드가 왼쪽 끝이다', () => {
+  const { room } = table();
+  assert.ok(!placements(room.board, cross, 0).some(({ x }) => x < 0), '시작 카드 왼쪽에는 놓을 수 없다');
+  room.board.push({ x: 0, y: 1, kind: 'path', card: cross, rot: 0 }, { x: 0, y: 2, kind: 'path', card: cross, rot: 0 });
+  room.board.push({ x: 0, y: -1, kind: 'path', card: cross, rot: 0 }, { x: 0, y: -2, kind: 'path', card: cross, rot: 0 });
+  const spots = placements(room.board, cross, 0);
+  assert.ok(spots.some(({ y }) => y === 2) && spots.every(({ x, y }) => x >= 0 && y >= -2 && y <= 2), '맨 위·아래 줄 바깥에는 놓을 수 없다');
+});
+
 test('길이 금에 닿으면 바로 끝나고 광부 팀 모두 이기며, 방해꾼이 이어도 광부 팀이 이긴다', () => {
   for (const finder of [0, 2]) {
     const { room, play } = table();

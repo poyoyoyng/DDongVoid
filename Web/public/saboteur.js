@@ -37,11 +37,12 @@ export const cards = [
 export const saboteurCounts = { 3: 1, 4: 1, 5: 2, 6: 2, 7: 3, 8: 3, 9: 3, 10: 4 };
 export const handSize = count => count <= 5 ? 6 : count <= 7 ? 5 : 4;
 
-// The start card sits at 0,0; the goals stand 7 cards to its right, one card apart.
+// The start card sits at 0,0 on the mine's left edge; the goals stand 7 cards to its right, one card apart.
+// The mine is five rows tall (the goal rows and the rows between them) and has nothing left of the start card.
 export const goalX = 8;
 export const goalYs = [-2, 0, 2];
 export const goalNames = ['위', '가운데', '아래'];
-export const bounds = { left: -6, right: 14, top: -6, bottom: 6 };
+export const bounds = { left: 0, right: 14, top: -2, bottom: 2 };
 export const goalFaces = ['gold', 'stone-up', 'stone-down'];
 const goalOpen = { gold: N | E | S | W, 'stone-up': N | W, 'stone-down': S | W };
 export const goalFaceName = face => face === 'gold' ? '금' : '돌';
