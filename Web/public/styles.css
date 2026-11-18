@@ -177,6 +177,14 @@ p { line-height: 1.65; }
 .art-lane.right .key { background: #ec9658; }
 .art-lane .key.mid { top: 38%; }
 .art-lane .key.low { top: 52%; }
+.art-sides { background: #cfe8fb; color: #2f4d6e; }
+.art-camp { position: absolute; top: 12%; bottom: 12%; width: 27%; display: flex; flex-direction: column; justify-content: space-around; align-items: center; border-radius: 9px; background: #ffffff8c; }
+.art-camp.left { left: 5%; }
+.art-camp.right { right: 5%; }
+.art-camp .critter { width: 88%; }
+.art-queue { position: absolute; left: 50%; bottom: 8%; width: 30%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; }
+.art-queue .critter { width: 100%; }
+.art-queue .critter:first-child { width: 72%; margin-bottom: -22%; }
 .art-hit { position: absolute; left: 11%; right: 11%; bottom: 21%; height: 3px; border-radius: 2px; background: #17402f; }
 .art-slap { background: #ffcea9; }
 .art-fighter { position: absolute; width: 56%; aspect-ratio: 1; top: 29%; background-size: 300% 200%; }
@@ -651,6 +659,11 @@ canvas { display: block; width: 100%; aspect-ratio: 2; }
 .rhythm-solo .touch-controls button { min-height: 56px; font: 900 21px/1 Consolas, monospace; }
 .rhythm-solo .touch-controls button:nth-child(3) { grid-column: 4; }
 .rhythm-solo .muted { text-align: center; }
+.sides-solo .canvas-wrap, .sides-solo .touch-controls { max-width: 480px; margin-inline: auto; }
+.sides-solo canvas { aspect-ratio: auto; height: auto; touch-action: manipulation; }
+.sides-solo .touch-controls { display: grid; grid-template-columns: 1fr 1fr; }
+.sides-solo .touch-controls button { min-height: 56px; font-size: 24px; }
+.sides-solo .muted { text-align: center; }
 
 dialog { width: min(480px, calc(100% - 32px)); max-height: calc(100% - 32px); border: 3px solid #fff; border-radius: 24px; box-shadow: 0 6px 0 var(--edge), 0 24px 60px #1f2b5c4d; padding: 23px; color: var(--ink); background: var(--panel); }
 dialog::backdrop { background: #22306a99; backdrop-filter: blur(3px); }
@@ -733,6 +746,8 @@ dialog .form-error { color: #a53745; margin: 0; }
 .guide-key.right { background: #f4c59d; box-shadow: 0 3px 0 #a5774f; }
 .guide-key.big { min-width: clamp(40px, 5vw, 56px); height: clamp(40px, 5vw, 56px); font-size: clamp(20px, 2.6vw, 28px); }
 .guide-emoji { font-size: 28px; line-height: 1; }
+.guide-game .critter { width: 44px; flex: none; }
+.guide-hero-art .critter { width: clamp(40px, 5.5vw, 64px); }
 .guide-hero-art .guide-emoji { font-size: clamp(30px, 4.4vw, 48px); }
 .guide-ciao-die { display: inline-grid; flex: none; place-items: center; width: 34px; aspect-ratio: 1; border-radius: 8px; background: #872e58; color: #fff; font-weight: 900; box-shadow: 0 3px 0 #56243b; }
 .guide-ciao-die.light { background: #fff0f1; color: #872e58; box-shadow: 0 3px 0 #b07a8c; }

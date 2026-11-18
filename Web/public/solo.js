@@ -1,5 +1,7 @@
 import { applySoloInput, height, makeSolo, maxTicks, stepSolo, tickRate, width } from './solo-model.js';
 import * as rhythm from './rhythm-model.js';
+import * as sides from './sides-model.js';
+import { critters, critterSvg } from './sides-art.js';
 
 // Phones get a narrower, taller board so the blocks and labels stay readable.
 function rhythmSize() {
@@ -24,6 +26,18 @@ const modes = {
     metric: state => '콤보 ' + state.combo + ' · 라이프 ' + state.life + '% · 속도 ×' + rhythm.speedMultiplier(state.seconds).toFixed(1),
     paint: paintRhythm,
     controller: rhythmController,
+  },
+  sides: {
+    label: '니편내편 화면', size: () => ({ width: 560, height: 600 }), tickRate: sides.tickRate, maxTicks: sides.maxTicks,
+    make: sides.makeSides, step: sides.stepSides,
+    controls: ['←', '→'],
+    help: '← → 키 또는 A D 키로 맨 앞 캐릭터를 같은 캐릭터가 있는 쪽으로 보내세요. 화면 왼쪽·오른쪽을 눌러도 됩니다. Space 또는 Esc로 일시정지합니다.',
+    metric: state => '콤보 ' + state.combo + ' · ' + (state.pause
+      ? (state.pause.kind === 'start' ? '준비' : '섞는 중!') : '섞기까지 ' + sides.nextShuffleIn(state) + '초'),
+    paint: paintSides,
+    controller: sidesController,
+    // Tapping the left or right half of the board sends the character that way.
+    tap: fraction => fraction < .5 ? 0 : 1,
   },
 };
 
@@ -65,6 +79,19 @@ function rhythmController(state, events) {
     keyFor: code => keyboard[code],
     press(id, key) {
       if (rhythm.hitRhythm(state, key) !== null) events.push([state.tick, key]);
+    },
+    release() {},
+    clear() {},
+  };
+}
+
+// Every press while playing is judged and a wrong one costs life, so all of them are recorded.
+function sidesController(state, events) {
+  const keyboard = { ArrowLeft: 0, KeyA: 0, ArrowRight: 1, KeyD: 1 };
+  return {
+    keyFor: code => keyboard[code],
+    press(id, side) {
+      if (sides.pressSides(state, side) !== null) events.push([state.tick, side]);
     },
     release() {},
     clear() {},
@@ -167,6 +194,10 @@ export function playSolo(game, run, save, restart) {
     if (event.target.closest('[data-resume]')) togglePause(false);
     if (event.target.closest('[data-retry-score]')) void saveScore();
     if (event.target.closest('[data-restart]')) restart();
+  });
+  if (mode.tap) listen(canvas, 'pointerdown', event => {
+    const rect = canvas.getBoundingClientRect();
+    setPressed('tap', mode.tap((event.clientX - rect.left) / rect.width), event.timeStamp);
   });
   for (const button of document.querySelectorAll('[data-game-key]')) {
     const value = Number(button.dataset.gameKey);
@@ -334,4 +365,167 @@ function paintRhythm(ctx, state) {
   ctx.fillRect(side, h - 8, lifeWidth, 4);
   ctx.fillStyle = state.life > 30 ? rhythmColors.lanes[0] : rhythmColors.judgements[3];
   ctx.fillRect(side, h - 8, lifeWidth * state.life / 100, 4);
+}
+
+// Firefox only draws an SVG on a canvas when it has its own width and height.
+const critterImages = critters.map((_, kind) => {
+  const image = new Image();
+  image.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(critterSvg(kind).replace('<svg ', '<svg width="100" height="100" '));
+  return image;
+});
+
+function drawCritter(ctx, kind, x, y, size) {
+  const image = critterImages[kind];
+  if (image.complete && image.naturalWidth) {
+    ctx.drawImage(image, x - size / 2, y - size / 2, size, size);
+    return;
+  }
+  ctx.fillStyle = critters[kind].color;
+  ctx.beginPath(); ctx.arc(x, y, size * .4, 0, Math.PI * 2); ctx.fill();
+}
+
+function shadow(ctx, x, y, size, color = '#2a223822') {
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.ellipse(x, y + size * .44, size * .36, size * .09, 0, 0, Math.PI * 2); ctx.fill();
+}
+
+function outlined(ctx, value, size, color, x, y) {
+  ctx.font = `900 ${size}px "Malgun Gothic", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = size / 6;
+  ctx.strokeStyle = '#2a2238';
+  ctx.strokeText(value, x, y);
+  ctx.fillStyle = color;
+  ctx.fillText(value, x, y);
+}
+
+const clamp01 = value => Math.max(0, Math.min(1, value));
+const easeInOut = t => t < .5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+
+// Like the original: the six stand in two columns, the line comes up the snowy path in the middle,
+// and the life bar sits on top.
+function paintSides(ctx, state) {
+  const { width: w, height: h } = ctx.canvas;
+  const centerX = w / 2, frontY = h - 100, gap = 50, size = 92;
+  const columnX = [w * .17, w * .83];
+  const rows = [h * .29, h * .48, h * .67];
+  const slotAt = slot => ({ x: columnX[sides.sideOfSlot(slot)], y: rows[slot % 3] });
+  const age = event => event ? state.tick - event.tick : Infinity;
+  const sortAge = age(state.lastSort);
+  const missAge = age(state.lastMiss);
+  const { pause } = state;
+  const elapsed = pause ? pause.total - pause.left : 0;
+  const mixing = pause?.kind === 'shuffle' && elapsed < sides.mixTicks;
+
+  const sky = ctx.createLinearGradient(0, 0, 0, h);
+  sky.addColorStop(0, '#8fcaf5');
+  sky.addColorStop(.5, '#d8eefc');
+  sky.addColorStop(1, '#f2f9ff');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = '#c4dcef';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(centerX - 34, 76); ctx.lineTo(centerX + 34, 76); ctx.lineTo(centerX + 94, h); ctx.lineTo(centerX - 94, h);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  for (const x of columnX) {
+    ctx.fillStyle = '#ffffff73';
+    ctx.strokeStyle = '#ffffffc0';
+    ctx.beginPath(); ctx.roundRect(x - 70, rows[0] - 72, 140, rows[2] - rows[0] + 144, 22); ctx.fill(); ctx.stroke();
+  }
+
+  // The six on the sides; while shuffling they hop from their old places to the new ones.
+  const hop = easeInOut(clamp01((elapsed - 12) / (sides.mixTicks - 30)));
+  state.slots.forEach((kind, slot) => {
+    const to = slotAt(slot);
+    let { x, y } = to;
+    let ground = to.y;
+    if (mixing && state.previousSlots) {
+      const from = slotAt(state.previousSlots.indexOf(kind));
+      x = from.x + (to.x - from.x) * hop;
+      ground = from.y + (to.y - from.y) * hop;
+      y = ground - Math.sin(Math.PI * hop) * 70;
+    }
+    let scale = 1;
+    if (state.lastSort?.kind === kind && sortAge < 10) {
+      scale += .18 * (1 - sortAge / 10);
+      shadow(ctx, x, ground, size * 1.3, '#ffd23f88');
+    } else shadow(ctx, x, ground, size);
+    drawCritter(ctx, kind, x, y, size * scale);
+  });
+
+  // The line: the front one sits on a yellow mark and the rest slide up a step after each sort.
+  const slide = sortAge < 8 ? 1 - sortAge / 8 : 0;
+  for (let index = state.queue.length - 1; index >= 0; index--) {
+    const place = index + slide;
+    const y = frontY - place * gap;
+    // The newcomer fades in at the back of the line.
+    ctx.globalAlpha = (pause?.kind === 'shuffle' ? .4 : 1) * clamp01(sides.queueLength - place);
+    let x = centerX;
+    if (index === 0 && missAge < 18) x += Math.sin(missAge * 1.4) * 10 * (1 - missAge / 18);
+    shadow(ctx, centerX, y, size, index === 0 ? '#ffd23fcc' : undefined);
+    drawCritter(ctx, state.queue[index], x, y, size * (1 - place * .06));
+  }
+  ctx.globalAlpha = 1;
+
+  // The one just sorted flies to its side.
+  if (sortAge < 10) {
+    const progress = sortAge / 10;
+    const target = slotAt(state.slots.indexOf(state.lastSort.kind));
+    ctx.globalAlpha = 1 - progress * .6;
+    drawCritter(ctx, state.lastSort.kind, centerX + (target.x - centerX) * progress,
+      frontY + (target.y - frontY) * progress - Math.sin(Math.PI * progress) * 60, size * (1 - progress * .3));
+    ctx.globalAlpha = 1;
+  }
+
+  for (let side = 0; side < 2; side++) {
+    const x = side ? w - 62 : 62, y = h - 52, direction = side ? 1 : -1;
+    const hit = state.lastSort?.side === side && sortAge < 8;
+    const miss = state.lastMiss?.side === side && missAge < 12;
+    ctx.fillStyle = miss ? '#ffb3b3' : hit ? '#ffe27a' : '#ffffff';
+    ctx.strokeStyle = '#7f93ad';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(x, y, 34, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#5c6f88';
+    ctx.beginPath();
+    ctx.moveTo(x + direction * 20, y);
+    for (const [dx, dy] of [[-4, -18], [-4, -8], [-18, -8], [-18, 8], [-4, 8], [-4, 18]]) ctx.lineTo(x + direction * dx, y + dy);
+    ctx.closePath(); ctx.fill();
+  }
+
+  if (missAge < 18) {
+    ctx.fillStyle = `rgba(235, 64, 52, ${.22 * (1 - missAge / 18)})`;
+    ctx.fillRect(0, 0, w, h);
+    outlined(ctx, '✕', 54, '#ff5a4c', centerX + (state.lastMiss.side ? 70 : -70), frontY - 10);
+  }
+
+  // Life bar.
+  const barX = 50, barY = 18, barWidth = w - barX - 22, barHeight = 22;
+  outlined(ctx, '♥', 24, '#ff5a6e', 30, barY + barHeight / 2 + 1);
+  ctx.fillStyle = '#ffffffd9';
+  ctx.strokeStyle = '#5c6f88';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.roundRect(barX, barY, barWidth, barHeight, 11); ctx.fill(); ctx.stroke();
+  if (state.life > 0) {
+    ctx.fillStyle = state.life > 50 ? '#5fd38d' : state.life > 25 ? '#f5c242' : '#ef5a4c';
+    ctx.beginPath(); ctx.roundRect(barX + 3, barY + 3, (barWidth - 6) * state.life / 100, barHeight - 6, 8); ctx.fill();
+  }
+  if (state.combo >= 2) outlined(ctx, state.combo + ' COMBO', 28, '#ff9a3c', centerX, 66);
+  const shuffleIn = sides.nextShuffleIn(state);
+  if (!pause && shuffleIn <= 3) outlined(ctx, `${shuffleIn}초 뒤 섞어요!`, 20, '#ffe27a', centerX, 100);
+
+  if (pause) {
+    const label = pause.kind === 'start' ? '시작!' : mixing ? '섞어!!' : '다시 시작!';
+    const shown = pause.kind === 'shuffle' && !mixing ? elapsed - sides.mixTicks : elapsed;
+    const pop = clamp01(shown / 8);
+    ctx.save();
+    ctx.translate(centerX, h * .42);
+    ctx.scale(.6 + .4 * pop, .6 + .4 * pop);
+    if (mixing) ctx.rotate(Math.sin(elapsed * .5) * .07);
+    outlined(ctx, label, 66, mixing ? '#ffcf3a' : '#ffffff', 0, 0);
+    ctx.restore();
+  }
 }

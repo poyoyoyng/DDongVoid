@@ -3,6 +3,7 @@ import { BLACK, forbiddenReason, pointName, size as omokSize, winningLine } from
 import { bankruptLine, baseBet, betOptions, cardKind, cardMonth, cardName as hwatuName, handLadder, handOf, isGwang, refillMoney, specialHands, startMoney, won } from './seotda.js';
 import { saboteurStage, saboteurTitle, saboteurView } from './saboteur-view.js';
 import { cardArt as saboteurCard, goalArt, startArt } from './saboteur-art.js';
+import { critterSvg } from './sides-art.js';
 
 export const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -11,6 +12,7 @@ export const escape = value => String(value ?? '').replace(/[&<>"']/g, char => (
 const artwork = {
   dodge: '<span class="fall fall-one">●</span><span class="fall fall-two">●</span><span class="fall fall-three">●</span><span class="dodge-player"><i></i><i></i></span>',
   rhythm: '<span class="art-lane left"><i class="key">S</i><i class="key low">D</i></span><span class="art-lane right"><i class="key">L</i><i class="key mid">K</i></span><span class="art-hit"></span>',
+  sides: `<span class="art-camp left">${critterSvg(0)}${critterSvg(2)}</span><span class="art-queue">${critterSvg(4)}${critterSvg(5)}</span><span class="art-camp right">${critterSvg(5)}${critterSvg(3)}</span>`,
   slap: '<span class="art-fighter mint"></span><span class="art-fighter cat"></span><span class="art-spark">✦</span>',
   ciao: '<span class="ciao-die">?</span><span class="ciao-die other">✕</span><span class="ciao-bridge"></span>',
   onecard: '<span class="art-card first">♣</span><span class="art-card second">♥</span><span class="art-card third">♠</span>',

@@ -5,6 +5,7 @@ import test from 'node:test';
 import WebSocket from 'ws';
 import { hitRhythm, makeRhythm, stepRhythm, tickRate as rhythmTickRate } from '../public/rhythm-model.js';
 import { makeSolo, stepSolo, tickRate } from '../public/solo-model.js';
+import { makeSides, pressSides, sideOf, stepSides, tickRate as sidesTickRate } from '../public/sides-model.js';
 
 const url = new URL(process.env.DDONGVOID_TEST_URL ?? 'http://127.0.0.1:8787');
 assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname), '로컬 실행기에서만 테스트할 수 있습니다.');
@@ -215,7 +216,24 @@ test('Cloudflare 로컬 실행기에서 가입, WebSocket 대전, 알람, 랭킹
     }
   }
   assert.ok(rhythm.score > 0);
-  await new Promise(resolve => setTimeout(resolve, Math.max(solo.tick * 1000 / tickRate, rhythm.tick * 1000 / rhythmTickRate)));
+  const sort = await request('/solo/start', { cookie: a.cookie, data: { game: 'sides' }, status: 201 });
+  const sides = makeSides(sort.seed);
+  const sends = [];
+  while (!sides.over) {
+    stepSides(sides);
+    if (sides.over || sides.pause) continue;
+    const right = sideOf(sides, sides.queue[0]);
+    // Sorts well for two seconds, then keeps pressing the wrong way until life runs out.
+    const side = sides.seconds <= 2 ? (sides.tick % 10 ? null : right) : 1 - right;
+    if (side !== null && pressSides(sides, side) !== null) sends.push([sides.tick, side]);
+  }
+  assert.ok(sides.score > 0);
+  await new Promise(resolve => setTimeout(resolve, Math.max(solo.tick * 1000 / tickRate, rhythm.tick * 1000 / rhythmTickRate,
+    sides.tick * 1000 / sidesTickRate)));
+  await request('/solo/finish', { cookie: a.cookie, data: { id: sort.id, tick: sides.tick, events: [[sends[0][0], 2]] }, status: 400 });
+  assert.equal((await request('/solo/finish', { cookie: a.cookie, data: { id: sort.id, tick: sides.tick, events: sends } })).score, sides.score);
+  const sorts = await request('/rankings?game=sides', { cookie: a.cookie });
+  assert.equal(sorts.rows.find(row => row.name === a.user.name).score, sides.score);
   await request('/solo/finish', { cookie: a.cookie, data: { id: beat.id, tick: rhythm.tick, events: [[presses[0][0], 4]] }, status: 400 });
   assert.equal((await request('/solo/finish', { cookie: a.cookie, data: { id: beat.id, tick: rhythm.tick, events: presses } })).score, rhythm.score);
   const beats = await request('/rankings?game=rhythm', { cookie: a.cookie });

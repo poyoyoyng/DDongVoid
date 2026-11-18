@@ -1,11 +1,13 @@
 import { DurableObject } from 'cloudflare:workers';
 import { replayRhythm, tickRate as rhythmTickRate } from '../public/rhythm-model.js';
 import { replayScore, tickRate as dodgeTickRate } from '../public/solo-model.js';
+import { replaySides, tickRate as sidesTickRate } from '../public/sides-model.js';
 import { errorResponse, json, readBody, requireThat } from './http.js';
 
 const soloGames = {
   dodge: { replay: replayScore, tickRate: dodgeTickRate },
   rhythm: { replay: replayRhythm, tickRate: rhythmTickRate },
+  sides: { replay: replaySides, tickRate: sidesTickRate },
 };
 export const isSoloGame = game => Object.hasOwn(soloGames, game);
 const maxAge = 48 * 60 * 60 * 1000;

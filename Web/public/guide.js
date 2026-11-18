@@ -3,6 +3,8 @@ import { bankruptLine, baseBet, refillMoney, startMoney, won } from './seotda.js
 import { cardFace, heading, hwatu, redCard, yachtFace } from './views.js';
 import { cardHelp, cardName as saboteurCardName, cards, handSize, saboteurCounts } from './saboteur.js';
 import { cardArt, cardBack, goalArt, goalBack, roleArt, startArt } from './saboteur-art.js';
+import { critterSvg } from './sides-art.js';
+import { drainRate as sidesDrain, lifeGain as sidesLifeGain, missPenalty as sidesMissPenalty, sortPoints as sidesPoints } from './sides-model.js';
 
 const dice = (values, { held = [], dim = [] } = {}) => `<span class="guide-dice">${values.map((value, index) =>
   `<span class="die-face guide-die${held.includes(index) ? ' held' : ''}${dim.includes(index) ? ' dim' : ''}">${yachtFace(value)}</span>`).join('')}</span>`;
@@ -279,6 +281,56 @@ function rhythmGuide() {
   });
 }
 
+function sidesGuide() {
+  const steps = [
+    ['양쪽 편 기억하기', '왼쪽과 오른쪽에 세 마리씩 서 있어요.<br>누가 어느 편인지 먼저 봐 두세요.',
+      `${critterSvg(0)}${critterSvg(2)}${critterSvg(4)}<b class="guide-swap">|</b>${critterSvg(1)}${critterSvg(3)}${critterSvg(5)}`],
+    ['맨 앞 캐릭터 보기', '가운데 줄 맨 아래, 노란 자리에 선<br>캐릭터를 보낼 차례예요.', critterSvg(5) + '<p>← 지금 보낼 캐릭터</p>'],
+    ['같은 편 쪽으로 보내기', '같은 캐릭터가 있는 쪽 방향키를 눌러요.<br>휴대폰은 화면 왼쪽·오른쪽을 눌러요.',
+      `${critterSvg(5)}<b class="guide-swap">→</b>${key('→')}<p>도깨비는 오른쪽 편</p>`],
+    ['콤보 잇기', '틀리지 않고 이어서 맞히면 콤보가 쌓이고<br>한 마리당 점수가 커져요.', chip('25 COMBO', 'mint big')],
+  ];
+  const results = [
+    ['맞히기', '같은 편 쪽으로 보냈을 때', chip('체력 +' + sidesLifeGain, 'mint'), '+100~'],
+    ['틀리기', '다른 편 쪽으로 보냈을 때 · 콤보 0', chip('체력 −' + sidesMissPenalty, 'peach'), '0'],
+    ['시간', '가만히 있어도 체력이 계속 줄어요', chip('초당 −' + sidesDrain(0) + '부터'), ''],
+  ];
+  return article('sides', {
+    eyebrow: '니편내편 게임 룰', title: '니편내편 쉽게 배우기',
+    intro: '줄 맨 앞 캐릭터를 같은 캐릭터가 서 있는 쪽으로 ← → 키로 보내요. 체력이 다 떨어지기 전에 많이 보낼수록 점수가 올라가요.',
+    art: critterSvg(0) + critterSvg(5),
+    stats: [['1명', '혼자 하는 게임'], ['← →', '왼쪽 · 오른쪽'], ['30초마다', '섞어!!'], ['최대 1,100', '한 마리당 점수']],
+    sections: [
+      ['이렇게 해요', stepList(steps,
+        `틀리면 체력이 ${sidesMissPenalty} 줄고 콤보가 0이 돼요. 틀린 캐릭터는 그대로 맨 앞에 남아요. Space나 Esc로 잠시 멈출 수 있어요.`)],
+      ['체력과 점수', `<ul class="guide-combos">${results.map(([name, text, visual, score]) => `
+        <li><strong>${name}</strong><span>${text}</span>${visual}<b>${score}</b></li>`).join('')}</ul>
+        <div class="guide-upper">
+          <div><h4>콤보 점수</h4><p>한 마리 보낼 때마다 100점 + 지금까지 이어온 콤보 × 10점을 받아요.</p>
+            <div class="guide-example"><b>콤보 30에서 맞히면 100 + 300 = ${sidesPoints(30)}점</b></div>
+            <p class="guide-small">체력은 최대 100이에요 · 다 떨어지면 끝나요</p></div>
+          <div class="guide-bonus"><p>콤보 100부터는</p><strong>한 마리 ${sidesPoints(100).toLocaleString('ko-KR')}점!</strong>
+            <p>틀리면 콤보가 0부터 다시 쌓여요.</p></div>
+        </div>`],
+      ['30초마다 섞어!!', `<div class="guide-upper">
+          <div><h4>자리 바꾸기</h4><p>게임 시간 30초마다 시간이 잠깐 멈추고 양쪽 여섯 마리가 자리를 바꿔요. 적어도 한 마리는 반대편으로 넘어가요.</p>
+            <div class="guide-example">${chip('섞어!!', 'gold big')}<b class="guide-swap">→</b>${chip('다시 시작!', 'mint big')}</div></div>
+          <div class="guide-bonus"><p>섞는 동안은</p><strong>체력이 줄지 않아요</strong>
+            <p>새 자리를 잘 봐 두세요. 섞기 3초 전부터 화면에 알려 줘요.</p></div>
+        </div>`],
+      ['점점 빨라져요', `<ul class="guide-combos">${[['시작', 0], ['1분', 60], ['2분', 120], ['3분', 180], ['5분 이후', 300]]
+        .map(([time, seconds]) => `<li><strong>${time}</strong><span>체력이 줄어드는 속도</span><span></span><b>초당 ${sidesDrain(seconds)}</b></li>`).join('')}</ul>
+        <p class="guide-small">· 섞는 시간은 빼고 세요 · 한 판은 최대 30분까지예요</p>`],
+      ['이기는 꿀팁', tipList([
+        ['한쪽만 외우기', '왼쪽 세 마리만 확실히 외우면 나머지는 전부 오른쪽이에요.'],
+        ['다음 캐릭터 미리 보기', '맨 앞 바로 뒤 캐릭터를 보고 손가락을 미리 준비해요.'],
+        ['막 누르지 않기', '틀리면 맞힐 때보다 세 배 많이 체력이 줄어요. 헷갈리면 한 번 더 보고 눌러요.'],
+      ])],
+    ],
+    foot: '로그인하면 바로 시작할 수 있어요 · 랭킹에는 사람마다 가장 높은 점수 하나만 올라가요.',
+  });
+}
+
 const ciaoDie = (face, tone = '') => `<span class="guide-ciao-die ${tone}">${face}</span>`;
 const ciaoTrack = pawns => `<div class="ciao-track guide-track">${[0, 1, 2, 3, 4, 9, 8, 7, 6, 5].map(step => `<div><span>${
   step === 0 ? 'S →' : step === 9 ? 'G' : step === 4 ? '4 ↓' : step < 4 ? step + ' →' : '← ' + step}</span><span class="pawns">${
@@ -504,7 +556,7 @@ function saboteurGuide() {
   });
 }
 
-const guides = { dodge: dodgeGuide, rhythm: rhythmGuide, slap: slapGuide, ciao: ciaoGuide, onecard: oneCardGuide, yacht: yachtGuide, omok: omokGuide, seotda: seotdaGuide, saboteur: saboteurGuide };
+const guides = { dodge: dodgeGuide, rhythm: rhythmGuide, sides: sidesGuide, slap: slapGuide, ciao: ciaoGuide, onecard: oneCardGuide, yacht: yachtGuide, omok: omokGuide, seotda: seotdaGuide, saboteur: saboteurGuide };
 
 export function guide(game) {
   const tabs = Object.entries(games).map(([id, item]) =>
