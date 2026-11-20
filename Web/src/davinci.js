@@ -30,7 +30,8 @@ export function startDavinci(room, random, now) {
   const rest = [...numbers, 24, 25];
   room.pile = Object.fromEntries(colors.map(color => [color, shuffle(rest.filter(tile => tileColor(tile) === color), random)]));
   const first = random(room.players.length);
-  Object.assign(room, { index: first, log: [], outs: [] });
+  // guesses counts every guess of the game and lastHit says how the latest went, so the room can flash 정답!/실패!.
+  Object.assign(room, { index: first, log: [], outs: [], guesses: 0, lastHit: null });
   note(room, `게임 시작 · ${size}장씩 · ${room.players[first].name}님부터`);
   beginTurn(room, now);
 }
@@ -95,7 +96,9 @@ function guess(room, player, seat, input, now) {
   requireThat(target && target !== player && !target.out && entry && !entry.open, '맞힐 상대의 숨겨진 패를 골라 주세요.');
   requireThat(integerIn(input.value, 0, joker), '0~11 또는 조커 중 하나를 골라 주세요.');
   const said = `${player.name} → ${spot(target, input.index)}는 ${valueName(input.value)}?`;
-  if (tileValue(entry.tile) === input.value) {
+  room.guesses++;
+  room.lastHit = tileValue(entry.tile) === input.value;
+  if (room.lastHit) {
     entry.open = true;
     room.streak++;
     note(room, said + ' · 맞음!');

@@ -373,6 +373,7 @@ function acceptRoom(next) {
   const rolled = next.game === 'yacht' && room && next.rollCount > (room.rollCount ?? 0) && next.rollsUsed > 0;
   const caught = next.game === 'ciao' && room && room.match === next.match && room.phase === 'respond' &&
     next.phase !== 'respond' && next.last?.includes(' 의심 성공 ');
+  const guessed = next.game === 'davinci' && room && room.match === next.match && next.guesses > (room.guesses ?? 0);
   if (!room || room.match !== next.match || room.seatEpoch !== next.seatEpoch ||
       room.index !== next.index || room.rollsUsed !== next.rollsUsed) {
     ui.held = next.held ? [...next.held] : Array(5).fill(false);
@@ -413,15 +414,17 @@ function acceptRoom(next) {
   }
   // Everyone in the room sees the same line: the revision picks it.
   if (caught) celebrate(['벌레컷', '꼴이 좋아'][next.revision % 2], false);
+  // Every 다빈치 코드 guess flashes its result for the whole room.
+  if (guessed) celebrate(next.lastHit ? '정답!' : '실패!', next.lastHit, next.lastHit ? '' : 'miss');
 }
 
-// A big banner over the whole screen (yacht, a caught ciao bluff), with confetti for yacht.
-function celebrate(text, confetti = true) {
+// A big banner over the whole screen (yacht, a caught ciao bluff, a 다빈치 코드 guess), with confetti for yacht.
+function celebrate(text, confetti = true, tone = '') {
   document.querySelector('.yacht-fanfare')?.remove();
   const colors = ['#ffd166', '#ef476f', '#06d6a0', '#4cc9f0', '#f78c6b'];
   const pieces = !confetti || matchMedia('(prefers-reduced-motion: reduce)').matches ? '' : Array.from({ length: 72 }, (_, index) =>
     `<i style="--x:${Math.random() * 100}%;--d:${(Math.random() * 0.4).toFixed(2)}s;--r:${Math.floor(Math.random() * 720 - 360)}deg;background:${colors[index % colors.length]}"></i>`).join('');
-  document.body.insertAdjacentHTML('beforeend', `<div class="yacht-fanfare" aria-live="polite"><strong>${escape(text)}</strong>${pieces}</div>`);
+  document.body.insertAdjacentHTML('beforeend', `<div class="yacht-fanfare ${tone}" aria-live="polite"><strong>${escape(text)}</strong>${pieces}</div>`);
   const banner = document.querySelector('.yacht-fanfare');
   setTimeout(() => banner.remove(), 2200);
 }

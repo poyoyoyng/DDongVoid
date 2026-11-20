@@ -612,6 +612,7 @@ button.card-face.picked { outline: 3px solid var(--app-mint); transform: transla
 }
 .yacht-fanfare { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; overflow: hidden; pointer-events: none; }
 .yacht-fanfare strong { font-size: clamp(44px, 12vw, 112px); font-weight: 900; letter-spacing: 0.02em; white-space: nowrap; color: #ffd166; text-shadow: 0 4px 0 #b5651d, 0 0 28px rgba(255, 209, 102, 0.7); animation: yacht-banner 2.2s ease-out forwards; }
+.yacht-fanfare.miss strong { color: #ff7b7b; text-shadow: 0 4px 0 #8f1d2c, 0 0 28px rgba(255, 107, 107, 0.6); }
 .yacht-fanfare i { position: absolute; top: -16px; left: var(--x); width: 9px; height: 15px; border-radius: 2px; animation: yacht-confetti 1.9s var(--d) ease-in forwards; }
 @keyframes yacht-banner {
   0% { transform: scale(0.3); opacity: 0; }

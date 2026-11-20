@@ -221,3 +221,19 @@ test('다빈치 코드 화면과 게임설명을 그린다', () => {
   assert.match(watching, /민트님이 추리하는 중/);
   assert.match(guide('davinci'), /다빈치 코드 쉽게 배우기/);
 });
+
+test('추리할 때마다 횟수와 정답 여부를 남겨 방 전체에 정답!/실패!를 띄울 수 있다', () => {
+  const { room, play } = table(2);
+  assert.equal(room.guesses, 0);
+  deal(room, [[B(1), W(5)], [B(2), W(8)]], { black: [B(6)], white: [] });
+  play(0, { action: 'draw', color: 'black' });
+  play(0, { action: 'guess', target: 1, index: 0, value: 2 });
+  assert.deepEqual([room.guesses, room.lastHit], [1, true]);
+  play(0, { action: 'guess', target: 1, index: 1, value: 3 });
+  assert.deepEqual([room.guesses, room.lastHit], [2, false]);
+  assert.deepEqual([roomView(room, '1').guesses, roomView(room, '1').lastHit], [2, false]);
+  // Running out of time is not a guess.
+  play(1, { action: 'guess', target: 0, index: 0, value: 1 });
+  expireRoom(room, room.deadline);
+  assert.equal(room.guesses, 3);
+});
