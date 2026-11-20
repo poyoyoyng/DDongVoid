@@ -5,6 +5,8 @@ import { saboteurStage, saboteurTitle, saboteurView } from './saboteur-view.js';
 import { cardArt as saboteurCard, goalArt, startArt } from './saboteur-art.js';
 import { critterSvg } from './sides-art.js';
 import { davinciBoard, davinciStage, tileArt } from './davinci-view.js';
+import { bluemarbleStage, bluemarbleView } from './bluemarble-view.js';
+import { maxRounds as bluemarbleRounds, salary as bluemarbleSalary, startMoney as bluemarbleMoney, won as bluemarbleWon } from './bluemarble.js';
 
 export const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -22,6 +24,7 @@ const artwork = {
   seotda: '<img class="art-hwatu first" src="/assets/hwatu/m3-0.svg" alt=""><img class="art-hwatu second" src="/assets/hwatu/m8-0.svg" alt=""><span class="art-coin">₩</span>',
   saboteur: `<span class="art-mine">${startArt()}${saboteurCard(30)}${saboteurCard(4)}${goalArt('gold')}</span>`,
   davinci: `<span class="art-code">${tileArt('black', 6)}${tileArt('white', 15)}${tileArt('black', null)}${tileArt('white', 25)}</span>`,
+  bluemarble: '<span class="bm-art-globe"></span><span class="bm-art-deed first"><i></i>서울</span><span class="bm-art-deed second"><i></i>파리</span><span class="bm-art-die first">⚃</span><span class="bm-art-die second">⚃</span>',
 };
 
 export function home() {
@@ -198,6 +201,7 @@ const waitingNotes = {
   seotda: `2~4명이 참가하고 모두 준비하면 시작합니다.<br>판마다 기본 판돈 ${won(baseBet)}을 내고, 패를 한 장씩 두 번 받으며 베팅해요.`,
   saboteur: '3~10명이 참가하고 모두 준비하면 시작합니다.<br>광부 팀 vs 방해꾼 팀! 역할은 비밀이에요. 금을 찾으면 광부 팀 모두, 카드가 다 떨어지면 방해꾼 팀 모두 이겨요.',
   davinci: '2~4명이 참가하고 모두 준비하면 시작합니다.<br>2~3명은 4장, 4명은 3장씩 받아요. 상대의 숨겨진 숫자를 맞혀 모두 공개시키고 마지막까지 살아남으세요.',
+  bluemarble: `2~4명이 참가하고 모두 준비하면 P1부터 시작합니다.<br>${bluemarbleWon(bluemarbleMoney(4))}(2명이면 ${bluemarbleWon(bluemarbleMoney(2))})으로 출발해 출발을 지날 때마다 월급 ${bluemarbleWon(bluemarbleSalary)}! 혼자 남거나 ${bluemarbleRounds}라운드 뒤 총자산이 가장 많으면 이겨요.`,
 };
 
 function stage(room) {
@@ -206,6 +210,7 @@ function stage(room) {
   if (room.game === 'seotda') return (room.stage === 1 ? '첫째 장' : '둘째 장') + ' 베팅';
   if (room.game === 'saboteur') return saboteurStage(room);
   if (room.game === 'davinci') return davinciStage(room);
+  if (room.game === 'bluemarble') return bluemarbleStage(room);
   return room.game === 'slap' ? 'ROUND ' + room.turn : room.game === 'yacht' ? `ROUND ${room.turn} / 12` : 'TURN ' + room.turn;
 }
 
@@ -247,7 +252,8 @@ export function roomPage(state, user, ui) {
   const finished = room.status === 'finished';
   const gameView = { slap: slapView, ciao: ciaoView, onecard: cardView, yacht: yachtView, omok: omokView, seotda: seotdaView,
     saboteur: (room, me, ui) => room.status === 'waiting' ? waitingSeats(room, me) : saboteurView(room, me, ui),
-    davinci: (room, me, ui) => room.status === 'waiting' ? waitingSeats(room, me) : davinciBoard(room, me, ui) }[room.game];
+    davinci: (room, me, ui) => room.status === 'waiting' ? waitingSeats(room, me) : davinciBoard(room, me, ui),
+    bluemarble: (room, me, ui) => room.status === 'waiting' ? waitingSeats(room, me) : bluemarbleView(room, me, ui) }[room.game];
   const winnerNames = room.winners.map(id => nameOf(room, id)).join(' · ');
   const main = [
     me && !playing ? action(me.ready ? '준비 취소' : finished ? '다시 하기 · 준비 완료' : '준비 완료',

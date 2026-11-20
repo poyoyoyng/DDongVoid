@@ -150,7 +150,7 @@ async function navigate() {
   solo?.stop();
   solo = null;
   room = null;
-  ui = { connected: false, held: Array(5).fill(false), card: null, call: false, power: 0, peeked: readPeeked(), sabCard: null, sabRot: 0, sabZoom: 1 };
+  ui = { connected: false, held: Array(5).fill(false), card: null, call: false, power: 0, peeked: readPeeked(), sabCard: null, sabRot: 0, sabZoom: 1, bmCell: null };
   page = parsePage();
   const { section, key } = page;
   // The rhythm game needs to be heard on its own.
@@ -595,6 +595,11 @@ app.addEventListener('click', async event => {
     // The picked tile counts only for this turn step; the number pad below it sends the guess.
     const same = ui.dvPick?.key === button.dataset.dvPick && ui.dvPick.turn === room.turn;
     ui.dvPick = same ? null : { key: button.dataset.dvPick, turn: room.turn };
+    return renderRoom();
+  }
+  if (button.dataset.bmCell !== undefined) {
+    const cell = Number(button.dataset.bmCell);
+    ui.bmCell = ui.bmCell === cell ? null : cell;
     return renderRoom();
   }
   if (button.hasAttribute('data-sab-rotate')) {

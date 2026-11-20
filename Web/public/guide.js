@@ -6,6 +6,10 @@ import { cardArt, cardBack, goalArt, goalBack, roleArt, startArt } from './sabot
 import { critterSvg } from './sides-art.js';
 import { tileArt as dvTile } from './davinci-view.js';
 import { drainRate as sidesDrain, lifeGain as sidesLifeGain, missPenalty as sidesMissPenalty, sortPoints as sidesPoints } from './sides-model.js';
+import {
+  fundFee, islandTurns, keys as goldenKeys, maxRounds, partNames, parts, salary as bmSalary, spaceFee, spaces as bmSpaces,
+  startMoney as bmStartMoney, won as bmWon,
+} from './bluemarble.js';
 
 const dice = (values, { held = [], dim = [] } = {}) => `<span class="guide-dice">${values.map((value, index) =>
   `<span class="die-face guide-die${held.includes(index) ? ' held' : ''}${dim.includes(index) ? ' dim' : ''}">${yachtFace(value)}</span>`).join('')}</span>`;
@@ -602,7 +606,58 @@ function davinciGuide() {
   });
 }
 
-const guides = { dodge: dodgeGuide, rhythm: rhythmGuide, sides: sidesGuide, slap: slapGuide, ciao: ciaoGuide, onecard: oneCardGuide, yacht: yachtGuide, omok: omokGuide, seotda: seotdaGuide, saboteur: saboteurGuide, davinci: davinciGuide };
+function bluemarbleGuide() {
+  const short = amount => bmWon(amount).replace('원', '');
+  const deedBadge = (name, group) => `<span class="bm-guide-deed ${group}"><i></i>${name}</span>`;
+  const steps = [
+    ['주사위 굴리기', '주사위 2개를 굴려 나온 합만큼 앞으로 가요.<br><b>더블</b>이면 한 번 더! 단, 더블 3번이면 무인도로 가요.', dice([4, 4])],
+    ['땅 사기', '주인 없는 도시 · 관광지 · 탈것에 서면<br>땅값을 내고 살 수 있어요. 안 사도 돼요.', deedBadge('서울', 'tour')],
+    ['건물 짓기', '내 도시에 다시 서면 별장(2채까지) · 빌딩 · 호텔을<br>순서 없이 지을 수 있어요. 지을수록 통행료가 올라요.', '<span class="bm-guide-marks"><i class="bm-villa"></i><i class="bm-villa"></i><i class="bm-building"></i><i class="bm-hotel"></i></span>'],
+    ['통행료 내기', '남의 땅에 서면 주인에게 통행료를 내요.<br>땅 통행료 + 지은 건물마다의 통행료를 모두 더해요.', deedBadge('파리', 'g6')],
+  ];
+  const lots = bmSpaces.map((space, pos) => ({ space, pos })).filter(({ space }) => space.price);
+  const groups = new Map();
+  for (const card of goldenKeys) {
+    const id = card.name + card.text;
+    groups.set(id, { card, count: (groups.get(id)?.count ?? 0) + 1 });
+  }
+  const specialPlaces = [
+    ['🏁 출발', `지나가거나 멈추면 월급 <b>${bmWon(bmSalary)}</b>`],
+    ['🏝️ 무인도', `<b>${islandTurns}턴</b> 갇혀요. 더블이 나오면 바로 탈출, ${islandTurns}번째 턴에는 굴린 만큼 나가요. 무인도 탈출권을 쓰면 바로 굴려요.`],
+    ['🎗️ 사회복지기금 접수처', `기금에 <b>${bmWon(fundFee)}</b>을 내요.`],
+    ['💰 사회복지기금 수령처', '그동안 모인 기금을 <b>모두</b> 받아요.'],
+    ['🚀 우주여행', `차례가 끝나고, 다음 차례에 판의 아무 칸으로나 날아가요. 컬럼비아호 주인에게 탑승료 <b>${bmWon(spaceFee)}</b>.`],
+    ['🔑 황금열쇠', '카드 한 장을 뽑아 그대로 따라요. 우대권 · 무인도 탈출권은 갖고 있다가 써요.'],
+  ];
+  return article('bluemarble', {
+    eyebrow: '부루마불 게임 룰', title: '부루마불 쉽게 배우기',
+    intro: '주사위를 굴려 세계 여러 도시를 돌며 땅을 사고 건물을 지어요. 남이 내 땅에 서면 통행료를 받아요. 다른 사람이 모두 파산하거나, 라운드가 끝났을 때 총자산이 가장 많으면 이겨요.',
+    art: dice([6, 6]) + deedBadge('서울', 'tour'),
+    stats: [['2~4명', 'P1부터 차례로'], [short(bmStartMoney(4)), `시작 자금 (2명이면 ${short(bmStartMoney(2))})`], [short(bmSalary), '출발 월급'], [`${maxRounds}라운드`, '끝나면 총자산 승부']],
+    sections: [
+      ['내 차례는 이렇게 해요', stepList(steps,
+        `한 번 고르는 데 <b>30초</b>예요. 시간이 지나면 주사위는 대신 굴려 주고, 땅 사기와 건물 짓기는 넘어가고, 우주여행은 출발로 가요. 굴리기 전에는 내 땅을 은행에 <b>반값</b>으로 팔 수 있어요.`)],
+      ['특별한 칸', `<ul class="guide-tips bm-guide-places">${specialPlaces.map(([title, text]) => `<li><h4>${title}</h4><p>${text}</p></li>`).join('')}</ul>`],
+      ['땅값과 통행료', `<div class="guide-sab-scroll"><table class="guide-sab-table bm-guide-table"><thead><tr><th scope="col">땅</th><th scope="col">땅값</th>
+          <th scope="col">${parts.map(part => partNames[part]).join(' · ')}</th><th scope="col">통행료: 땅</th><th scope="col">별장 1 · 2채</th><th scope="col">빌딩</th><th scope="col">호텔</th></tr></thead>
+        <tbody>${lots.map(({ space }) => space.kind === 'city'
+          ? `<tr><th scope="row"><span class="bm-guide-dot g${space.group}"></span>${space.name}</th><td>${short(space.price)}</td><td>${parts.map(part => short(space.cost[part])).join(' · ')}</td>
+            <td>${short(space.tolls[0])}</td><td>+${short(space.tolls[1])} · +${short(space.tolls[2])}</td><td>+${short(space.tolls[3])}</td><td>+${short(space.tolls[4])}</td></tr>`
+          : `<tr><th scope="row"><span class="bm-guide-dot ${space.group}"></span>${space.name}</th><td>${short(space.price)}</td><td>못 지어요</td><td colspan="4">${short(space.toll)}</td></tr>`).join('')}</tbody></table></div>
+        <p class="guide-small">· 통행료는 땅 통행료에 지은 건물의 통행료를 모두 더해요. 예) 베이징에 별장 2채 · 빌딩 · 호텔이면 4천 + 6만 + 18만 + 45만 = 69만 4천원 · 단위: 원</p>`],
+      ['황금열쇠 (30장)', `<ul class="bm-guide-keys">${[...groups.values()].map(({ card, count }) =>
+        `<li><b>${card.name}</b>${count > 1 ? `<em>${count}장</em>` : ''}<small>${card.text}</small></li>`).join('')}</ul>`],
+      ['돈이 모자라면 · 끝나는 조건', `<div class="guide-upper">
+          <div><h4>돈이 모자라면</h4><p>낼 돈이 모자라면 내 땅을 <b>싼 것부터</b> 은행에 반값으로 팔아서 내요. 땅을 다 팔아도 모자라면 가진 돈을 모두 내고 <b>파산</b>해요. 파산한 사람의 땅은 은행으로 돌아가요.</p></div>
+          <div class="guide-bonus"><p>다른 사람이 모두 파산하면</p><strong>최후의 1인 승리!</strong>
+            <p>${maxRounds}라운드가 끝나면 현금 + 땅값 + 건물값을 더한 <b>총자산</b>이 가장 많은 사람이 이겨요.</p></div>
+        </div>`],
+    ],
+    foot: '게임 선택 → 부루마불 → 방 만들기 · 2~4명이 참가하고 모두 준비 완료를 누르면 시작해요.<br><small class="guide-small">원작 부루마불 · 씨앗사 · 땅값 · 통행료 · 황금열쇠는 나무위키 「부루마불/주요 카드」를 따랐어요.</small>',
+  });
+}
+
+const guides = { dodge: dodgeGuide, rhythm: rhythmGuide, sides: sidesGuide, slap: slapGuide, ciao: ciaoGuide, onecard: oneCardGuide, yacht: yachtGuide, omok: omokGuide, seotda: seotdaGuide, saboteur: saboteurGuide, davinci: davinciGuide, bluemarble: bluemarbleGuide };
 
 export function guide(game) {
   const tabs = Object.entries(games).map(([id, item]) =>

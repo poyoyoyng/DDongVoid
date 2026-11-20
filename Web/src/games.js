@@ -5,8 +5,9 @@ import { applyMemberAction, isMemberAction } from './room-members.js';
 import { expireSeotda, leaveSeotda, seotdaAction, seotdaView, startSeotda } from './seotda.js';
 import { expireSaboteur, saboteurAction, saboteurView, startSaboteur } from './saboteur.js';
 import { davinciAction, davinciView, expireDavinci, startDavinci } from './davinci.js';
+import { bluemarbleAction, bluemarbleView, expireBluemarble, startBluemarble } from './bluemarble.js';
 
-const roomGames = new Set(['slap', 'ciao', 'onecard', 'yacht', 'omok', 'seotda', 'saboteur', 'davinci']);
+const roomGames = new Set(['slap', 'ciao', 'onecard', 'yacht', 'omok', 'seotda', 'saboteur', 'davinci', 'bluemarble']);
 export const isRoomGame = game => roomGames.has(game);
 const current = room => room.players[room.index];
 const integerIn = (value, first, last) => Number.isInteger(value) && value >= first && value <= last;
@@ -67,6 +68,7 @@ export function applyAction(room, account, input, now, roll = randomInt, wallets
       if (room.game === 'seotda') seotdaAction(room, player, input, now, roll);
       if (room.game === 'saboteur') saboteurAction(room, player, input, now, roll);
       if (room.game === 'davinci') davinciAction(room, player, input, now);
+      if (room.game === 'bluemarble') bluemarbleAction(room, player, input, now, roll);
     }
   }
   room.revision++;
@@ -115,6 +117,9 @@ function start(room, roll, now, wallets) {
       break;
     case 'davinci':
       startDavinci(room, roll, now);
+      break;
+    case 'bluemarble':
+      startBluemarble(room, roll, now);
       break;
   }
 }
@@ -265,6 +270,7 @@ export function expireRoom(room, now, roll = randomInt) {
   else if (room.game === 'seotda') expireSeotda(room, now, roll);
   else if (room.game === 'saboteur') expireSaboteur(room, now, roll);
   else if (room.game === 'davinci') expireDavinci(room, now);
+  else if (room.game === 'bluemarble') expireBluemarble(room, now, roll);
   else return false;
   room.revision++;
   return true;
@@ -462,5 +468,6 @@ export function roomView(room, id) {
   if (view.game === 'seotda') seotdaView(view, id);
   if (view.game === 'saboteur') saboteurView(view, id);
   if (view.game === 'davinci') davinciView(view, id);
+  if (view.game === 'bluemarble') bluemarbleView(view);
   return view;
 }
