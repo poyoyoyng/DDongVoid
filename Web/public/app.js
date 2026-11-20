@@ -150,7 +150,7 @@ async function navigate() {
   solo?.stop();
   solo = null;
   room = null;
-  ui = { connected: false, held: Array(5).fill(false), card: null, call: false, power: 0, peeked: readPeeked(), sabCard: null, sabRot: 0, sabZoom: 1, bmCell: null };
+  ui = { connected: false, held: Array(5).fill(false), card: null, call: false, power: 0, peeked: readPeeked(), sabCard: null, sabRot: 0, sabZoom: 1, bmCell: null, bmShow: null, bmGhost: null, bmKey: false, bmWalk: 0 };
   page = parsePage();
   const { section, key } = page;
   // The rhythm game needs to be heard on its own.
@@ -398,8 +398,10 @@ function acceptRoom(next) {
     ui.sabRot = 0;
   }
   const previous = room;
+  const walking = next.game === 'bluemarble' && walkBluemarble(previous, next);
   room = next;
   renderRoom();
+  if (walking) void walking();
   // Results reach the ranking board a moment after a game ends, so the board is read again a little later.
   const members = [...next.players, ...next.spectators].filter(person => !person.vacant);
   if (!previous || previous.status !== next.status || members.some(person => !ui.ranks?.has(person.id))) {
@@ -447,6 +449,94 @@ function animateYachtRoll() {
       for (const face of faces) face.innerHTML = yachtFace(1 + Math.floor(Math.random() * 6));
     }
   }, 55);
+}
+
+// 부루마불: a pawn goes where it moved one space at a time, or flies there (무인도, 우주여행), instead of jumping.
+// Meanwhile ui.bmShow keeps it drawn where it has got to, hidden, and a copy floating over the board hops between
+// spaces. Returns the walk to start once the room is drawn, or nothing when there is no new move to show.
+function walkBluemarble(previous, next) {
+  const walk = next.walk;
+  if (!previous || previous.game !== 'bluemarble' || !walk?.moves.length || previous.walk?.id === walk.id) return null;
+  ui.bmWalk++;
+  document.querySelector('.bm-ghost')?.remove();
+  ui.bmShow = ui.bmGhost = null;
+  ui.bmKey = false;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return null;
+  const { seat, from } = walk.moves[0];
+  const steps = [];
+  for (const move of walk.moves) {
+    const back = move.kind === 'back';
+    const count = move.kind === 'fly' ? 1 : move.kind === 'lap' ? 40 : ((back ? move.from - move.to : move.to - move.from) + 40) % 40;
+    for (let step = 1; step <= count; step++) {
+      steps.push({ pos: move.kind === 'fly' ? move.to : (move.from + (back ? -step : step) + 40) % 40, fly: move.kind === 'fly', rest: step === count });
+    }
+  }
+  // A long way round goes quicker, so no walk takes much more than a couple of seconds.
+  const walked = steps.filter(step => !step.fly).length;
+  const pace = Math.min(220, Math.max(70, 2400 / walked));
+  ui.bmShow = { [seat]: from };
+  ui.bmGhost = seat;
+  const token = ui.bmWalk;
+  const owner = generation;
+  const live = () => token === ui.bmWalk && owner === generation;
+  return async () => {
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    let ghost = hopPawn(null, seat, from, 0);
+    await wait(250);
+    for (const step of steps) {
+      if (!live()) return ghost?.remove();
+      const ms = step.fly ? 700 : pace;
+      ghost = hopPawn(ghost, seat, step.pos, ms, step.fly);
+      if (step.rest && step !== steps.at(-1)) {
+        // A stop on the way is a 황금열쇠 that sends the pawn on: its card shows and is held a moment first.
+        await wait(ms);
+        if (!live()) return ghost?.remove();
+        ui.bmKey = true;
+        renderRoom();
+        await wait(900);
+      } else {
+        await wait(ms);
+      }
+    }
+    ghost?.remove();
+    if (!live()) return;
+    ui.bmShow = ui.bmGhost = null;
+    ui.bmKey = false;
+    renderRoom();
+  };
+}
+
+// Puts the hidden pawn in its place on the board and hops the floating copy there from where it was.
+function hopPawn(ghost, seat, pos, ms, fly = false) {
+  ui.bmShow[seat] = pos;
+  const pawn = app.querySelector('[data-bm-cell] .bm-pawn.seat-' + seat);
+  const cell = app.querySelector('[data-bm-cell="' + pos + '"]');
+  if (!pawn || !cell) return ghost;
+  const start = (ghost ?? pawn).getBoundingClientRect();
+  let holder = cell.querySelector('.bm-pawns');
+  if (!holder) cell.append(holder = Object.assign(document.createElement('span'), { className: 'bm-pawns' }));
+  const left = pawn.parentElement;
+  if (left !== holder) {
+    holder.append(pawn);
+    if (!left.children.length) left.remove();
+  }
+  const end = pawn.getBoundingClientRect();
+  if (!ghost) {
+    ghost = Object.assign(document.createElement('i'), { className: 'bm-pawn bm-ghost seat-' + seat });
+    ghost.setAttribute('aria-hidden', 'true');
+    document.body.append(ghost);
+  }
+  Object.assign(ghost.style, { left: end.left + scrollX + 'px', top: end.top + scrollY + 'px', width: end.width + 'px', height: end.height + 'px' });
+  const dx = start.left - end.left;
+  const dy = start.top - end.top;
+  if (ms) {
+    ghost.animate([
+      { transform: `translate(${dx}px, ${dy}px)` },
+      { transform: `translate(${dx / 2}px, ${dy / 2 - end.height * (fly ? 5 : 1.2)}px) scale(${fly ? 1.8 : 1.3})` },
+      { transform: 'none' },
+    ], { duration: ms, easing: 'ease-in-out' });
+  }
+  return ghost;
 }
 
 function updateDeadline() {

@@ -28,7 +28,7 @@ export function startBluemarble(room, random, now) {
   Object.assign(room, {
     phase: 'roll', index: 0, round: 1, dice: null, doubles: 0, again: false, stop: false, fund: 0, pending: null,
     estates: spaces.map((_, pos) => ownable(pos) ? emptyEstate() : null),
-    keyDeck: shuffle(keys.map((_, card) => card), random), drawn: null, moved: null, result: null, log: [],
+    keyDeck: shuffle(keys.map((_, card) => card), random), drawn: null, walk: null, result: null, log: [],
     deadline: now + turnTime,
   });
   note(room, `게임 시작 · 모두 ${won(money)}씩 · ${room.players[0].name}부터`);
@@ -94,8 +94,14 @@ function finish(room, winners, reason) {
   });
 }
 
+// Every move of one roll or flight in order, so the board can walk the pawn along them: forward and back go one space
+// at a time, a lap goes all the way round, and fly jumps straight there (무인도, 우주여행). id tells one walk from the next.
+function track(room, seat, from, to, kind) {
+  room.walk.moves.push({ seat, from, to, kind });
+}
+
 // Moves forward to a space; passing or landing on 출발 pays the salary.
-function advance(room, seat, to, { pay = true } = {}) {
+function advance(room, seat, to, { pay = true, kind = 'forward' } = {}) {
   const player = room.players[seat];
   const from = player.pos;
   const steps = (to - from + 40) % 40;
@@ -104,12 +110,12 @@ function advance(room, seat, to, { pay = true } = {}) {
     note(room, `${player.name} · 출발을 지나 월급 ${won(salary)}`);
   }
   player.pos = to;
-  room.moved = { seat, from, to };
+  track(room, seat, from, to, kind);
 }
 
 function sendToIsland(room, seat) {
   const player = room.players[seat];
-  room.moved = { seat, from: player.pos, to: ISLAND };
+  track(room, seat, player.pos, ISLAND, 'fly');
   player.pos = ISLAND;
   player.island = islandTurns;
   room.stop = true;
@@ -200,7 +206,7 @@ function drawKey(room, seat) {
     }
     case 'back':
       player.pos = (player.pos - info.steps + 40) % 40;
-      room.moved = { seat, from: (player.pos + info.steps) % 40, to: player.pos };
+      track(room, seat, (player.pos + info.steps) % 40, player.pos, 'back');
       return land(room, seat);
     case 'go':
       advance(room, seat, info.to);
@@ -212,7 +218,7 @@ function drawKey(room, seat) {
       player.money += salary + room.fund;
       note(room, `${player.name} · 한 바퀴 돌아 월급 ${won(salary)}과 사회복지기금 ${won(room.fund)} 받기`);
       room.fund = 0;
-      room.moved = { seat, from: player.pos, to: player.pos, lap: true };
+      track(room, seat, player.pos, player.pos, 'lap');
       return false;
     case 'space':
       advance(room, seat, SPACE);
@@ -284,6 +290,7 @@ function rollDice(room, seat, random) {
   const double = dice[0] === dice[1];
   const sum = dice[0] + dice[1];
   room.dice = dice;
+  room.walk = { id: room.turn, moves: [] };
   room.stop = false;
   room.again = false;
   if (player.island) {
@@ -315,6 +322,7 @@ function travel(room, seat, to) {
   requireThat(integerIn(to, 0, 39) && to !== SPACE, '우주여행으로 갈 칸을 골라 주세요.');
   player.space = false;
   room.dice = null;
+  room.walk = { id: room.turn, moves: [] };
   room.again = false;
   room.stop = false;
   const owner = room.estates[COLUMBIA].owner;
@@ -326,7 +334,7 @@ function travel(room, seat, to) {
   player.freeRide = false;
   if (player.bankrupt) return settle(room);
   note(room, `${player.name} · 🚀 ${nameOf(to)}(으)로 우주여행`);
-  advance(room, seat, to);
+  advance(room, seat, to, { kind: 'fly' });
   if (!land(room, seat)) settle(room);
 }
 

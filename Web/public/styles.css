@@ -992,6 +992,8 @@ dialog .form-error { color: #a53745; margin: 0; }
 .bm-cell .bm-pawn { width: max(8px, 2cqw); height: max(8px, 2cqw); }
 .bm-cell .bm-pawn.active { box-shadow: 0 0 0 2px #fff; animation: bm-hop 1s ease-in-out infinite; }
 @keyframes bm-hop { 50% { transform: translateY(-25%); } }
+.bm-cell .bm-pawn.ghosted { visibility: hidden; animation: none; }
+.bm-ghost { position: absolute; z-index: 40; pointer-events: none; box-shadow: 0 0 0 2px #fff, 0 4px 8px rgb(0 0 0 / .35); }
 .bm-center { grid-area: 2 / 2 / 11 / 11; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.6cqw; min-width: 0; padding: 2cqw;
   border-radius: 1.2cqw; background: radial-gradient(circle at 50% 42%, #2b7bc4 0, #174a7c 45%, #0e2f4f 75%); color: #fff; text-align: center; }
 .bm-logo { color: #ffd064; font-size: max(14px, 4.6cqw); font-weight: 900; line-height: 1; letter-spacing: .04em; text-shadow: 0 .4cqw 0 #0b2238; }

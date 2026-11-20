@@ -16,6 +16,8 @@ const specialIcons = { 5: '🌴', 15: '✈️', 25: '⚓', 28: '🛳️', 32: '�
 const buildingMarks = estate => estate ? '<i class="bm-villa"></i>'.repeat(estate.villa) +
   '<i class="bm-building"></i>'.repeat(estate.building) + '<i class="bm-hotel"></i>'.repeat(estate.hotel) : '';
 
+// While a pawn walks (app.js), ui.bmShow says where it is drawn, ui.bmGhost which seat's pawn is floating above the board,
+// and ui.bmKey whether it has reached the 황금열쇠 it drew yet.
 function cell(room, pos, ui, travel) {
   const space = spaces[pos];
   const { row, col } = cellPlace(pos);
@@ -23,10 +25,10 @@ function cell(room, pos, ui, travel) {
   const owner = estate?.owner ?? null;
   const side = row === 11 ? 'bottom' : col === 1 ? 'left' : row === 1 ? 'top' : 'right';
   const corner = [0, 10, 20, 30].includes(pos);
-  const pawns = room.players.map((player, seat) => !player.bankrupt && player.pos === pos
-    ? `<i class="bm-pawn seat-${seat}${seat === room.index ? ' active' : ''}" title="${escape(player.name)}"></i>` : '').join('');
+  const pawns = room.players.map((player, seat) => (!player.bankrupt || seat === ui.bmGhost) && (ui.bmShow?.[seat] ?? player.pos) === pos
+    ? `<i class="bm-pawn seat-${seat}${seat === room.index ? ' active' : ''}${seat === ui.bmGhost ? ' ghosted' : ''}" title="${escape(player.name)}"></i>` : '').join('');
   const classes = ['bm-cell', side, space.kind, corner ? 'corner' : '', space.kind === 'city' ? 'g' + space.group : '',
-    owner !== null ? 'owned own-' + owner : '', ui.bmCell === pos ? 'picked' : '', room.moved?.to === pos ? 'landed' : '',
+    owner !== null ? 'owned own-' + owner : '', ui.bmCell === pos ? 'picked' : '', !ui.bmShow && room.walk?.moves.at(-1)?.to === pos ? 'landed' : '',
     travel && pos !== SPACE ? 'travel' : ''].filter(Boolean).join(' ');
   const icon = space.kind === 'special' ? specialIcons[pos] : kindIcons[space.kind] ?? '';
   const price = space.price ? `<small class="bm-price">${won(space.price).replace('원', '')}</small>` : '';
@@ -54,7 +56,7 @@ function keyCard(room) {
   return `<div class="bm-key"><span>🔑 황금열쇠</span><b>${escape(info.name)}</b><small>${escape(info.text)}</small></div>`;
 }
 
-function center(room, me) {
+function center(room, me, ui) {
   const playing = room.status === 'playing';
   const actual = playing ? room.players[room.index] : null;
   return `<div class="bm-center">
@@ -62,7 +64,7 @@ function center(room, me) {
     ${dice(room)}
     ${actual ? `<p class="bm-turn"><i class="bm-pawn seat-${room.index}"></i>${actual.id === me?.id ? '내 차례' : escape(actual.name) + '님의 차례'}
       · <strong data-deadline="${room.deadline}"></strong></p>` : ''}
-    ${keyCard(room)}
+    ${ui.bmShow && !ui.bmKey ? '' : keyCard(room)}
     <p class="bm-fund">사회복지기금 <b>${won(room.fund ?? 0)}</b></p>
   </div>`;
 }
@@ -108,6 +110,7 @@ function deed(room, pos, me, myTurn) {
 function controls(room, me, ui) {
   const seat = room.players.indexOf(me);
   if (room.status !== 'playing' || room.paused || seat !== room.index || me.bankrupt) return '';
+  if (ui.bmShow) return '<div class="bm-controls"><p class="app-muted">말이 가는 중이에요…</p></div>';
   const pending = room.pending;
   const hasKey = type => me.keys.some(card => keys[card].type === type);
   switch (room.phase) {
@@ -178,7 +181,7 @@ export function bluemarbleView(room, me, ui) {
   const travel = myTurn && room.phase === 'space';
   const cells = spaces.map((_, pos) => cell(room, pos, ui, travel)).join('');
   return `<div class="bm-layout">
-    <div class="bm-board-wrap"><div class="bm-board">${cells}${center(room, me)}</div></div>
+    <div class="bm-board-wrap"><div class="bm-board">${cells}${center(room, me, ui)}</div></div>
     <div class="bm-side">
       ${result(room)}
       ${controls(room, me, ui)}

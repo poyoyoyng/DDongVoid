@@ -195,6 +195,20 @@ test('황금열쇠: 관광여행은 출발을 지나며 월급을 받고, 무인
   assert.equal(room.index, 1, '무인도로 가면 더블이어도 차례가 끝난다');
 });
 
+test('말이 간 길을 차례대로 남겨 화면이 한 칸씩 움직일 수 있다', () => {
+  const { room, play, roll } = table(2);
+  room.keyDeck = [keyOf('back', card => card.steps === 3), keyOf('island'), ...room.keyDeck];
+  roll(0, 3, 4); // 7 황금열쇠 → 뒤로 3칸, 4 빈 땅
+  const first = room.walk;
+  assert.deepEqual(first.moves, [{ seat: 0, from: 0, to: 7, kind: 'forward' }, { seat: 0, from: 7, to: 4, kind: 'back' }]);
+  play(0, { action: 'skip' });
+  assert.equal(room.walk, first, '땅을 사지 않아도 길은 그대로라 다시 움직이지 않는다');
+  roll(1, 6, 6); // 12 황금열쇠 → 무인도로 날아간다
+  assert.notEqual(room.walk.id, first.id);
+  assert.deepEqual(room.walk.moves, [{ seat: 1, from: 0, to: 12, kind: 'forward' }, { seat: 1, from: 12, to: ISLAND, kind: 'fly' }]);
+  assert.equal(roomView(room, players[0].id).walk.moves.length, 2);
+});
+
 test('황금열쇠: 건물 세금은 건물 수만큼, 반액대매출은 가장 비싼 땅을 반값에 판다', () => {
   const { room, roll } = table(2);
   room.estates[3] = { owner: 0, villa: 2, building: 1, hotel: 1 };
