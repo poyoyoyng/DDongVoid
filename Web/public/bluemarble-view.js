@@ -185,7 +185,7 @@ export function bluemarbleView(room, me, ui) {
       ${players(room, me)}
       ${me && room.status === 'playing' && !me.bankrupt ? act('파산 선언 (기권)', { action: 'resign' }, 'small danger bm-resign') : ''}
       ${deed(room, ui.bmCell ?? null, me, myTurn)}
-      ${room.log?.length ? `<ol class="bm-log">${room.log.map(line => '<li>' + escape(line) + '</li>').join('')}</ol>` : ''}
+      ${room.log?.length ? `<ol class="bm-log" data-log-scroll aria-label="활동 기록">${room.log.map(line => '<li>' + escape(line) + '</li>').join('')}</ol>` : ''}
     </div></div>`;
 }
 

@@ -674,5 +674,5 @@ function seotdaView(room, me, ui) {
     </div>
     ${seats}${mine}
     ${room.status === 'playing' && !room.paused ? seotdaControls(room, me) : ''}
-    ${room.log?.length ? `<ol class="seotda-log">${room.log.map(line => '<li>' + escape(line) + '</li>').join('')}</ol>` : ''}`);
+    ${room.log?.length ? `<ol class="seotda-log" data-log-scroll aria-label="활동 기록">${room.log.map(line => '<li>' + escape(line) + '</li>').join('')}</ol>` : ''}`);
 }

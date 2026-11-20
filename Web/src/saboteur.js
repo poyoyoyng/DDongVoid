@@ -6,7 +6,7 @@ import { requireThat } from './http.js';
 const integerIn = (value, first, last) => Number.isInteger(value) && value >= first && value <= last;
 
 function note(room, text) {
-  room.log = [...(room.log ?? []), text].slice(-10);
+  room.log = [...(room.log ?? []), text].slice(-50);
 }
 
 function shuffle(items, random) {

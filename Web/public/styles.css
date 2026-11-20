@@ -438,7 +438,7 @@ button.omok-cell:hover::after, button.omok-cell:focus-visible::after { content: 
 .hwatu.peel small { color: var(--app-peach); }
 .hwatu.flip-in img { animation: hwatu-flip .35s ease-out; }
 @keyframes hwatu-flip { from { transform: perspective(300px) rotateY(90deg); } to { transform: none; } }
-.seotda-log { margin: 12px 0 0; padding: 10px 12px 10px 30px; border-radius: 10px; background: var(--app-inner); color: var(--app-muted); font-size: 12px; line-height: 1.6; }
+.seotda-log { max-height: calc(12px * 1.6 * 5 + 20px); margin: 12px 0 0; padding: 10px 12px 10px 34px; overflow-y: auto; overscroll-behavior: contain; border-radius: 10px; background: var(--app-inner); color: var(--app-muted); font-size: 12px; line-height: 1.6; }
 .seotda-log li:last-child { color: var(--app-peach); }
 .seotda-actions { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .seotda-actions .app-button:disabled { background: #27332f; color: #e9f1ed; opacity: .4; }
@@ -541,7 +541,7 @@ button.sab-cell.target:hover { transform: translateY(-2px); }
 .sab-teams b { display: block; color: #fff; font-size: 14px; }
 .sab-teams li.won b::after { content: ' · 승리'; color: var(--app-gold); }
 .sab-teams span { color: #c9d6cf; font-size: 12.5px; overflow-wrap: anywhere; }
-.sab-log { margin: 12px 0 0; padding: 10px 12px 10px 30px; border-radius: 10px; background: var(--app-inner); color: var(--app-muted); font-size: 12px; line-height: 1.6; }
+.sab-log { max-height: calc(12px * 1.6 * 5 + 20px); margin: 12px 0 0; padding: 10px 12px 10px 34px; overflow-y: auto; overscroll-behavior: contain; border-radius: 10px; background: var(--app-inner); color: var(--app-muted); font-size: 12px; line-height: 1.6; }
 .sab-log li:last-child { color: var(--app-peach); }
 .guide-sab-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
 .guide-sab-cards li { display: grid; justify-items: center; align-content: start; gap: 4px; text-align: center; }
@@ -1050,7 +1050,7 @@ dialog .form-error { color: #a53745; margin: 0; }
 .bm-result li .bm-pawn { margin-right: 6px; vertical-align: -1px; }
 .bm-result li b { float: right; color: var(--app-gold); }
 .bm-result li.winner { font-weight: 900; }
-.bm-log { margin: 0; padding: 10px 12px 10px 30px; border-radius: 10px; background: var(--app-inner); color: var(--app-muted); font-size: 12px; line-height: 1.6; }
+.bm-log { max-height: calc(12px * 1.6 * 5 + 20px); margin: 0; padding: 10px 12px 10px 34px; overflow-y: auto; overscroll-behavior: contain; border-radius: 10px; background: var(--app-inner); color: var(--app-muted); font-size: 12px; line-height: 1.6; }
 .bm-log li:last-child { color: var(--app-peach); }
 .bm-guide-deed { position: relative; display: inline-grid; place-items: center; width: 64px; height: 82px; padding-top: 16px; border-radius: 8px; background: #fffaf0; color: #24302a;
   font-size: 15px; font-weight: 900; box-shadow: 0 3px 0 #0002; overflow: hidden; }

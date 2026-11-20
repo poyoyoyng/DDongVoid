@@ -187,5 +187,5 @@ export function saboteurView(room, me, ui) {
     ${mine(room, me, ui, selection)}
     ${hand}
     ${inPlay && me ? controls(room, me, selection) : ''}
-    ${room.log?.length ? `<ol class="sab-log">${room.log.map(line => '<li>' + escape(line) + '</li>').join('')}</ol>` : ''}`;
+    ${room.log?.length ? `<ol class="sab-log" data-log-scroll aria-label="활동 기록">${room.log.map(line => '<li>' + escape(line) + '</li>').join('')}</ol>` : ''}`;
 }

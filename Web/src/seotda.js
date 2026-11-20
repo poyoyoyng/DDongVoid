@@ -13,7 +13,7 @@ function seatsFrom(room, from) {
 }
 
 function note(room, text) {
-  room.log = [...(room.log ?? []), text].slice(-8);
+  room.log = [...(room.log ?? []), text].slice(-50);
 }
 
 function shuffle(cards, random) {

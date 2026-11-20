@@ -9,7 +9,7 @@ const nameOf = pos => spaces[pos].name;
 const alive = room => room.players.filter(player => !player.bankrupt);
 
 function note(room, text) {
-  room.log = [...(room.log ?? []), text].slice(-12);
+  room.log = [...(room.log ?? []), text].slice(-50);
 }
 
 function shuffle(items, random) {
