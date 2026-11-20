@@ -314,9 +314,14 @@ function renderRoom() {
   // A scrolled board (사보타지) keeps its place across redraws.
   const scroller = content.querySelector('[data-keep-scroll]');
   const kept = scroller && [scroller.scrollLeft, scroller.scrollTop];
+  // A scrolling log follows new lines while it is at the bottom, and stays put while someone reads back.
+  const log = content.querySelector('[data-log-scroll]');
+  const logAt = log && log.scrollHeight - log.scrollTop - log.clientHeight >= 4 ? log.scrollTop : null;
   content.innerHTML = roomPage(room, user.id, ui);
   const board = kept && content.querySelector('[data-keep-scroll]');
   if (board) [board.scrollLeft, board.scrollTop] = kept;
+  const nextLog = content.querySelector('[data-log-scroll]');
+  if (nextLog) nextLog.scrollTop = logAt ?? nextLog.scrollHeight;
   fitRoomChat();
   updateDeadline();
   if (hold !== undefined) app.querySelector('[data-hold="' + hold + '"]')?.focus();

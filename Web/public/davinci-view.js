@@ -126,5 +126,5 @@ export function davinciBoard(room, me, ui) {
     ${seats}
     ${playing && !room.paused ? controls(room, me, ui, myTurn) : ''}
     ${me?.tiles ? myRow(room, me, mySeat, myTurn ? room.phase : null) : ''}
-    ${room.log?.length ? `<ol class="dv-log">${room.log.map(line => '<li>' + escape(line) + '</li>').join('')}</ol>` : ''}`;
+    ${room.log?.length ? `<ol class="dv-log" data-log-scroll aria-label="활동 기록">${room.log.map(line => '<li>' + escape(line) + '</li>').join('')}</ol>` : ''}`;
 }

@@ -5,8 +5,9 @@ const integerIn = (value, first, last) => Number.isInteger(value) && value >= fi
 const hidden = player => player.tiles.filter(entry => !entry.open).length;
 const spot = (player, index) => `${player.name}님의 왼쪽에서 ${index + 1}번째 ${colorNames[tileColor(player.tiles[index].tile)]} 패`;
 
+// The room keeps a long history; the log box shows five lines and scrolls for the rest.
 function note(room, text) {
-  room.log = [...(room.log ?? []), text].slice(-12);
+  room.log = [...(room.log ?? []), text].slice(-50);
 }
 
 function shuffle(items, random) {

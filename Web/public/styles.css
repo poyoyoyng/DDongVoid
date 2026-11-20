@@ -907,7 +907,7 @@ dialog .form-error { color: #a53745; margin: 0; }
 .dv-draw .app-button { flex-direction: row; gap: 10px; }
 .dv-draw .app-button span:last-child { display: grid; text-align: left; }
 .dv-draw .dv-tile { --tile: 28px; }
-.dv-log { margin: 12px 0 0; padding: 10px 12px 10px 30px; border-radius: 10px; background: var(--app-inner); color: var(--app-muted); font-size: 12px; line-height: 1.6; }
+.dv-log { max-height: calc(12px * 1.6 * 5 + 20px); margin: 12px 0 0; padding: 10px 12px 10px 34px; overflow-y: auto; overscroll-behavior: contain; border-radius: 10px; background: var(--app-inner); color: var(--app-muted); font-size: 12px; line-height: 1.6; }
 .dv-log li:last-child { color: var(--app-peach); }
 .guide-hero-art .dv-tile { --tile: clamp(34px, 4.6vw, 50px); }
 .guide-demo .dv-tile { --tile: 34px; }
