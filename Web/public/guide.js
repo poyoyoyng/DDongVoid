@@ -4,6 +4,7 @@ import { cardFace, heading, hwatu, redCard, yachtFace } from './views.js';
 import { cardHelp, cardName as saboteurCardName, cards, handSize, saboteurCounts } from './saboteur.js';
 import { cardArt, cardBack, goalArt, goalBack, roleArt, startArt } from './saboteur-art.js';
 import { critterSvg } from './sides-art.js';
+import { tileArt as dvTile } from './davinci-view.js';
 import { drainRate as sidesDrain, lifeGain as sidesLifeGain, missPenalty as sidesMissPenalty, sortPoints as sidesPoints } from './sides-model.js';
 
 const dice = (values, { held = [], dim = [] } = {}) => `<span class="guide-dice">${values.map((value, index) =>
@@ -556,7 +557,52 @@ function saboteurGuide() {
   });
 }
 
-const guides = { dodge: dodgeGuide, rhythm: rhythmGuide, sides: sidesGuide, slap: slapGuide, ciao: ciaoGuide, onecard: oneCardGuide, yacht: yachtGuide, omok: omokGuide, seotda: seotdaGuide, saboteur: saboteurGuide };
+// A row of tiles for the 다빈치 코드 guide: [color, tile or null, open].
+const code = tiles => `<span class="guide-code">${tiles.map(([color, tile, open]) => dvTile(color, tile, { open })).join('')}</span>`;
+
+function davinciGuide() {
+  const steps = [
+    ['패 나눠 받기', '2~3명은 4장, 4명은 3장씩 받아요.<br>처음 받는 패에는 조커가 없어요.', code([['black', null], ['white', null], ['white', null], ['black', null]])],
+    ['작은 수부터 세우기', '왼쪽이 작은 수, 오른쪽이 큰 수예요.<br>숫자가 같으면 <b>검은 패가 왼쪽</b>이에요.', code([['black', 2], ['white', 3], ['black', 10], ['white', 19]])],
+    ['패 한 장 가져오기', '검은 패와 흰 패 중 색을 골라 한 장 가져와<br>순서에 맞는 자리에 끼워 넣어요.', `${dvTile('black', null)}${chip('검은 패')}${dvTile('white', null)}${chip('흰 패')}`],
+    ['상대 패 맞히기', '상대의 숨겨진 패 하나를 골라<br>0~11 또는 조커 중 숫자를 말해요.', `${dvTile('white', null)}${chip('7?', 'mint')}`],
+  ];
+  const results = [
+    ['맞혔다!', '상대 패가 공개돼요. 또 추리하거나 멈추고 차례를 넘겨요', code([['white', 15, true]]), '계속 · 멈춤'],
+    ['틀렸다…', '방금 가져온 내 패를 모두에게 공개하고 차례가 끝나요', code([['black', 8, true]]), '내 패 공개'],
+    ['멈추기', '맞힌 뒤 멈추면 가져온 패는 숨긴 채로 내 코드에 남아요', chip('멈추기'), '안전'],
+    ['더미가 비면', '패를 가져오지 않고 추리만 해요. 틀리면 내 숨긴 패 하나를 골라 공개해요', chip('내 패 1장', 'peach'), '골라서 공개'],
+  ];
+  return article('davinci', {
+    eyebrow: '다빈치 코드 게임 룰', title: '다빈치 코드 쉽게 배우기',
+    intro: '숫자가 적힌 패를 상대에게 보이지 않게 세워 두고, 차례마다 상대의 숨겨진 숫자를 추리해요. 내 패가 모두 공개되면 탈락이고, 마지막까지 살아남으면 이겨요.',
+    art: code([['black', 6], ['white', null], ['white', 25], ['black', null]]),
+    stats: [['2~4명', '개인전'], ['26장', '검은·흰 0~11 + 조커 2'], ['4장 / 3장', '2~3명 / 4명 시작 패'], ['60초', '단계마다 제한 시간']],
+    sections: [
+      ['한 판은 이렇게 해요', stepList(steps,
+        '추리가 <b>틀리면</b> 방금 가져온 내 패를 모두가 볼 수 있게 공개해요. 내 패가 <b>모두 공개되면 탈락</b>이에요.')],
+      ['맞혔을 때와 틀렸을 때', `<ul class="guide-combos">${results.map(([name, text, visual, result]) =>
+        `<li><strong>${name}</strong><span>${text}</span>${visual}<b>${result}</b></li>`).join('')}</ul>
+        <p class="guide-small">· 공개된 패는 금색 테두리로 표시돼요 · 숨긴 패 아래 빨간 ✕ 숫자는 누군가 말했다가 틀린 숫자예요</p>`],
+      ['조커와 패 읽는 법', `<div class="guide-upper">
+          <div><h4>조커는 어디든 OK</h4><p>가져온 조커는 내 코드의 원하는 자리에 끼워 넣을 수 있어요. 숫자 순서를 흐트러뜨려 상대를 헷갈리게 해요. 조커를 맞힐 때는 <b>조커</b>를 고르면 돼요.</p>
+            <div class="guide-example">${code([['black', 4], ['white', 25], ['black', 12], ['white', 17]])}</div>
+            <p class="guide-small">조커 옆에 숫자 패가 들어갈 때는 놓을 자리를 고를 수 있어요.</p></div>
+          <div class="guide-bonus"><p>패 색은 모두에게 보여요</p><strong>숫자만 비밀!</strong>
+            <p>상대 패의 색과 순서로 들어갈 수 있는 숫자를 좁혀 보세요.</p><p class="guide-small">6과 9는 밑줄로 구별해요.</p></div>
+        </div>`],
+      ['이기는 꿀팁', tipList([
+        ['양 끝부터 노리기', '가장 왼쪽 패는 작은 수, 가장 오른쪽 패는 큰 수일 가능성이 높아요.'],
+        ['공개된 패로 범위 좁히기', '공개된 패 사이에 숨은 패는 두 숫자 사이의 값만 될 수 있어요.'],
+        ['욕심은 적당히', '연속으로 맞히면 좋지만, 틀리면 방금 가져온 내 패가 공개돼요. 자신 없으면 멈추세요.'],
+        ['시간 초과 주의', '60초 안에 고르지 않으면 자동으로 진행돼요. 추리를 한 번도 안 했다면 틀린 것으로 처리해요.'],
+      ])],
+    ],
+    foot: '게임 선택 → 다빈치 코드 → 방 만들기 · 2~4명이 참가하고 모두 준비 완료를 누르면 시작해요.<br><small class="guide-small">원작 다빈치 코드(Coda, アルゴ) · 스즈키 히로아키 · 와카스기 에이지, 갓켄 · 패 그림은 이 사이트에서 새로 그렸어요.</small>',
+  });
+}
+
+const guides = { dodge: dodgeGuide, rhythm: rhythmGuide, sides: sidesGuide, slap: slapGuide, ciao: ciaoGuide, onecard: oneCardGuide, yacht: yachtGuide, omok: omokGuide, seotda: seotdaGuide, saboteur: saboteurGuide, davinci: davinciGuide };
 
 export function guide(game) {
   const tabs = Object.entries(games).map(([id, item]) =>

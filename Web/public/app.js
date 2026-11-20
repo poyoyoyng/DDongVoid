@@ -591,6 +591,12 @@ app.addEventListener('click', async event => {
     ui.sabCard = ui.sabCard === card ? null : card;
     return renderRoom();
   }
+  if (button.dataset.dvPick) {
+    // The picked tile counts only for this turn step; the number pad below it sends the guess.
+    const same = ui.dvPick?.key === button.dataset.dvPick && ui.dvPick.turn === room.turn;
+    ui.dvPick = same ? null : { key: button.dataset.dvPick, turn: room.turn };
+    return renderRoom();
+  }
   if (button.hasAttribute('data-sab-rotate')) {
     ui.sabRot = 1 - ui.sabRot;
     return renderRoom();

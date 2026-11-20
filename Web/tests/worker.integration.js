@@ -289,3 +289,50 @@ test('섯다는 판이 끝나면 D1 잔액과 돈 랭킹에 반영하고 다음 
   await act(members[0], { action: 'die' });
   await eventually(money, balances => balances[0] === 9_980_000 && balances[1] === 10_020_000);
 });
+
+test('다빈치 코드는 상대에게 숨긴 숫자를 보내지 않고, 끝까지 추리하면 승자를 랭킹에 반영한다', { timeout: 60_000 }, async () => {
+  const prefix = 'qa-' + randomUUID().slice(0, 8);
+  const password = randomUUID().slice(0, 4);
+  const members = [];
+  for (const name of [prefix + '-a', prefix + '-b']) members.push(await request('/join', { data: { name, password }, status: 201 }));
+  const { room: created } = await request('/rooms', { cookie: members[0].cookie, data: { title: prefix + ' 다빈치', game: 'davinci' }, status: 201 });
+  let room = created;
+  const act = async (member, input) => {
+    ({ room } = await request('/rooms/' + room.id + '/action', { cookie: member.cookie,
+      data: { ...input, turn: room.turn, revision: room.revision, match: room.match, seatEpoch: room.seatEpoch } }));
+    return room;
+  };
+  await act(members[1], { action: 'join' });
+  await act(members[0], { action: 'ready', ready: true });
+  await act(members[1], { action: 'ready', ready: true });
+  assert.equal(room.status, 'playing');
+  const seat = room.players.findIndex(player => player.id === members[1].user.id);
+  assert.ok(room.players[seat].tiles.every(entry => Number.isInteger(entry.tile)));
+  assert.ok(room.players[1 - seat].tiles.every(entry => entry.tile === undefined && ['black', 'white'].includes(entry.color)));
+  assert.equal(room.pile, undefined);
+  assert.equal(room.pileCount.black + room.pileCount.white, 18);
+
+  // Each player guesses the leftmost hidden tile of the other, never repeating a miss, until one is out.
+  for (let step = 0; step < 400 && room.status === 'playing'; step++) {
+    const member = members.find(candidate => candidate.user.id === room.players[room.index].id);
+    ({ room } = await request('/rooms/' + room.id, { cookie: member.cookie }));
+    const mine = room.index;
+    if (room.phase === 'draw') await act(member, { action: 'draw', color: room.pileCount.black ? 'black' : 'white' });
+    else if (room.phase === 'place') await act(member, { action: 'place', slot: room.slots[0] });
+    else if (room.phase === 'reveal') await act(member, { action: 'reveal', index: room.players[mine].tiles.findIndex(entry => !entry.open) });
+    else if (room.streak) await act(member, { action: 'stop' });
+    else {
+      const index = room.players[1 - mine].tiles.findIndex(entry => !entry.open);
+      const entry = room.players[1 - mine].tiles[index];
+      const value = Array.from({ length: 13 }, (_, value) => value).find(value => !entry.misses.includes(value));
+      await act(member, { action: 'guess', target: 1 - mine, index, value });
+    }
+  }
+  assert.equal(room.status, 'finished');
+  assert.equal(room.winners.length, 1);
+  assert.ok(room.players.every(player => player.tiles.every(entry => Number.isInteger(entry.tile))));
+  const winner = members.find(member => member.user.id === room.winners[0]);
+  const { rows } = await eventually(() => request('/rankings?game=davinci', { cookie: members[0].cookie }),
+    ({ rows }) => rows.find(row => row.name === winner.user.name)?.wins === 1);
+  assert.ok(rows.find(row => row.name === winner.user.name).mmr > 1000);
+});

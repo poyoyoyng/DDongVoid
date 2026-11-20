@@ -4,6 +4,7 @@ import { bankruptLine, baseBet, betOptions, cardKind, cardMonth, cardName as hwa
 import { saboteurStage, saboteurTitle, saboteurView } from './saboteur-view.js';
 import { cardArt as saboteurCard, goalArt, startArt } from './saboteur-art.js';
 import { critterSvg } from './sides-art.js';
+import { davinciBoard, davinciStage, tileArt } from './davinci-view.js';
 
 export const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -20,6 +21,7 @@ const artwork = {
   omok: '<span class="art-goban"><i class="b"></i><i class="w"></i><i class="b"></i><i class="w"></i><i class="b"></i></span>',
   seotda: '<img class="art-hwatu first" src="/assets/hwatu/m3-0.svg" alt=""><img class="art-hwatu second" src="/assets/hwatu/m8-0.svg" alt=""><span class="art-coin">₩</span>',
   saboteur: `<span class="art-mine">${startArt()}${saboteurCard(30)}${saboteurCard(4)}${goalArt('gold')}</span>`,
+  davinci: `<span class="art-code">${tileArt('black', 6)}${tileArt('white', 15)}${tileArt('black', null)}${tileArt('white', 25)}</span>`,
 };
 
 export function home() {
@@ -195,6 +197,7 @@ const waitingNotes = {
   omok: '두 사람 모두 준비 완료를 누르면 시작합니다.<br>흑이 먼저 두고, 흑과 백은 한 판씩 번갈아 맡아요.',
   seotda: `2~4명이 참가하고 모두 준비하면 시작합니다.<br>판마다 기본 판돈 ${won(baseBet)}을 내고, 패를 한 장씩 두 번 받으며 베팅해요.`,
   saboteur: '3~10명이 참가하고 모두 준비하면 시작합니다.<br>광부 팀 vs 방해꾼 팀! 역할은 비밀이에요. 금을 찾으면 광부 팀 모두, 카드가 다 떨어지면 방해꾼 팀 모두 이겨요.',
+  davinci: '2~4명이 참가하고 모두 준비하면 시작합니다.<br>2~3명은 4장, 4명은 3장씩 받아요. 상대의 숨겨진 숫자를 맞혀 모두 공개시키고 마지막까지 살아남으세요.',
 };
 
 function stage(room) {
@@ -202,6 +205,7 @@ function stage(room) {
   if (room.status !== 'playing') return 'WAITING ROOM';
   if (room.game === 'seotda') return (room.stage === 1 ? '첫째 장' : '둘째 장') + ' 베팅';
   if (room.game === 'saboteur') return saboteurStage(room);
+  if (room.game === 'davinci') return davinciStage(room);
   return room.game === 'slap' ? 'ROUND ' + room.turn : room.game === 'yacht' ? `ROUND ${room.turn} / 12` : 'TURN ' + room.turn;
 }
 
@@ -242,7 +246,8 @@ export function roomPage(state, user, ui) {
   const playing = room.status === 'playing';
   const finished = room.status === 'finished';
   const gameView = { slap: slapView, ciao: ciaoView, onecard: cardView, yacht: yachtView, omok: omokView, seotda: seotdaView,
-    saboteur: (room, me, ui) => room.status === 'waiting' ? waitingSeats(room, me) : saboteurView(room, me, ui) }[room.game];
+    saboteur: (room, me, ui) => room.status === 'waiting' ? waitingSeats(room, me) : saboteurView(room, me, ui),
+    davinci: (room, me, ui) => room.status === 'waiting' ? waitingSeats(room, me) : davinciBoard(room, me, ui) }[room.game];
   const winnerNames = room.winners.map(id => nameOf(room, id)).join(' · ');
   const main = [
     me && !playing ? action(me.ready ? '준비 취소' : finished ? '다시 하기 · 준비 완료' : '준비 완료',
