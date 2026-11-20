@@ -974,8 +974,13 @@ dialog .form-error { color: #a53745; margin: 0; }
 .bm-cell.fund, .bm-cell.donate { background: #e6defc; color: #3f2d7a; }
 .bm-cell.space { background: #1c2c52; color: #e8eeff; }
 .bm-cell.start { background: #d9f7e3; color: #155d35; }
-.own-0 { --owner: #3ccf8e; } .own-1 { --owner: #f39a5b; } .own-2 { --owner: #4ea8f2; } .own-3 { --owner: #a873f0; }
-.bm-cell.owned { background: color-mix(in srgb, var(--owner) 38%, #f6f2e4); box-shadow: inset 0 0 0 .45cqw var(--owner); }
+.own-0 { --owner: #e8352f; } .own-1 { --owner: #f5b800; } .own-2 { --owner: #2f6fe0; } .own-3 { --owner: #2aa84a; }
+.bm-cell.owned { background: color-mix(in srgb, var(--owner) 40%, #fffaf0); box-shadow: inset 0 0 0 max(2px, .6cqw) var(--owner); }
+/* An owned lot flies its owner's flag, in the colour of their pawn. */
+.bm-flag { position: absolute; top: .7cqw; right: .9cqw; width: max(5px, 1.9cqw); height: max(7px, 2.8cqw); border-left: max(1.5px, .3cqw) solid #2b1d14; pointer-events: none; }
+.bm-flag::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 64%; background: var(--owner); clip-path: polygon(0 0, 100% 50%, 0 100%); }
+.bm-cell.bottom .bm-flag { top: 1.7cqw; }
+.bm-cell.left .bm-flag { right: 2.1cqw; }
 .bm-cell.picked { outline: 3px solid var(--app-gold); outline-offset: -1px; z-index: 2; }
 .bm-cell.landed { animation: bm-landed 1.2s ease-out 1; }
 .bm-cell.travel { outline: 2px dashed #a7f3ce; outline-offset: -3px; }
@@ -987,13 +992,19 @@ dialog .form-error { color: #a53745; margin: 0; }
 .bm-hotel { background: #e03131; clip-path: polygon(50% 0, 63% 35%, 100% 37%, 70% 60%, 80% 100%, 50% 77%, 20% 100%, 30% 60%, 0 37%, 37% 35%); }
 .bm-building { background: #1864ab; }
 .bm-marks .bm-building { height: max(7px, 1.8cqw); }
-.bm-pawns { position: absolute; right: .35cqw; bottom: .35cqw; display: flex; flex-wrap: wrap-reverse; justify-content: flex-end; gap: .25cqw; max-width: 70%; }
-.bm-pawn { display: inline-block; flex: none; width: 12px; height: 12px; border: 1.5px solid #0b2238; border-radius: 50% 50% 45% 45%; background: var(--seat); }
-.bm-cell .bm-pawn { width: max(8px, 2cqw); height: max(8px, 2cqw); }
-.bm-cell .bm-pawn.active { box-shadow: 0 0 0 2px #fff; animation: bm-hop 1s ease-in-out infinite; }
+/* Pawns stand at the foot of their space, overlapping a little when several share it. */
+.bm-pawns { position: absolute; inset: auto 0 0; display: flex; justify-content: center; pointer-events: none; }
+.bm-pawn { display: inline-block; flex: none; width: 22px; height: 22px; background: center / contain no-repeat; filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / .45)); }
+.bm-pawn.seat-0 { background-image: url(assets/bluemarble/hero.svg); }
+.bm-pawn.seat-1 { background-image: url(assets/bluemarble/chick.svg); }
+.bm-pawn.seat-2 { background-image: url(assets/bluemarble/police.svg); }
+.bm-pawn.seat-3 { background-image: url(assets/bluemarble/dino.svg); }
+.bm-cell .bm-pawn { width: max(14px, 4.2cqw); height: max(14px, 4.2cqw); }
+.bm-cell .bm-pawn + .bm-pawn { margin-left: min(-6px, -2.3cqw); }
+.bm-cell .bm-pawn.active { position: relative; z-index: 1; animation: bm-hop 1s ease-in-out infinite; }
 @keyframes bm-hop { 50% { transform: translateY(-25%); } }
 .bm-cell .bm-pawn.ghosted { visibility: hidden; animation: none; }
-.bm-ghost { position: absolute; z-index: 40; pointer-events: none; box-shadow: 0 0 0 2px #fff, 0 4px 8px rgb(0 0 0 / .35); }
+.bm-ghost { position: absolute; z-index: 40; pointer-events: none; filter: drop-shadow(0 3px 4px rgb(0 0 0 / .45)); }
 .bm-center { grid-area: 2 / 2 / 11 / 11; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.6cqw; min-width: 0; padding: 2cqw;
   border-radius: 1.2cqw; background: radial-gradient(circle at 50% 42%, #2b7bc4 0, #174a7c 45%, #0e2f4f 75%); color: #fff; text-align: center; }
 .bm-logo { color: #ffd064; font-size: max(14px, 4.6cqw); font-weight: 900; line-height: 1; letter-spacing: .04em; text-shadow: 0 .4cqw 0 #0b2238; }
@@ -1004,6 +1015,19 @@ dialog .form-error { color: #a53745; margin: 0; }
 .bm-dice.double .die-face { border-color: #ffd064; }
 .bm-turn { display: flex; align-items: center; gap: 6px; font-size: max(12px, 2.1cqw); font-weight: 800; }
 .bm-turn strong { color: #ffd064; }
+.bm-turn .bm-pawn { width: max(20px, 3.6cqw); height: max(20px, 3.6cqw); }
+/* What just happened: earlier lines small, the newest one big in a bubble, money as a green or red chip. */
+.bm-news { display: grid; justify-items: center; gap: .5cqw; width: 100%; max-width: 66cqw; margin: 0; padding: 0; list-style: none; }
+.bm-news li { display: flex; align-items: center; justify-content: center; gap: .9cqw; color: #cfe3f5; font-size: max(10px, 1.7cqw); font-weight: 700; line-height: 1.25; }
+.bm-news li .bm-pawn { width: max(14px, 2.6cqw); height: max(14px, 2.6cqw); }
+.bm-news li b { color: #fff; }
+.bm-news li.latest { padding: .9cqw 1.8cqw; border-radius: 1.4cqw; background: rgb(255 255 255 / .14); color: #fff; font-size: max(13px, 2.7cqw); font-weight: 900; animation: bm-news-in .35s ease-out; }
+.bm-news li.latest .bm-pawn { width: max(22px, 4.6cqw); height: max(22px, 4.6cqw); }
+.bm-news li.latest b { color: #ffd064; }
+.bm-news em { flex: none; padding: .2cqw .9cqw; border-radius: 99px; color: #fff; font-style: normal; font-weight: 900; font-variant-numeric: tabular-nums; }
+.bm-news em.plus { background: #1f9d55; }
+.bm-news em.minus { background: #e03131; }
+@keyframes bm-news-in { from { opacity: 0; transform: scale(.8); } }
 .bm-key { display: grid; gap: .5cqw; max-width: 62cqw; padding: 1.4cqw 2cqw; border: 2px solid #ffd064; border-radius: 1.2cqw; background: #fff8de; color: #4a3300;
   box-shadow: 0 .5cqw 0 #b8860b; animation: bm-key-in .35s ease-out; }
 .bm-key span { color: #a87400; font-size: max(10px, 1.6cqw); font-weight: 800; }
@@ -1016,6 +1040,7 @@ dialog .form-error { color: #a53745; margin: 0; }
   .bm-price, .bm-cell:not(.corner):not(.special) .bm-icon { display: none; }
   .bm-cell { font-size: max(7px, 2.25cqw); }
   .bm-key small, .bm-logo span { display: none; }
+  .bm-news li:not(.latest):not(:nth-last-child(2)) { display: none; }
 }
 .bm-side { display: grid; gap: 10px; min-width: 0; }
 .bm-controls { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--app-mint); border-radius: 12px; background: #1f3a2d; }
@@ -1024,7 +1049,7 @@ dialog .form-error { color: #a53745; margin: 0; }
 .bm-controls > .app-button.wide { margin-top: 0; }
 .bm-players { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .bm-players li { display: flex; align-items: flex-start; gap: 9px; padding: 9px 11px; border: 1px solid #395447; border-radius: 10px; background: var(--app-inner); }
-.bm-players li > .bm-pawn { margin-top: 3px; width: 14px; height: 14px; }
+.bm-players li > .bm-pawn { width: 34px; height: 34px; }
 .bm-players li > div { display: grid; gap: 2px; min-width: 0; }
 .bm-players strong { font-size: 14px; overflow-wrap: anywhere; }
 .bm-players small { color: var(--app-muted); font-size: 12px; }
@@ -1049,7 +1074,7 @@ dialog .form-error { color: #a53745; margin: 0; }
 .bm-result h3 { margin-bottom: 6px; color: var(--app-gold); font-size: 16px; }
 .bm-result ol { display: grid; gap: 4px; margin: 0; padding-left: 20px; }
 .bm-result li { font-size: 14px; }
-.bm-result li .bm-pawn { margin-right: 6px; vertical-align: -1px; }
+.bm-result li .bm-pawn { margin-right: 6px; vertical-align: middle; }
 .bm-result li b { float: right; color: var(--app-gold); }
 .bm-result li.winner { font-weight: 900; }
 .bm-log { max-height: calc(12px * 1.6 * 5 + 20px); margin: 0; padding: 10px 12px 10px 34px; overflow-y: auto; overscroll-behavior: contain; border-radius: 10px; background: var(--app-inner); color: var(--app-muted); font-size: 12px; line-height: 1.6; }
@@ -1069,5 +1094,5 @@ dialog .form-error { color: #a53745; margin: 0; }
 .bm-guide-keys em { color: #a87400; font-size: 12px; font-style: normal; font-weight: 800; }
 .bm-guide-keys small { color: #6d5a2a; font-size: 12px; line-height: 1.4; }
 @media (prefers-reduced-motion: reduce) {
-  .bm-cell .bm-pawn.active, .bm-cell.landed, .bm-key { animation: none; }
+  .bm-cell .bm-pawn.active, .bm-cell.landed, .bm-key, .bm-news li.latest { animation: none; }
 }

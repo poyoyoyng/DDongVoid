@@ -611,7 +611,7 @@ function bluemarbleGuide() {
   const deedBadge = (name, group) => `<span class="bm-guide-deed ${group}"><i></i>${name}</span>`;
   const steps = [
     ['주사위 굴리기', '주사위 2개를 굴려 나온 합만큼 앞으로 가요.<br><b>더블</b>이면 한 번 더! 단, 더블 3번이면 무인도로 가요.', dice([4, 4])],
-    ['땅 사기', '주인 없는 도시 · 관광지 · 탈것에 서면<br>땅값을 내고 살 수 있어요. 안 사도 돼요.', deedBadge('서울', 'tour')],
+    ['땅 사기', '주인 없는 도시 · 관광지 · 탈것에 서면<br>땅값을 내고 살 수 있어요. 안 사도 돼요.<br>산 땅에는 내 말 색깔의 <b>깃발</b>이 꽂혀요.', deedBadge('서울', 'tour')],
     ['건물 짓기', '내 도시에 다시 서면 별장(2채까지) · 빌딩 · 호텔을<br>순서 없이 지을 수 있어요. 지을수록 통행료가 올라요.', '<span class="bm-guide-marks"><i class="bm-villa"></i><i class="bm-villa"></i><i class="bm-building"></i><i class="bm-hotel"></i></span>'],
     ['통행료 내기', '남의 땅에 서면 주인에게 통행료를 내요.<br>땅 통행료 + 지은 건물마다의 통행료를 모두 더해요.', deedBadge('파리', 'g6')],
   ];

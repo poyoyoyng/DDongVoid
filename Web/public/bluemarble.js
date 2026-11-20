@@ -66,6 +66,15 @@ export const spaces = [
 ];
 
 // Names short enough for a board cell.
+// The four pawns, each in one strong colour so a seat is told apart at a glance. The art is assets/bluemarble/<art>.svg,
+// and styles.css paints .bm-pawn.seat-N with it and owned lots (.own-N) in the same colour.
+export const pieces = [
+  { name: '꼬마 히어로', art: 'hero', color: '#e8352f' },
+  { name: '삐약이', art: 'chick', color: '#f5b800' },
+  { name: '꼬마 경찰', art: 'police', color: '#2f6fe0' },
+  { name: '아기 공룡', art: 'dino', color: '#2aa84a' },
+];
+
 export const shortNames = {
   21: '부에노스', 15: '콩코드', 28: '퀸엘리자베스', 32: '컬럼비아', 20: '기금 받기', 38: '기금 내기',
 };

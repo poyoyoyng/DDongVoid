@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { applyAction, createRoom, expireRoom, roomView } from '../src/games.js';
 import {
-  COLUMBIA, DONATE, FUND, ISLAND, SPACE, cellPlace, estateValue, fundFee, keys, maxRounds, salary, spaceFee, spaces, startMoney, toll, turnTime, won,
+  COLUMBIA, DONATE, FUND, ISLAND, SPACE, cellPlace, estateValue, fundFee, keys, maxRounds, pieces, salary, spaceFee, spaces, startMoney, toll, turnTime, won,
 } from '../public/bluemarble.js';
 import { roomPage } from '../public/views.js';
 import { guide } from '../public/guide.js';
@@ -327,4 +327,38 @@ test('보는 화면에는 황금열쇠 더미 순서가 없고, 판 · 땅 문�
   assert.match(html, /베이징/);
   assert.match(html, /지금 통행료 <b>2만 4천원<\/b>/);
   assert.match(guide('bluemarble'), /황금열쇠/);
+});
+
+test('판 가운데에 누가 무엇을 했는지와 오간 돈을 크게 보여 준다', () => {
+  const { room, play, roll } = table(2);
+  roll(0, 1, 2); // 3 베이징, 주인 없는 땅
+  assert.deepEqual(room.news, [
+    { seat: 0, text: '🎲 1 + 2 = 3', amount: 0, at: 0 },
+    { seat: 0, text: '베이징 도착 · 주인 없는 땅', amount: 0, at: 1 },
+  ]);
+  play(0, { action: 'buy' });
+  assert.deepEqual(room.news.at(-1), { seat: 0, text: '베이징 땅 구입! 🚩', amount: -spaces[3].price, at: 1 });
+  roll(1, 1, 2); // 고양이가 민트의 베이징에 선다
+  assert.equal(room.news.length, 2, '새로 굴리면 새로 적는다');
+  assert.deepEqual(room.news.at(-1), { seat: 1, text: '민트님의 베이징에 걸렸다! 통행료', amount: -toll(3, room.estates[3]), at: 1 });
+  const html = roomPage(roomView(room, '0'), '0', { connected: true });
+  assert.match(html, /class="bm-news"/);
+  assert.match(html, /<em class="minus">−4천원<\/em>/);
+  assert.match(html, /class="bm-flag"/, '산 땅에는 깃발이 꽂힌다');
+  assert.match(html, /bm-pawn seat-1/);
+});
+
+test('말 캐릭터 그림 4개는 따로 불러도 되는 SVG다', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  for (const [seat, piece] of pieces.entries()) {
+    const svg = await readFile(new URL(`../public/assets/bluemarble/${piece.art}.svg`, import.meta.url), 'utf8');
+    assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 64 64">/);
+    for (const tag of svg.match(/<[^/!][^>]*>/g)) {
+      const names = [...tag.matchAll(/\s([\w-]+)=/g)].map(match => match[1]);
+      assert.equal(new Set(names).size, names.length, piece.name + ': ' + tag);
+    }
+    assert.ok(css.includes(`.bm-pawn.seat-${seat} { background-image: url(assets/bluemarble/${piece.art}.svg); }`), piece.name);
+    assert.ok(css.includes(`.own-${seat} { --owner: ${piece.color}; }`), piece.name + ' 땅 색');
+  }
 });

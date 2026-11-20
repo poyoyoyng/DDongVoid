@@ -150,7 +150,7 @@ async function navigate() {
   solo?.stop();
   solo = null;
   room = null;
-  ui = { connected: false, held: Array(5).fill(false), card: null, call: false, power: 0, peeked: readPeeked(), sabCard: null, sabRot: 0, sabZoom: 1, bmCell: null, bmShow: null, bmGhost: null, bmKey: false, bmWalk: 0 };
+  ui = { connected: false, held: Array(5).fill(false), card: null, call: false, power: 0, peeked: readPeeked(), sabCard: null, sabRot: 0, sabZoom: 1, bmCell: null, bmShow: null, bmGhost: null, bmMoves: 0, bmWalk: 0 };
   page = parsePage();
   const { section, key } = page;
   // The rhythm game needs to be heard on its own.
@@ -460,7 +460,7 @@ function walkBluemarble(previous, next) {
   ui.bmWalk++;
   document.querySelector('.bm-ghost')?.remove();
   ui.bmShow = ui.bmGhost = null;
-  ui.bmKey = false;
+  ui.bmMoves = 0;
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return null;
   const { seat, from } = walk.moves[0];
   const steps = [];
@@ -488,10 +488,10 @@ function walkBluemarble(previous, next) {
       const ms = step.fly ? 700 : pace;
       ghost = hopPawn(ghost, seat, step.pos, ms, step.fly);
       if (step.rest && step !== steps.at(-1)) {
-        // A stop on the way is a 황금열쇠 that sends the pawn on: its card shows and is held a moment first.
+        // A stop on the way is a 황금열쇠 that sends the pawn on: its card and what happened there show for a moment first.
         await wait(ms);
         if (!live()) return ghost?.remove();
-        ui.bmKey = true;
+        ui.bmMoves++;
         renderRoom();
         await wait(900);
       } else {
@@ -501,7 +501,7 @@ function walkBluemarble(previous, next) {
     ghost?.remove();
     if (!live()) return;
     ui.bmShow = ui.bmGhost = null;
-    ui.bmKey = false;
+    ui.bmMoves = 0;
     renderRoom();
   };
 }

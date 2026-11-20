@@ -1,6 +1,6 @@
 import { escape, rankTag, yachtFace } from './views.js';
 import {
-  SPACE, buildable, cellPlace, estateValue, fundFee, islandTurns, keys, maxRounds, partLimit, partNames, parts,
+  SPACE, buildable, cellPlace, estateValue, fundFee, islandTurns, keys, maxRounds, partLimit, partNames, parts, pieces,
   saleValue, salary, shortName, spaceFee, spaces, toll, won,
 } from './bluemarble.js';
 
@@ -17,7 +17,7 @@ const buildingMarks = estate => estate ? '<i class="bm-villa"></i>'.repeat(estat
   '<i class="bm-building"></i>'.repeat(estate.building) + '<i class="bm-hotel"></i>'.repeat(estate.hotel) : '';
 
 // While a pawn walks (app.js), ui.bmShow says where it is drawn, ui.bmGhost which seat's pawn is floating above the board,
-// and ui.bmKey whether it has reached the 황금열쇠 it drew yet.
+// and ui.bmMoves how many of the walk's moves it has finished.
 function cell(room, pos, ui, travel) {
   const space = spaces[pos];
   const { row, col } = cellPlace(pos);
@@ -26,7 +26,7 @@ function cell(room, pos, ui, travel) {
   const side = row === 11 ? 'bottom' : col === 1 ? 'left' : row === 1 ? 'top' : 'right';
   const corner = [0, 10, 20, 30].includes(pos);
   const pawns = room.players.map((player, seat) => (!player.bankrupt || seat === ui.bmGhost) && (ui.bmShow?.[seat] ?? player.pos) === pos
-    ? `<i class="bm-pawn seat-${seat}${seat === room.index ? ' active' : ''}${seat === ui.bmGhost ? ' ghosted' : ''}" title="${escape(player.name)}"></i>` : '').join('');
+    ? `<i class="bm-pawn seat-${seat}${seat === room.index ? ' active' : ''}${seat === ui.bmGhost ? ' ghosted' : ''}" title="${escape(player.name)} · ${pieces[seat].name}"></i>` : '').join('');
   const classes = ['bm-cell', side, space.kind, corner ? 'corner' : '', space.kind === 'city' ? 'g' + space.group : '',
     owner !== null ? 'owned own-' + owner : '', ui.bmCell === pos ? 'picked' : '', !ui.bmShow && room.walk?.moves.at(-1)?.to === pos ? 'landed' : '',
     travel && pos !== SPACE ? 'travel' : ''].filter(Boolean).join(' ');
@@ -35,6 +35,7 @@ function cell(room, pos, ui, travel) {
   return `<button type="button" class="${classes}" style="grid-area:${row}/${col}" data-bm-cell="${pos}"
       aria-label="${escape(space.name)}${owner !== null ? ' · ' + escape(room.players[owner].name) + ' 소유' : ''}">
     ${space.kind === 'city' ? '<span class="bm-band"></span>' : ''}
+    ${owner !== null ? '<span class="bm-flag" aria-hidden="true"></span>' : ''}
     ${icon ? `<span class="bm-icon" aria-hidden="true">${icon}</span>` : ''}
     <span class="bm-name">${escape(shortName(pos))}</span>${price}
     ${estate && (estate.villa || estate.building || estate.hotel) ? `<span class="bm-marks">${buildingMarks(estate)}</span>` : ''}
@@ -56,6 +57,20 @@ function keyCard(room) {
   return `<div class="bm-key"><span>🔑 황금열쇠</span><b>${escape(info.name)}</b><small>${escape(info.text)}</small></div>`;
 }
 
+// What the player whose turn it is just did, in big letters: the newest line largest, money in green (+) or red (-).
+// While their pawn walks, a line waits until the pawn has got where it happened.
+function news(room, ui) {
+  const lines = (room.news ?? []).filter(line => !ui.bmShow || line.at <= ui.bmMoves);
+  if (!lines.length) return '';
+  return `<ol class="bm-news" aria-live="polite">${lines.map((line, index) => {
+    const latest = index === lines.length - 1;
+    const named = latest || index === 0 || lines[index - 1].seat !== line.seat;
+    const money = line.amount ? `<em class="${line.amount > 0 ? 'plus' : 'minus'}">${line.amount > 0 ? '+' : '−'}${won(Math.abs(line.amount))}</em>` : '';
+    return `<li class="${latest ? 'latest' : ''}"><i class="bm-pawn seat-${line.seat}"></i>
+      <span>${named ? `<b>${escape(room.players[line.seat].name)}</b> ` : ''}${escape(line.text)}</span>${money}</li>`;
+  }).join('')}</ol>`;
+}
+
 function center(room, me, ui) {
   const playing = room.status === 'playing';
   const actual = playing ? room.players[room.index] : null;
@@ -64,7 +79,8 @@ function center(room, me, ui) {
     ${dice(room)}
     ${actual ? `<p class="bm-turn"><i class="bm-pawn seat-${room.index}"></i>${actual.id === me?.id ? '내 차례' : escape(actual.name) + '님의 차례'}
       · <strong data-deadline="${room.deadline}"></strong></p>` : ''}
-    ${ui.bmShow && !ui.bmKey ? '' : keyCard(room)}
+    ${news(room, ui)}
+    ${ui.bmShow && !ui.bmMoves ? '' : keyCard(room)}
     <p class="bm-fund">사회복지기금 <b>${won(room.fund ?? 0)}</b></p>
   </div>`;
 }
@@ -160,7 +176,7 @@ function players(room, me) {
       <i class="bm-pawn seat-${seat}"></i>
       <div><strong>${current ? '▶ ' : ''}${escape(player.name)}${player.id === me?.id ? ' (나)' : ''}${rankTag(room, player)}</strong>
         <span class="bm-money">${player.bankrupt ? '—' : won(player.money)}</span>
-        <small>땅 ${lots.length}곳 · 총자산 ${player.bankrupt ? '0원' : won(worth)}${status ? ' · ' + status : ''}</small>
+        <small>${pieces[seat].name} · 땅 ${lots.length}곳 · 총자산 ${player.bankrupt ? '0원' : won(worth)}${status ? ' · ' + status : ''}</small>
         ${held.length ? `<small class="bm-held">🔑 ${held.map(escape).join(', ')}</small>` : ''}</div></li>`;
   }).join('')}</ul>`;
 }

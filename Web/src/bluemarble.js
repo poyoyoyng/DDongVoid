@@ -12,6 +12,12 @@ function note(room, text) {
   room.log = [...(room.log ?? []), text].slice(-50);
 }
 
+// What just happened, told in big letters in the middle of the board: whose, what, and the money in (+) or out (-).
+// at is how many moves of the walk had been made, so the board tells it once the walking pawn has got there.
+function tell(room, seat, text, amount = 0) {
+  room.news = [...(room.news ?? []), { seat, text, amount, at: room.walk?.moves.length ?? 0 }].slice(-6);
+}
+
 function shuffle(items, random) {
   for (let index = items.length - 1; index > 0; index--) {
     const other = random(index + 1);
@@ -28,7 +34,7 @@ export function startBluemarble(room, random, now) {
   Object.assign(room, {
     phase: 'roll', index: 0, round: 1, dice: null, doubles: 0, again: false, stop: false, fund: 0, pending: null,
     estates: spaces.map((_, pos) => ownable(pos) ? emptyEstate() : null),
-    keyDeck: shuffle(keys.map((_, card) => card), random), drawn: null, walk: null, result: null, log: [],
+    keyDeck: shuffle(keys.map((_, card) => card), random), drawn: null, walk: null, news: [], result: null, log: [],
     deadline: now + turnTime,
   });
   note(room, `게임 시작 · 모두 ${won(money)}씩 · ${room.players[0].name}부터`);
@@ -46,6 +52,7 @@ function charge(room, seat, amount, to, reason) {
   else if (to !== 'bank') room.players[to].money += paid;
   if (paid < amount) {
     note(room, `${player.name} · ${reason} ${won(amount)}을 다 내지 못해 파산!`);
+    tell(room, seat, '돈이 모자라 파산! 💸');
     bankrupt(room, seat);
   }
 }
@@ -69,6 +76,7 @@ function liquidate(room, seat, amount) {
     if (player.money >= amount) break;
     const price = sell(room, seat, pos);
     note(room, `${player.name} · 돈이 모자라 ${nameOf(pos)}을(를) 은행에 ${won(price)}에 팔았습니다`);
+    tell(room, seat, `돈이 모자라 ${nameOf(pos)} 팔기`, price);
   }
 }
 
@@ -105,12 +113,13 @@ function advance(room, seat, to, { pay = true, kind = 'forward' } = {}) {
   const player = room.players[seat];
   const from = player.pos;
   const steps = (to - from + 40) % 40;
+  player.pos = to;
+  track(room, seat, from, to, kind);
   if (pay && steps && from + steps >= 40) {
     player.money += salary;
     note(room, `${player.name} · 출발을 지나 월급 ${won(salary)}`);
+    tell(room, seat, '출발을 지나 월급', salary);
   }
-  player.pos = to;
-  track(room, seat, from, to, kind);
 }
 
 function sendToIsland(room, seat) {
@@ -129,18 +138,25 @@ function land(room, seat) {
   if (ownable(pos)) {
     const estate = room.estates[pos];
     if (estate.owner === null) {
+      tell(room, seat, `${space.name} 도착 · 주인 없는 땅`);
       if (player.money >= space.price) return wait(room, 'buy', { pos });
       note(room, `${player.name} · ${space.name} 도착 · 돈이 모자라 살 수 없어요`);
       return false;
     }
     if (estate.owner === seat) {
+      tell(room, seat, `내 땅 ${space.name} 도착`);
       const cheapest = Math.min(...buildable(pos, estate).map(part => space.cost[part]));
       if (player.money >= cheapest) return wait(room, 'build', { pos });
       note(room, `${player.name} · 내 땅 ${space.name} 도착`);
       return false;
     }
     const amount = toll(pos, estate);
-    if (player.keys.some(card => keys[card].type === 'pass')) return wait(room, 'toll', { pos, amount, to: estate.owner });
+    const caught = `${room.players[estate.owner].name}님의 ${space.name}에 걸렸다!`;
+    if (player.keys.some(card => keys[card].type === 'pass')) {
+      tell(room, seat, caught);
+      return wait(room, 'toll', { pos, amount, to: estate.owner });
+    }
+    tell(room, seat, caught + ' 통행료', -amount);
     note(room, `${player.name} → ${room.players[estate.owner].name} · ${space.name} 통행료 ${won(amount)}`);
     charge(room, seat, amount, estate.owner, '통행료');
     return false;
@@ -150,19 +166,23 @@ function land(room, seat) {
       return drawKey(room, seat);
     case 'island':
       note(room, `${player.name} · 무인도에 갇혔어요 (${islandTurns}턴)`);
+      tell(room, seat, '무인도에 갇혔다! 🏝️');
       sendToIsland(room, seat);
       return false;
     case 'fund':
       note(room, `${player.name} · 사회복지기금 ${won(room.fund)} 받기`);
+      tell(room, seat, '사회복지기금 받기', room.fund);
       player.money += room.fund;
       room.fund = 0;
       return false;
     case 'donate':
       note(room, `${player.name} · 사회복지기금 ${won(fundFee)} 내기`);
+      tell(room, seat, '사회복지기금 내기', -fundFee);
       charge(room, seat, fundFee, 'fund', '사회복지기금');
       return false;
     case 'space':
       note(room, `${player.name} · 우주여행 정거장 도착 · 다음 차례에 원하는 곳으로 가요`);
+      tell(room, seat, '우주여행 정거장 도착 🚀');
       player.space = true;
       room.stop = true;
       return false;
@@ -184,6 +204,7 @@ function drawKey(room, seat) {
   const info = keys[card];
   room.drawn = { card, seat, turn: room.turn };
   note(room, `${player.name} · 황금열쇠 「${info.name}」 ${info.text}`);
+  tell(room, seat, `🔑 황금열쇠 「${info.name}」`, info.type === 'gain' ? info.amount : info.type === 'pay' ? -info.amount : 0);
   if (info.keep) player.keys.push(card);
   else room.keyDeck.push(card);
   switch (info.type) {
@@ -194,13 +215,16 @@ function drawKey(room, seat) {
         return false;
       }
       const pos = lots.reduce((best, candidate) => estateValue(candidate, room.estates[candidate]) > estateValue(best, room.estates[best]) ? candidate : best);
-      note(room, `${nameOf(pos)}을(를) ${won(sell(room, seat, pos))}에 팔았습니다`);
+      const price = sell(room, seat, pos);
+      note(room, `${nameOf(pos)}을(를) ${won(price)}에 팔았습니다`);
+      tell(room, seat, `${nameOf(pos)} 반값에 팔기`, price);
       return false;
     }
     case 'levy': {
       const amount = owned(room, seat).reduce((total, pos) =>
         total + Object.entries(info.rates).reduce((sum, [part, rate]) => sum + room.estates[pos][part] * rate, 0), 0);
       note(room, amount ? `${player.name} · ${info.name} ${won(amount)}` : '건물이 없어서 낼 돈이 없어요');
+      tell(room, seat, amount ? '건물 수만큼 세금' : '건물이 없어 세금 없음', -amount);
       charge(room, seat, amount, 'bank', info.name);
       return false;
     }
@@ -217,6 +241,7 @@ function drawKey(room, seat) {
     case 'world':
       player.money += salary + room.fund;
       note(room, `${player.name} · 한 바퀴 돌아 월급 ${won(salary)}과 사회복지기금 ${won(room.fund)} 받기`);
+      tell(room, seat, '한 바퀴 돌아 월급과 사회복지기금', salary + room.fund);
       room.fund = 0;
       track(room, seat, player.pos, player.pos, 'lap');
       return false;
@@ -230,6 +255,7 @@ function drawKey(room, seat) {
       const estate = room.estates[info.via];
       if (estate.owner !== null && estate.owner !== seat) {
         note(room, `${player.name} → ${room.players[estate.owner].name} · ${nameOf(info.via)} 탑승료 ${won(spaces[info.via].toll)}`);
+        tell(room, seat, `${room.players[estate.owner].name}님의 ${nameOf(info.via)} 탑승료`, -spaces[info.via].toll);
         charge(room, seat, spaces[info.via].toll, estate.owner, '탑승료');
         if (player.bankrupt) return false;
       }
@@ -242,14 +268,18 @@ function drawKey(room, seat) {
     case 'pay':
       charge(room, seat, info.amount, 'bank', info.name);
       return false;
-    case 'gift':
+    case 'gift': {
+      let total = 0;
       for (const [other, giver] of room.players.entries()) {
         if (other === seat || giver.bankrupt) continue;
         const paid = Math.min(giver.money, info.amount);
         giver.money -= paid;
         player.money += paid;
+        total += paid;
       }
+      tell(room, seat, '모두에게 축하금 받기', total);
       return false;
+    }
     default:
       return false;
   }
@@ -291,27 +321,34 @@ function rollDice(room, seat, random) {
   const sum = dice[0] + dice[1];
   room.dice = dice;
   room.walk = { id: room.turn, moves: [] };
+  room.news = [];
+  const told = `🎲 ${dice[0]} + ${dice[1]} = ${sum}`;
   room.stop = false;
   room.again = false;
   if (player.island) {
     if (double) {
       note(room, `${player.name} · 🎲 ${dice.join('·')} 더블! 무인도 탈출`);
+      tell(room, seat, told + ' 더블! 무인도 탈출');
       player.island = 0;
     } else if (--player.island) {
       note(room, `${player.name} · 🎲 ${dice.join('·')} · 무인도에 남아요 (남은 ${player.island}턴)`);
+      tell(room, seat, told + ` · 무인도에 남아요 (남은 ${player.island}턴)`);
       return settle(room);
     } else {
       note(room, `${player.name} · 🎲 ${dice.join('·')} · 무인도에서 ${islandTurns}턴을 채우고 나갑니다`);
+      tell(room, seat, told + ' · 무인도에서 나가요');
     }
   } else {
     room.doubles = double ? room.doubles + 1 : 0;
     if (room.doubles >= 3) {
       note(room, `${player.name} · 🎲 ${dice.join('·')} 더블 3번! 무인도로 갑니다`);
+      tell(room, seat, told + ' 더블 3번! 무인도로');
       sendToIsland(room, seat);
       return settle(room);
     }
     room.again = double;
     note(room, `${player.name} · 🎲 ${dice.join('·')}${double ? ' 더블! 한 번 더' : ''}`);
+    tell(room, seat, told + (double ? ' 더블! 한 번 더' : ''));
   }
   advance(room, seat, (player.pos + sum) % 40);
   if (!land(room, seat)) settle(room);
@@ -323,17 +360,20 @@ function travel(room, seat, to) {
   player.space = false;
   room.dice = null;
   room.walk = { id: room.turn, moves: [] };
+  room.news = [];
   room.again = false;
   room.stop = false;
   const owner = room.estates[COLUMBIA].owner;
   if (player.freeRide) note(room, `${player.name} · 우주여행 초대권으로 컬럼비아호 무료 탑승`);
   else if (owner !== null && owner !== seat) {
     note(room, `${player.name} → ${room.players[owner].name} · 컬럼비아호 탑승료 ${won(spaceFee)}`);
+    tell(room, seat, `${room.players[owner].name}님의 컬럼비아호 탑승료`, -spaceFee);
     charge(room, seat, spaceFee, owner, '컬럼비아호 탑승료');
   }
   player.freeRide = false;
   if (player.bankrupt) return settle(room);
   note(room, `${player.name} · 🚀 ${nameOf(to)}(으)로 우주여행`);
+  tell(room, seat, `🚀 ${nameOf(to)}(으)로 우주여행`);
   advance(room, seat, to, { kind: 'fly' });
   if (!land(room, seat)) settle(room);
 }
@@ -356,11 +396,14 @@ function act(room, seat, input, random) {
       useKey(player, 'escape', room);
       player.island = 0;
       note(room, `${player.name} · 무인도 탈출권으로 탈출!`);
+      tell(room, seat, '무인도 탈출권으로 탈출!');
       return;
     case 'sell': {
       const pos = input.pos;
       requireThat(room.phase === 'roll' && integerIn(pos, 0, 39) && room.estates[pos]?.owner === seat, '팔 수 있는 내 땅을 골라 주세요.');
-      note(room, `${player.name} · ${nameOf(pos)}을(를) 은행에 ${won(sell(room, seat, pos))}에 팔았습니다`);
+      const price = sell(room, seat, pos);
+      note(room, `${player.name} · ${nameOf(pos)}을(를) 은행에 ${won(price)}에 팔았습니다`);
+      tell(room, seat, `${nameOf(pos)} 은행에 팔기`, price);
       return;
     }
     case 'travel':
@@ -373,6 +416,7 @@ function act(room, seat, input, random) {
       player.money -= space.price;
       room.estates[pending.pos].owner = seat;
       note(room, `${player.name} · ${space.name} 구입 (${won(space.price)})`);
+      tell(room, seat, `${space.name} 땅 구입! 🚩`, -space.price);
       return settle(room);
     }
     case 'build': {
@@ -385,13 +429,17 @@ function act(room, seat, input, random) {
       player.money -= space.cost[part];
       estate[part]++;
       note(room, `${player.name} · ${space.name}에 ${partNames[part]} 짓기 (${won(space.cost[part])})`);
+      tell(room, seat, `${space.name}에 ${partNames[part]} 짓기 🏠`, -space.cost[part]);
       const more = buildable(pending.pos, estate).some(next => player.money >= space.cost[next]);
       if (!more) settle(room);
       return;
     }
     case 'skip':
       requireThat(room.phase === 'buy' || room.phase === 'build', '넘길 것이 없습니다.');
-      if (room.phase === 'buy') note(room, `${player.name} · ${nameOf(pending.pos)} 사지 않기`);
+      if (room.phase === 'buy') {
+        note(room, `${player.name} · ${nameOf(pending.pos)} 사지 않기`);
+        tell(room, seat, `${nameOf(pending.pos)} 사지 않기`);
+      }
       return settle(room);
     case 'toll': {
       requireThat(room.phase === 'toll', '지금은 통행료를 낼 때가 아닙니다.');
@@ -400,8 +448,10 @@ function act(room, seat, input, random) {
         requireThat(player.keys.some(card => keys[card].type === 'pass'), '우대권이 없습니다.');
         useKey(player, 'pass', room);
         note(room, `${player.name} · 우대권으로 ${owner.name}님의 ${nameOf(pending.pos)} 통행료 면제`);
+        tell(room, seat, '우대권으로 통행료 면제! 🎫');
       } else {
         note(room, `${player.name} → ${owner.name} · ${nameOf(pending.pos)} 통행료 ${won(pending.amount)}`);
+        tell(room, seat, '통행료 내기', -pending.amount);
         charge(room, seat, pending.amount, pending.to, '통행료');
       }
       return settle(room);
@@ -418,6 +468,7 @@ export function bluemarbleAction(room, player, input, now, random) {
   room.now = now;
   if (input.action === 'resign') {
     note(room, `${player.name} · 파산 선언`);
+    tell(room, seat, '파산 선언 🏳️');
     const current = seat === room.index;
     bankrupt(room, seat);
     if (room.status === 'playing' && current) nextPlayer(room);
@@ -435,6 +486,7 @@ export function expireBluemarble(room, now, random) {
   const seat = room.index;
   const player = room.players[seat];
   note(room, `${player.name} · 시간 초과`);
+  tell(room, seat, '시간 초과 ⏰');
   if (room.phase === 'roll') rollDice(room, seat, random);
   else if (room.phase === 'space') travel(room, seat, START);
   else if (room.phase === 'toll') act(room, seat, { action: 'toll', pass: player.money < room.pending.amount }, random);
