@@ -255,6 +255,7 @@ internal static class RankingChecks
             .SequenceEqual(["똥 피하기", "키보드 리듬", "맞짱", "차오차오", "원카드", "야추", "오목"]), "랭킹에 모든 게임 탭 표시");
         ClickGame("야추"); Wait(() => Labels().Contains("1승 1무 0패"));
         Assert(Labels().Contains("0승 1무 1패") && Labels().Any(t => t.StartsWith("내 순위  1위") && t.Contains("1승 1무 0패")), "야추 승·무·패와 내 순위 표시");
+        Assert(Labels().Contains("역대 최고점수  ·  돼지현  274점"), "야추 랭킹에 역대 최고점수 표시");
         ClickGame("원카드"); Wait(() => Labels().Contains("1승 0패"));
         Assert(Labels().Count(t => t == "0승 1패") == 2, "원카드 3인 게임은 우승자 1승·나머지 1패");
         ClickGame("차오차오"); Wait(() => Labels().Any(t => t.StartsWith("아직 등록된 기록이 없어요")));

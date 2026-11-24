@@ -619,7 +619,7 @@ public partial class MainWindow : Window
         AddButton("메인 메뉴로", ReturnToGame);
         try
         {
-            var rankings = await Task.Run(() => game switch
+            var (rankings, yachtRecord) = await Task.Run(() => (game switch
             {
                 RankingGame.Rhythm => new RhythmStore(rankingStore.Folder).Rankings(),
                 RankingGame.Slap => new SlapStore(rankingStore.Folder).Rankings(),
@@ -628,9 +628,17 @@ public partial class MainWindow : Window
                 RankingGame.Yacht => new GameResultStore(rankingStore.Folder).Rankings(GameResultStore.Yacht),
                 RankingGame.Omok => new GameResultStore(rankingStore.Folder).Rankings(GameResultStore.Omok),
                 _ => rankingStore.Rankings()
-            });
+            }, game == RankingGame.Yacht ? new GameResultStore(rankingStore.Folder).YachtBest() : null));
             if (panel != "ranking" || request != rankingRequest || store != rankingStore) return;
             BeginRankingPanel();
+            if (yachtRecord is not null)
+            {
+                var best = new TextBlock { Name = "YachtRecord", FontSize = 13, FontWeight = FontWeights.Bold, Foreground = Theme.Paint(Colors.PaleGoldenrod),
+                    Text = $"역대 최고점수  ·  {yachtRecord.Id}{(yachtRecord.Id == userId ? " (나)" : "")}  {yachtRecord.Score:N0}점" };
+                if (yachtRecord.AchievedAt is { } at) best.ToolTip = $"{at.ToLocalTime():yyyy-MM-dd HH:mm} 달성";
+                DialogContent.Children.Add(new Border { Child = best, Padding = new Thickness(12, 10, 12, 10), Margin = new Thickness(0, 0, 0, 12),
+                    CornerRadius = new CornerRadius(8), Background = Theme.Paint(Color.FromRgb(46, 44, 26)) });
+            }
             if (rankings.Count == 0) AddText("아직 등록된 기록이 없어요.\n로그인 후 첫 기록을 남겨 보세요.", 13, "#91AB9C", 0, 16);
             else
             {

@@ -81,4 +81,35 @@ public sealed class GameResultStore
                 try { store.Add(new GameResult(game, room.Id, room.Revision, DateTimeOffset.UtcNow, [.. room.Players], [.. room.Winners])); }
                 catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException) { }
     }
+
+    // The all-time Yacht high score. Its own file too, so older versions that rewrite the results file cannot drop it.
+    public string YachtRecordPath => Path.Combine(Folder, "ddongvoid-yacht-record.json");
+    // Carried over from before the record was kept; only a strictly higher score replaces it.
+    public static readonly YachtRecord FirstYachtRecord = new("돼지현", 274, null);
+    public YachtRecord YachtBest()
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                using var file = new FileStream(YachtRecordPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                var record = JsonSerializer.Deserialize<YachtRecord>(file, JsonOptions);
+                if (record is null || string.IsNullOrEmpty(record.Id) || record.Score < 0) throw new JsonException();
+                return record;
+            }
+            catch (IOException ex) when (attempt < 20 && (ex.HResult & 0xffff) is 32 or 33) { Thread.Sleep(25); }
+            catch (FileNotFoundException) { return FirstYachtRecord; }
+            catch (DirectoryNotFoundException) { return FirstYachtRecord; }
+            catch (JsonException ex) { throw new InvalidDataException("야추 역대 기록 JSON 형식이 올바르지 않습니다. 기록을 보호하기 위해 원본 파일을 보존했습니다.", ex); }
+        }
+    }
+    public bool TryRaiseYachtBest(string id, int score) => SharedFile.Locked(YachtRecordPath, ".ddongvoid-yacht-record.lock", true,
+        "다른 PC에서 야추 역대 기록을 저장 중입니다. 잠시 후 다시 시도해 주세요.", () =>
+        {
+            if (score <= YachtBest().Score) return false;
+            SharedFile.WriteAtomic(YachtRecordPath, new YachtRecord(id, score, DateTimeOffset.UtcNow), JsonOptions);
+            return true;
+        });
 }
+
+public sealed record YachtRecord(string Id, int Score, DateTimeOffset? AchievedAt);

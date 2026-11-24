@@ -226,8 +226,20 @@ public sealed class YachtStore
             var result = action(db); Validate(db);
             GameResultStore.RecordFinished(Folder, GameResultStore.Yacht, db.Rooms, finished,
                 r => (r.Id, r.Revision, r.Status == YachtStatus.Finished, r.Players.Select(p => p.Id).ToList(), r.Winners));
+            RecordYachtBest(db, finished);
             SharedFile.WriteAtomic(FilePath, db, JsonOptions); return result;
         });
+    // Like the results, a broken or busy record file must never stop a game from ending.
+    private void RecordYachtBest(YachtDatabase db, IReadOnlyDictionary<Guid, bool> wasFinished)
+    {
+        var results = new GameResultStore(Folder);
+        foreach (var room in db.Rooms.Where(r => r.Status == YachtStatus.Finished && !wasFinished.GetValueOrDefault(r.Id) && r.Players.Count >= 2))
+        {
+            var top = room.Players.MaxBy(p => p.Total())!;
+            try { results.TryRaiseYachtBest(top.Id, top.Total()); }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException) { }
+        }
+    }
     private static YachtRoom Room(YachtDatabase db, Guid id) => db.Rooms.FirstOrDefault(r => r.Id == id)
         ?? throw new ArgumentException("방이 사라졌습니다. 방 목록에서 다시 골라 주세요.");
     public async Task<YachtSnapshot> SnapshotAsync(CancellationToken cancellation = default)

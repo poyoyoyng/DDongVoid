@@ -52,6 +52,21 @@ internal static class GameResultChecks
             var ranking = results.Rankings(GameResultStore.Yacht);
             assert(results.Results(GameResultStore.Yacht).Count == 2 && ranking.Count == 2 && ranking.All(e => e.BestScore + e.Draws + e.Losses == 2), "재대전 결과 누적 오류");
         });
+        check("야추 역대 최고점수: 첫 기록은 돼지현 274점·더 높은 점수만 갱신·게임이 끝나면 1위 점수로 갱신", () =>
+        {
+            var results = new GameResultStore(Path.Combine(root, "야추 역대"));
+            assert(results.YachtBest() is { Id: "돼지현", Score: 274, AchievedAt: null } && !File.Exists(results.YachtRecordPath), "첫 역대 기록 오류");
+            assert(!results.TryRaiseYachtBest("a", 274) && results.YachtBest().Id == "돼지현", "같은 점수로 역대 기록을 빼앗음");
+            assert(results.TryRaiseYachtBest("a", 280) && results.YachtBest() is { Id: "a", Score: 280, AchievedAt: not null }, "더 높은 점수로 갱신 안 됨");
+            assert(!results.TryRaiseYachtBest("b", 100) && results.YachtBest().Id == "a", "낮은 점수로 역대 기록을 덮어씀");
+            var s = new YachtStore(Path.Combine(root, "야추 역대 갱신"));
+            var store = new GameResultStore(s.Folder);
+            Directory.CreateDirectory(s.Folder); File.WriteAllText(store.YachtRecordPath,"{\"Id\":\"old\",\"Score\":0,\"AchievedAt\":null}");
+            var r = s.Create("p0", "역대"); s.Join(r.Id, "p1"); s.SetReady(r.Id, "p0", true); s.SetReady(r.Id, "p1", true);
+            var done = PlayOut(s, r.Id);
+            var top = done.Players.MaxBy(p => p.Total())!;
+            assert(store.YachtBest() is var best && best.Id == top.Id && best.Score == top.Total(), "게임 종료 후 역대 기록 갱신 안 됨");
+        });
         check("승패 기록 파일이 손상돼도 게임은 끝나고 원본은 보존", () =>
         {
             var s = new YachtStore(Path.Combine(root, "승패 손상"));
