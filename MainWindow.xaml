@@ -52,7 +52,7 @@
                   <Button Content="✕" Click="Close_Click" ToolTip="게임 종료" AutomationProperties.Name="게임 종료" Width="30" Height="30" Padding="0" FontSize="15" Background="Transparent"/>
                 </StackPanel>
               </Grid>
-              <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="440"><StackPanel x:Name="DialogContent"/></ScrollViewer>
+              <ScrollViewer x:Name="DialogScroller" Loaded="DialogScroller_Loaded" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="440"><StackPanel x:Name="DialogContent"/></ScrollViewer>
             </Grid>
           </Border>
           <Border x:Name="OneCardCallout" Visibility="Collapsed" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24" Opacity="{Binding ElementName=DialogContent, Path=Opacity}"/>

@@ -103,6 +103,9 @@ internal static class RankingChecks
         Assert(titleSlider.Value == 50, "메뉴와 창 제목의 투명도 슬라이더 동기화");
         var header = (FrameworkElement)window.FindName("DialogHeader"); var titleRow = (FrameworkElement)window.FindName("TitleOpacityRow");
         Assert(header.Opacity == .5 && titleRow.Opacity == .5, "투명도·흑백 버튼 줄도 투명도에 따라 연해짐");
+        var dialogScroller = (ScrollViewer)window.FindName("DialogScroller");
+        var dialogScrollBar = (System.Windows.Controls.Primitives.ScrollBar)dialogScroller.Template.FindName("PART_VerticalScrollBar", dialogScroller);
+        Assert(dialogScrollBar.Opacity == .5, "메뉴 스크롤바도 투명도에 따라 연해짐");
         titleSlider.Value = 0; Layout();
         bool OpacityVisible(DependencyObject element)
         {
@@ -114,6 +117,7 @@ internal static class RankingChecks
             && OpacityVisible(quickSlider),
             "0%에서도 조절 영역을 유지해 표시 상태 복구 가능");
         Assert(header.Opacity == .2 && titleRow.Opacity == .2, "0%에서도 투명도·흑백 버튼 줄은 20%로 남김");
+        Assert(dialogScrollBar.Opacity == 0, "0%에서는 메뉴 스크롤바도 마우스를 올리기 전까지 숨김");
         quickSlider.Value = 100;
         Assert(surface.Opacity == 1 && surface.PlayerAlpha == .6 && rhythmSurface.NoteAlpha == .8
             && ((TextBlock)window.FindName("QuietScore")).Opacity == .5, "100%에서 각 설정의 원래 표시 상태 복원");

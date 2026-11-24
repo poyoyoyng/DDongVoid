@@ -229,6 +229,18 @@ public partial class MainWindow : Window
         var faded = Math.Max(preferences.OpacityScale, QuickControlsFloor);
         DialogHeader.Opacity = DialogHeader.IsMouseOver ? 1 : faded;
         TitleOpacityRow.Opacity = TitleOpacityRow.IsMouseOver ? 1 : faded;
+        // The menu's scroll bar sits outside DialogContent, so it fades with the menu and lights up only under the mouse.
+        if (DialogScrollBar is { } bar) bar.Opacity = bar.IsMouseOver || bar.IsMouseCaptureWithin ? 1 : preferences.OpacityScale;
+    }
+    private System.Windows.Controls.Primitives.ScrollBar? DialogScrollBar =>
+        DialogScroller.Template?.FindName("PART_VerticalScrollBar", DialogScroller) as System.Windows.Controls.Primitives.ScrollBar;
+    private void DialogScroller_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (DialogScrollBar is not { } bar) return;
+        bar.MouseEnter -= QuickControls_Hover; bar.MouseEnter += QuickControls_Hover;
+        bar.MouseLeave -= QuickControls_Hover; bar.MouseLeave += QuickControls_Hover;
+        bar.LostMouseCapture -= QuickControls_Hover; bar.LostMouseCapture += QuickControls_Hover;
+        if (preferences is not null) UpdateQuickControls();
     }
     private void QuickControls_Hover(object sender, MouseEventArgs e) => UpdateQuickControls();
     private void QuickOpacity_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
