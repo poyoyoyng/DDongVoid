@@ -17,3 +17,5 @@ main{padding-top:28px}.intro{margin-bottom:26px}.game-grid{grid-template-columns
 @media(max-width:680px){.center-column .action-panel{position:relative;top:auto}.action-event{font-size:9px;margin:6px auto}.center-column .action-hint{font-size:9px}}
 
 .augment-counter{display:block;line-height:1.6;margin-top:3px}.augment-live-status{color:var(--lime);font-size:13px}.player-foot{line-height:1.7}
+
+.pull-tether{stroke:#d6b577;stroke-width:5;stroke-linecap:round;opacity:.8;pointer-events:none}.pull-handle{fill:#c4ed8920;stroke:#c4ed89;stroke-width:2;pointer-events:none}.aim-line{marker-end:url(#aim-arrow)}.flight-disc{pointer-events:none}.flick-power{max-width:280px;margin:12px auto;text-align:center}.flick-power span{font-size:12px;color:var(--lime);display:block;margin-bottom:7px}.flick-power progress{width:100%;height:9px;accent-color:var(--lime)}.shot-line{opacity:.2}

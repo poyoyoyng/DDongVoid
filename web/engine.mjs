@@ -3,7 +3,7 @@ export const AUGMENTS = [
   { id:'tower', icon:'♜', name:'사단 합체', tier:'prism', kind:'특수 승리', desc:'판 위에서 내 말 4개를 한 칸에 업으면 즉시 승리합니다.' },
   { id:'line', icon:'⁙', name:'일렬횡대', tier:'prism', kind:'특수 승리', desc:'판 위의 직선 경로에서 서로 다른 연속 4칸에 말을 하나씩 세우면 즉시 승리합니다.' },
   { id:'choice', icon:'⑫', name:'작지만 확실한', tier:'gold', kind:'운명 선택', desc:'윷을 던지는 대신 도 또는 개를 직접 고릅니다. 윷·모는 나오지 않습니다.' },
-  { id:'flick', icon:'↗', name:'알까기의 달인', tier:'prism', kind:'미니게임', desc:'내 4·8·12…번째 턴 시작에 알까기 한 발! 맞힌 상대 말 묶음을 대기로 보내고 보너스 던지기를 얻습니다.' },
+  { id:'flick', icon:'↗', name:'알까기의 달인', tier:'prism', kind:'미니게임', desc:'내 4·8·12…번째 턴에 알을 뒤로 당겨 발사! 당긴 길이로 파워를 조절합니다. 명중하면 상대 묶음을 잡고 한 번 더, 빗나가면 내 묶음이 탈락해 대기로 돌아갑니다.' },
   { id:'reroll', icon:'⟳', name:'한 번 더 생각해', tier:'silver', kind:'행운', desc:'매 턴 한 번, 도·개·걸·빽도 결과 하나를 다시 던질 수 있습니다. 도·개 선택 증강과 함께라면 다시 고릅니다.' },
   { id:'shield', icon:'♧', name:'든든한 호신부', tier:'gold', kind:'방어', desc:'이번 판에 상대의 잡기 또는 알까기를 총 2회 막습니다. 잡으러 온 말은 이동 전 자리로 돌아갑니다.' },
   { id:'stride', icon:'⇉', name:'세 번째 큰 걸음', tier:'silver', kind:'기동', desc:'내 3·6·9…번째 턴의 첫 전진 이동 거리가 1칸 늘어납니다.' },
@@ -144,17 +144,25 @@ function capture(s,owner,at) {
   if(has(s,owner,'hunter'))s.players[owner].boost=Math.min(2,s.players[owner].boost+1);
   return {caught:caught.length,blocked:false};
 }
+export const FLICK_MAX_PULL=180;
+export const FLICK_MAX_TRAVEL=760;
+export const FLICK_MIN_PULL=8;
+export function flickFromPull(pullX,pullY) {
+  const length=Math.hypot(pullX,pullY);
+  if(![pullX,pullY,length].every(Number.isFinite))throw Error('잘못된 알까기 드래그입니다.');
+  const power=Math.min(1,length/FLICK_MAX_PULL)*FLICK_MAX_TRAVEL;
+  return {dx:pullX?-pullX/length:0,dy:pullY?-pullY/length:0,power,length};
+}
 export function simulateFlick(source,dx,dy,power,targets) {
-  const mag=Math.hypot(dx,dy);if(mag<.001)return {trail:[source],hit:null};
-  const travel=Math.max(70,Math.min(650,power)),ux=dx/mag,uy=dy/mag;
+  const mag=Math.hypot(dx,dy);if(mag<.001)return {trail:[source,{...source}],hit:null};
+  const travel=Math.max(0,Math.min(FLICK_MAX_TRAVEL,power)),ux=dx/mag,uy=dy/mag;
   let best=travel,hit=null;
   for(const target of targets) {
     const tx=target.x-source.x,ty=target.y-source.y,along=tx*ux+ty*uy,perp2=tx*tx+ty*ty-along*along;
-    if(perp2>30*30||along<0)continue;
-    const near=Math.max(0,along-Math.sqrt(30*30-perp2));
+    if(perp2>42*42||along<0)continue;
+    const near=Math.max(0,along-Math.sqrt(42*42-perp2));
     if(near<=best){best=near;hit=target.node;}
   }
-  // The flick is a strike on the current board, not a permanent relocation.
   return {trail:[source,{x:source.x+ux*best,y:source.y+uy*best}],hit};
 }
 export function act(s,action,rng=Math.random) {
@@ -204,12 +212,23 @@ export function act(s,action,rng=Math.random) {
     }
     case 'flick': {
       if(s.phase!=='flick')throw Error('알까기 차례가 아닙니다.');
-      if(![action.dx,action.dy,action.power].every(Number.isFinite))throw Error('잘못된 알까기 입력입니다.');
+      const launch=flickFromPull(action.pullX,action.pullY);
+      if(launch.length<FLICK_MIN_PULL)throw Error('알을 조금 더 당긴 뒤 놓으세요.');
       const t=p.tokens.find(t=>t.id===action.token),source=t&&NODES[position(t)];
       if(!source)throw Error('판 위의 내 말을 선택하세요.');
+      const sourceNode=position(t),shooters=group(s,s.active,t.id);
       const targets=[...new Set(s.players.flatMap((p,i)=>i===s.active?[]:p.tokens.map(position)))].filter(n=>NODES[n]).map(node=>({...NODES[node],node}));
-      const shot=simulateFlick(source,action.dx,action.dy,action.power,targets);s.flick={...shot,owner:s.active,id:s.revision+1};
-      if(shot.hit){const result=capture(s,s.active,shot.hit);if(result.caught)s.throws++;}else note(s,`${p.name} · 알까기 빗나감`);
+      const shot=simulateFlick(source,launch.dx,launch.dy,launch.power,targets);
+      const victim=shot.hit?s.players.findIndex((opponent,i)=>i!==s.active&&opponent.tokens.some(t=>position(t)===shot.hit)):-1;
+      const victimTokens=victim<0?[]:s.players[victim].tokens.filter(t=>position(t)===shot.hit).map(t=>t.id);
+      s.flick={...shot,owner:s.active,id:s.revision+1,sourceNode,sourceTokens:shooters.map(t=>t.id),victim,victimTokens,launch,outcome:'miss'};
+      if(shot.hit) {
+        const result=capture(s,s.active,shot.hit);s.flick.outcome=result.blocked?'blocked':'hit';
+        if(result.caught)s.throws++;
+      }else {
+        for(const token of shooters){token.path=[];token.done=false;token.returning=true;}
+        note(s,`${p.name} · 알까기 빗나감! 내 말 ${shooters.length}개가 날아가 탈락했습니다.`);
+      }
       s.phase='roll';break;
     }
     case 'skipFlick':if(s.phase!=='flick')throw Error('알까기 차례가 아닙니다.');s.phase='roll';break;
@@ -224,7 +243,8 @@ export function botAction(s,rng=Math.random) {
   }
   if(s.phase==='flick') {
     for(const t of s.players[s.active].tokens)if(NODES[position(t)])for(const e of s.players.flatMap((p,i)=>i===s.active?[]:p.tokens))if(NODES[position(e)]) {
-      const a=NODES[position(t)],b=NODES[position(e)];return {type:'flick',token:t.id,dx:b.x-a.x,dy:b.y-a.y,power:650};
+      const a=NODES[position(t)],b=NODES[position(e)],distance=Math.hypot(b.x-a.x,b.y-a.y);
+      return {type:'flick',token:t.id,pullX:-(b.x-a.x)/distance*FLICK_MAX_PULL,pullY:-(b.y-a.y)/distance*FLICK_MAX_PULL};
     }
     return {type:'skipFlick'};
   }

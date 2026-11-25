@@ -16,7 +16,7 @@ test('online: create, join, authenticate, enforce turns and versions, reconnect,
   const tokens=[a.body.token,b.body.token],active=start.body.state.active,version=start.body.version;
   assert.equal((await req(path+'/action','POST',{version,action:{type:'roll'}},tokens[1-active])).status,403);
   assert.equal((await req(path+'/action','POST',{version:0,action:{type:'roll'}},tokens[active])).status,409);
-  assert.equal((await req(path+'/action','POST',{version,action:{type:'flick',token:0,dx:1,dy:0,power:9999}},tokens[active])).status,400);
+  assert.equal((await req(path+'/action','POST',{version,action:{type:'flick',token:0,pullX:-180,pullY:0}},tokens[active])).status,400);
   const unchanged=await req(path,'GET',undefined,tokens[active]);assert.equal(unchanged.body.version,version);assert.equal(unchanged.body.state.revision,0);
   const played=await req(path+'/action','POST',{version,action:{type:'roll'}},tokens[active]);assert.equal(played.status,200);assert.equal(played.body.version,version+1);
   const reconnect=await req(path,'GET',undefined,tokens[1-active]);assert.equal(reconnect.body.version,version+1);assert.deepEqual(reconnect.body.state,played.body.state);

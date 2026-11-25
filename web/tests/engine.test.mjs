@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {AUGMENTS,NODES,act,createGame,walk,position,legalMoves,checkWin,simulateFlick,botAction,dopamineTurnsLeft} from '../engine.mjs';
+import {AUGMENTS,NODES,act,createGame,walk,position,legalMoves,checkWin,simulateFlick,botAction,dopamineTurnsLeft,flickFromPull,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL} from '../engine.mjs';
 const fixed=()=>.4;
 const fresh=()=>createGame(['청','홍'],true,fixed);
 function put(s,p,id,path){s.players[p].tokens[id].path=Array.isArray(path)?path:[path];}
@@ -95,9 +95,9 @@ test('flick swept collision hits the first target; limited power and misses do n
   assert.equal(simulateFlick(src,1,0,650,targets).hit,'first');assert.equal(simulateFlick(src,1,0,80,targets).hit,null);assert.equal(simulateFlick(src,0,1,650,targets).hit,null);
 });
 test('flick obeys phase and defense and grants a bonus only for a successful hit',()=>{
-  const s=fresh();s.players[0].augments=['flick'];put(s,0,0,'o1');put(s,1,0,'o4');s.phase='flick';act(s,{type:'flick',token:0,dx:0,dy:-1,power:650});assert.equal(position(s.players[1].tokens[0]),'home');assert.equal(s.throws,2);assert.equal(position(s.players[0].tokens[0]),'o1');
-  assert.throws(()=>act(s,{type:'flick',token:0,dx:0,dy:-1,power:650}));
-  const block=fresh();put(block,0,0,'o1');put(block,1,0,'o4');block.players[1].shields=1;block.phase='flick';act(block,{type:'flick',token:0,dx:0,dy:-1,power:650});assert.equal(block.throws,1);assert.equal(position(block.players[1].tokens[0]),'o4');
+  const s=fresh();s.players[0].augments=['flick'];put(s,0,0,'o1');put(s,1,0,'o4');s.phase='flick';act(s,{type:'flick',token:0,pullX:0,pullY:FLICK_MAX_PULL});assert.equal(position(s.players[1].tokens[0]),'home');assert.equal(s.throws,2);assert.equal(position(s.players[0].tokens[0]),'o1');
+  assert.throws(()=>act(s,{type:'flick',token:0,pullX:0,pullY:FLICK_MAX_PULL}));
+  const block=fresh();put(block,0,0,'o1');put(block,1,0,'o4');block.players[1].shields=1;block.phase='flick';act(block,{type:'flick',token:0,pullX:0,pullY:FLICK_MAX_PULL});assert.equal(block.throws,1);assert.equal(position(block.players[1].tokens[0]),'o4');
 });
 test('illegal moves, duplicate picks and inactive phase actions are rejected',()=>{
   const s=fresh();assert.throws(()=>act(s,{type:'move',token:0,result:1,route:'shortcut'}));assert.throws(()=>act(s,{type:'augment',id:'tower'}));assert.throws(()=>act(s,{type:'unknown'}));
@@ -126,7 +126,7 @@ test('ordinary captures can target any other player without touching the remaini
   }
 });
 test('flick considers all three opponents and captures only the first collision',()=>{
-  const s=createGame(['A','B','C','D'],true,()=>0);put(s,0,0,'o1');put(s,1,0,'o5');put(s,2,0,'o4');put(s,3,0,'o3');s.phase='flick';act(s,{type:'flick',token:0,dx:0,dy:-1,power:650});
+  const s=createGame(['A','B','C','D'],true,()=>0);put(s,0,0,'o1');put(s,1,0,'o5');put(s,2,0,'o4');put(s,3,0,'o3');s.phase='flick';act(s,{type:'flick',token:0,pullX:0,pullY:FLICK_MAX_PULL});
   assert.equal(position(s.players[3].tokens[0]),'home');assert.equal(position(s.players[2].tokens[0]),'o4');assert.equal(position(s.players[1].tokens[0]),'o5');
 });
 function pick(s,id){s.phase='augment';s.offers=[id];act(s,{type:'augment',id},fixed);}
@@ -159,7 +159,7 @@ test('aunt grants three total immunities, protects the whole stack, and the four
 });
 test('aunt immunity blocks flick capture without granting a bonus and is spent before the old shield',()=>{
   const s=fresh();s.active=1;pick(s,'shield');pick(s,'aunt');s.active=0;put(s,0,0,'o1');put(s,1,0,'o4');s.phase='flick';
-  act(s,{type:'flick',token:0,dx:0,dy:-1,power:650});assert.equal(s.players[1].immunity,2);assert.equal(s.players[1].shields,2);assert.equal(s.throws,1);assert.equal(position(s.players[1].tokens[0]),'o4');
+  act(s,{type:'flick',token:0,pullX:0,pullY:FLICK_MAX_PULL});assert.equal(s.players[1].immunity,2);assert.equal(s.players[1].shields,2);assert.equal(s.throws,1);assert.equal(position(s.players[1].tokens[0]),'o4');
   for(let i=0;i<4;i++){s.active=0;put(s,0,0,'o2');pending(s,2);move(s);assert.equal(position(s.players[1].tokens[0]),'o4');}
   assert.equal(s.players[1].immunity,0);assert.equal(s.players[1].shields,0);s.active=0;pending(s,2);move(s);assert.equal(position(s.players[1].tokens[0]),'home');
 });
@@ -182,4 +182,28 @@ test('mutually exclusive throw replacements are filtered from drafting and draft
     const s=createGame(['A','B'],true,()=>0);pick(s,owned);s.players[0].turn=9;s.active=1;act(s,{type:'roll'},()=>1.1/16);
     assert.equal(s.phase,'augment');assert.ok(!s.offers.includes(excluded));act(s,{type:'draftReroll'},()=>.9);assert.ok(!s.offers.includes(excluded));
   }
+});
+test('pull direction reverses on release and drag length scales power to a server-side cap',()=>{
+  const short=flickFromPull(0,30),long=flickFromPull(0,90),max=flickFromPull(0,FLICK_MAX_PULL),beyond=flickFromPull(0,500);
+  assert.equal(short.dy,-1);assert.equal(short.dx,0);assert.equal(long.power,short.power*3);assert.equal(max.power,FLICK_MAX_TRAVEL);assert.equal(beyond.power,max.power);
+  assert.equal(flickFromPull(-40,0).dx,1);assert.equal(flickFromPull(0,-40).dy,1);
+});
+test('a miss kills the launching stack without affecting other pieces or spending immunity',()=>{
+  const s=fresh();s.players[0].augments=['flick','aunt','shield'];s.players[0].immunity=3;s.players[0].shields=2;put(s,0,0,'o1');put(s,0,1,'o1');put(s,0,2,'o2');put(s,1,0,'o4');s.phase='flick';
+  act(s,{type:'flick',token:1,pullX:-FLICK_MAX_PULL,pullY:0});
+  assert.equal(position(s.players[0].tokens[0]),'home');assert.equal(position(s.players[0].tokens[1]),'home');assert.equal(position(s.players[0].tokens[2]),'o2');assert.equal(position(s.players[1].tokens[0]),'o4');
+  assert.equal(s.players[0].immunity,3);assert.equal(s.players[0].shields,2);assert.equal(s.players[0].tokens[0].returning,true);assert.equal(s.throws,1);assert.equal(s.phase,'roll');assert.equal(s.flick.outcome,'miss');assert.deepEqual(s.flick.sourceTokens,[0,1]);assert.match(s.log[0],/탈락/);
+});
+test('aiming correctly with insufficient drag still misses; extra client power cannot prevent self-elimination',()=>{
+  const weak=fresh();put(weak,0,0,'o1');put(weak,1,0,'o4');weak.phase='flick';act(weak,{type:'flick',token:0,pullX:0,pullY:FLICK_MIN_PULL,power:1e9});
+  assert.equal(weak.flick.outcome,'miss');assert.equal(position(weak.players[0].tokens[0]),'home');assert.equal(position(weak.players[1].tokens[0]),'o4');
+  const strong=fresh();put(strong,0,0,'o1');put(strong,1,0,'o4');put(strong,1,1,'o4');strong.phase='flick';act(strong,{type:'flick',token:0,pullX:0,pullY:90});
+  assert.equal(strong.flick.outcome,'hit');assert.equal(position(strong.players[0].tokens[0]),'o1');assert.equal(position(strong.players[1].tokens[0]),'home');assert.equal(position(strong.players[1].tokens[1]),'home');assert.equal(strong.throws,2);assert.equal(strong.flick.victim,1);assert.deepEqual(strong.flick.victimTokens,[0,1]);
+});
+test('short taps, malformed drags and non-board launchers are rejected without changing the game',()=>{
+  const s=fresh();put(s,0,0,'o1');put(s,1,0,'o4');s.phase='flick';const before=structuredClone(s);
+  for(const action of [{token:0,pullX:0,pullY:0},{token:0,pullX:0,pullY:FLICK_MIN_PULL-.1},{token:0,pullX:NaN,pullY:80},{token:0,pullX:0,pullY:Infinity},{token:0,dx:0,dy:-1,power:760},{token:3,pullX:0,pullY:90}]){
+    assert.throws(()=>act(s,{type:'flick',...action}));assert.deepEqual(s,before);
+  }
+  act(s,{type:'skipFlick'});assert.equal(position(s.players[0].tokens[0]),'o1');assert.equal(s.phase,'roll');
 });
