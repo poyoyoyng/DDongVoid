@@ -12,7 +12,7 @@ export const AUGMENTS = [
   { id:'comeback', icon:'⤴', name:'다시 출발', tier:'silver', kind:'재기', desc:'잡혔던 말은 대기에서 다시 출발할 때 딱 한 번 2칸 더 갑니다.' },
   { id:'forward', icon:'↑', name:'앞으로만', tier:'silver', kind:'안정', desc:'내 빽도 결과가 모두 도로 바뀝니다.' },
   { id:'finish', icon:'⚑', name:'완주의 기세', tier:'gold', kind:'연계', desc:'말을 완주시키면 추가 던지기 1회를 얻습니다. 한 턴에 한 번 발동합니다.' },
-  { id:'dopamine', icon:'↟', name:'도파민장아찌', tier:'gold', kind:'선불 쾌감', desc:'선택한 턴부터 내 7턴 동안 모든 전진 이동 +1칸. 이후 판이 끝날 때까지 −1칸입니다. 빽도는 그대로이며, 0칸이 되면 제자리에 머뭅니다.' },
+  { id:'dopamine', icon:'↟', name:'도파민장아찌', tier:'gold', kind:'선불 쾌감', desc:'선택한 턴부터 내 7턴 동안 전진 이동 +1칸, 이후 10턴 동안 −1칸입니다. 상대 잡기·내 말 완주 한 번마다 디버프가 1턴 줄어듭니다. 버프 중 성공도 미리 차감하며, 디버프 종료 후 정상 이동합니다. 빽도는 그대로입니다.' },
   { id:'aunt', icon:'✋', name:'어쩌라고아줌마', tier:'gold', kind:'잡힘 면역', desc:'잡히려는 순간 “어쩌라고” 하며 잡기·알까기를 총 3회 무시합니다. 업힌 묶음 전체를 보호하며, 한 번의 공격에 1회만 소모합니다.' },
   { id:'banchan', icon:'🍱', name:'반찬맨', tier:'gold', kind:'뜻밖의 한 상', desc:'평소에는 도·개·걸만 나옵니다. 가끔 모가 나오면 두 번 더 던집니다! 윷·빽도는 나오지 않습니다.' },
 ];
@@ -33,9 +33,20 @@ export const LINES = [
 export const position=t=>t.done?'finish':t.path.at(-1)??'home';
 export const has=(s,p,id)=>s.players[p].augments.includes(id);
 export const label=n=>({'-1':'빽도',1:'도',2:'개',3:'걸',4:'윷',5:'모'})[n];
-const player=name=>({name,turn:0,tokens:Array.from({length:4},(_,id)=>({id,path:[],done:false,returning:false})),augments:[],shields:0,immunity:0,dopamineStart:null,boost:0,rerolled:false,draftRerolls:1,strideUsed:false,finishUsed:false});
+const player=name=>({name,turn:0,tokens:Array.from({length:4},(_,id)=>({id,path:[],done:false,returning:false})),augments:[],shields:0,immunity:0,dopamineStart:null,dopamineRelief:0,boost:0,rerolled:false,draftRerolls:1,strideUsed:false,finishUsed:false});
 export function dopamineTurnsLeft(p) {
   return p.augments.includes('dopamine')&&Number.isInteger(p.dopamineStart)?Math.max(0,7-(p.turn-p.dopamineStart)):0;
+}
+export function dopamineDebuffTurnsLeft(p) {
+  if(!p.augments.includes('dopamine')||!Number.isInteger(p.dopamineStart))return 0;
+  const elapsed=Math.max(0,p.turn-p.dopamineStart-7);
+  return Math.max(0,10-elapsed-(p.dopamineRelief??0));
+}
+function relieveDopamine(s,owner,reason) {
+  const p=s.players[owner],left=dopamineDebuffTurnsLeft(p);
+  if(!left)return;
+  p.dopamineRelief=(p.dopamineRelief??0)+1;
+  note(s,`${p.name} · ${reason}! 도파민 디버프 1턴 감소 (${left-1}턴 남음)`);
 }
 export function createGame(names=['플레이어 1','플레이어 2'],backdo=true,rng=Math.random) {
   if(!Array.isArray(names)||names.length<2||names.length>4)throw Error('개인전은 2~4명으로 진행합니다.');
@@ -106,7 +117,8 @@ function distance(s,result,g) {
   if(has(s,s.active,'stride')&&p.turn%3===0&&!p.strideUsed)n++;
   if(has(s,s.active,'solo')&&g.length===1&&n>0&&result.value===1)n++;
   if(has(s,s.active,'comeback')&&position(g[0])==='home'&&g[0].returning)n+=2;
-  if(has(s,s.active,'dopamine'))n+=dopamineTurnsLeft(p)>0?1:-1;
+  if(dopamineTurnsLeft(p)>0)n++;
+  else if(dopamineDebuffTurnsLeft(p)>0)n--;
   return Math.max(0,n+p.boost);
 }
 export function legalMoves(s) {
@@ -141,6 +153,7 @@ function capture(s,owner,at) {
   if(victim.shields>0) {victim.shields--;note(s,`${victim.name}의 호신부가 잡기를 막았습니다. (${victim.shields}회 남음)`);return {caught:0,blocked:true};}
   for(const t of caught){t.path=[];t.done=false;t.returning=true;}
   note(s,`${s.players[owner].name}, ${victim.name}의 말 ${caught.length}개 잡기!`);
+  relieveDopamine(s,owner,'상대 잡기');
   if(has(s,owner,'hunter'))s.players[owner].boost=Math.min(2,s.players[owner].boost+1);
   return {caught:caught.length,blocked:false};
 }
@@ -172,7 +185,7 @@ export function act(s,action,rng=Math.random) {
     case 'augment': {
       if(s.phase!=='augment'||!s.offers.includes(action.id))throw Error('선택할 수 없는 증강입니다.');
       p.augments.push(action.id);if(action.id==='shield')p.shields=2;
-      if(action.id==='dopamine')p.dopamineStart=p.turn;
+      if(action.id==='dopamine'){p.dopamineStart=p.turn;p.dopamineRelief=0;}
       if(action.id==='aunt')p.immunity=3;
       note(s,`${p.name}의 증강: ${AUGMENTS.find(a=>a.id===action.id).name}`);s.offers=[];
       checkWin(s,s.active);if(s.winner===null)afterDraft(s);break;
@@ -205,6 +218,7 @@ export function act(s,action,rng=Math.random) {
       if(!outcome.blocked) {
         for(const t of g){t.path=[...moved.path];t.done=moved.done;if(move.steps>0)t.returning=false;}
         note(s,`${p.name} ${g.map(t=>t.id+1).join('·')}번 말 ${move.steps===-1?'뒤로 1':move.steps}칸${moved.done?' · 완주!':''}`);
+        if(moved.done)relieveDopamine(s,s.active,'말 완주');
         if(outcome.caught&&result.value<4)s.throws++;
         if(moved.done&&has(s,s.active,'finish')&&!p.finishUsed){s.throws++;p.finishUsed=true;note(s,'완주의 기세 · 한 번 더!');}
       }

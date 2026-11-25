@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {AUGMENTS,NODES,act,createGame,walk,position,legalMoves,checkWin,simulateFlick,botAction,dopamineTurnsLeft,flickFromPull,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL} from '../public/jeung-yut/engine.mjs';
+import {AUGMENTS,NODES,act,createGame,walk,position,legalMoves,checkWin,simulateFlick,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL} from '../public/jeung-yut/engine.mjs';
 const fixed=()=>.4;
 const fresh=()=>createGame(['청','홍'],true,fixed);
 function put(s,p,id,path){s.players[p].tokens[id].path=Array.isArray(path)?path:[path];}
@@ -130,16 +130,19 @@ test('flick considers all three opponents and captures only the first collision'
   assert.equal(position(s.players[3].tokens[0]),'home');assert.equal(position(s.players[2].tokens[0]),'o4');assert.equal(position(s.players[1].tokens[0]),'o5');
 });
 function pick(s,id){s.phase='augment';s.offers=[id];act(s,{type:'augment',id},fixed);}
-test('dopamine lasts exactly seven personal turns including the selection turn, then reduces forward steps',()=>{
+test('dopamine lasts seven personal turns, then ten debuff turns, then returns to normal',()=>{
   const s=fresh();s.players[0].turn=5;pick(s,'dopamine');const p=s.players[0];assert.equal(p.dopamineStart,5);
   for(let turn=5;turn<=11;turn++){p.turn=turn;pending(s,2);assert.equal(legalMoves(s)[0].steps,3);assert.equal(dopamineTurnsLeft(p),12-turn);}
   p.turn=12;pending(s,2);assert.equal(legalMoves(s)[0].steps,1);assert.equal(dopamineTurnsLeft(p),0);
-  p.turn=50;pending(s,3);assert.equal(legalMoves(s)[0].steps,2);
+  p.turn=21;pending(s,3);assert.equal(legalMoves(s)[0].steps,2);assert.equal(dopamineDebuffTurnsLeft(p),1);
+  p.turn=22;pending(s,3);assert.equal(legalMoves(s)[0].steps,3);assert.equal(dopamineDebuffTurnsLeft(p),0);
+  p.turn=50;pending(s,3);assert.equal(legalMoves(s)[0].steps,3);
   put(s,0,0,['o5','a1']);pending(s,-1);assert.equal(legalMoves(s)[0].steps,-1);move(s);assert.equal(position(p.tokens[0]),'o5');
 });
 test('extra throws and captures do not consume dopamine turns; the effect stays local to the owner',()=>{
   const s=fresh();s.players[0].turn=5;pick(s,'dopamine');act(s,{type:'roll'},()=>0);act(s,{type:'roll'},()=>15.1/16);assert.equal(dopamineTurnsLeft(s.players[0]),7);assert.equal(s.players[0].turn,5);
   put(s,1,0,'o3');pending(s,2);move(s);assert.equal(s.active,0);assert.equal(dopamineTurnsLeft(s.players[0]),7);
+  assert.equal(dopamineDebuffTurnsLeft(s.players[0]),9);
   s.active=1;pending(s,2);assert.equal(legalMoves(s)[0].steps,2);assert.equal(dopamineTurnsLeft(s.players[1]),0);
 });
 test('dopamine combines with other bonuses and a zero-step do is consumable without finishing or getting stuck',()=>{
@@ -206,4 +209,46 @@ test('short taps, malformed drags and non-board launchers are rejected without c
     assert.throws(()=>act(s,{type:'flick',...action}));assert.deepEqual(s,before);
   }
   act(s,{type:'skipFlick'});assert.equal(position(s.players[0].tokens[0]),'o1');assert.equal(s.phase,'roll');
+});
+function dopamineGame(turn=12){const s=fresh();s.players[0].turn=5;pick(s,'dopamine');s.players[0].turn=turn;return s;}
+test('dopamine capture reduces the remaining debuff once per caught stack, and more catches reduce it in the same turn',()=>{
+  const s=dopamineGame();put(s,1,0,'o1');put(s,1,1,'o1');pending(s,2);move(s);
+  assert.equal(s.players[0].turn,12);assert.equal(dopamineDebuffTurnsLeft(s.players[0]),9);assert.equal(s.players[0].dopamineRelief,1);
+  put(s,1,2,'o2');pending(s,2);move(s);
+  assert.equal(dopamineDebuffTurnsLeft(s.players[0]),8);assert.equal(s.players[0].dopamineRelief,2);
+  s.active=1;act(s,{type:'roll'},()=>0);assert.equal(dopamineDebuffTurnsLeft(s.players[0]),8);
+  s.players[0].turn=13;assert.equal(dopamineDebuffTurnsLeft(s.players[0]),7);
+});
+test('finishing a stack reduces dopamine debuff by one turn, without counting each carried piece separately',()=>{
+  const s=dopamineGame();put(s,0,0,'o0');put(s,0,1,'o0');pending(s,2);move(s);
+  assert.ok(s.players[0].tokens[0].done);assert.ok(s.players[0].tokens[1].done);
+  assert.equal(s.players[0].dopamineRelief,1);assert.equal(dopamineDebuffTurnsLeft(s.players[0]),9);assert.equal(s.winner,null);
+});
+test('buff-stage captures and finishes prepay future debuff without shortening the seven buff turns',()=>{
+  const s=dopamineGame(5);put(s,1,0,'o2');pending(s,1);move(s);
+  assert.equal(dopamineTurnsLeft(s.players[0]),7);assert.equal(dopamineDebuffTurnsLeft(s.players[0]),9);
+  put(s,0,0,'o0');pending(s,1);move(s);
+  assert.equal(dopamineTurnsLeft(s.players[0]),7);assert.equal(dopamineDebuffTurnsLeft(s.players[0]),8);
+  s.players[0].turn=12;assert.equal(dopamineTurnsLeft(s.players[0]),0);assert.equal(dopamineDebuffTurnsLeft(s.players[0]),8);
+});
+test('a final debuff relief restores normal movement immediately for remaining results in the same turn',()=>{
+  const s=dopamineGame();s.players[0].dopamineRelief=9;put(s,1,0,'o1');pending(s,2);
+  assert.equal(legalMoves(s)[0].steps,1);move(s);assert.equal(dopamineDebuffTurnsLeft(s.players[0]),0);
+  pending(s,2);assert.equal(legalMoves(s)[0].steps,2);
+  put(s,1,1,'o3');move(s);assert.equal(s.players[0].dopamineRelief,10);assert.equal(dopamineDebuffTurnsLeft(s.players[0]),0);
+});
+test('successful flick captures reduce dopamine debuff, blocked hits and self-elimination do not',()=>{
+  for(const defense of ['none','shield','aunt','miss']){
+    const s=dopamineGame();put(s,0,0,'o1');put(s,1,0,'o4');s.phase='flick';
+    if(defense==='shield')s.players[1].shields=1;if(defense==='aunt')s.players[1].immunity=1;
+    act(s,{type:'flick',token:0,pullX:defense==='miss'?-90:0,pullY:defense==='miss'?0:90});
+    assert.equal(dopamineDebuffTurnsLeft(s.players[0]),defense==='none'?9:10,defense);
+    assert.equal(s.players[0].dopamineRelief,defense==='none'?1:0,defense);
+  }
+});
+test('expired dopamine cannot regain a penalty, and older persisted players default missing relief to zero',()=>{
+  const old=dopamineGame();delete old.players[0].dopamineRelief;assert.equal(dopamineDebuffTurnsLeft(old.players[0]),10);
+  put(old,1,0,'o1');pending(old,2);move(old);assert.equal(old.players[0].dopamineRelief,1);
+  const expired=dopamineGame(22);put(expired,1,0,'o2');pending(expired,2);move(expired);
+  assert.equal(dopamineDebuffTurnsLeft(expired.players[0]),0);assert.equal(expired.players[0].dopamineRelief,0);
 });

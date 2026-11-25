@@ -1,4 +1,4 @@
-import {AUGMENTS,MILESTONES,NODES,LINES,createGame,act,legalMoves,position,has,label,botAction,dopamineTurnsLeft,flickFromPull,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL} from './engine.mjs';
+import {AUGMENTS,MILESTONES,NODES,LINES,createGame,act,legalMoves,position,has,label,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL} from './engine.mjs';
 const $=id=>document.getElementById(id);
 const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const requestedRoom=new URLSearchParams(location.search).get('room');
@@ -10,7 +10,7 @@ function toast(message){$('toast').textContent=message;$('toast').hidden=false;c
 function canPlay(){return !busy&&!shotAnimation&&(!siteRoomId||siteRoom?.status==='playing'&&!siteRoom.paused)&&(!online||online.ready&&state.active===online.player)&&!(mode==='ai'&&state.active!==0);}
 function aug(id){return AUGMENTS.find(a=>a.id===id);}
 function augmentStatus(p,id){
-  if(id==='dopamine')return dopamineTurnsLeft(p)>0?`+1칸 · ${dopamineTurnsLeft(p)}턴 남음`:'−1칸 · 후유증';
+  if(id==='dopamine'){const buff=dopamineTurnsLeft(p),debuff=dopamineDebuffTurnsLeft(p);return buff>0?`+1칸 ${buff}턴 · 이후 −1칸 ${debuff}턴`:debuff>0?`−1칸 · ${debuff}턴 남음`:'후유증 종료 · 정상 이동';}
   if(id==='aunt')return `잡힘 면역 ${p.immunity??0}/3회`;
   if(id==='shield')return `호신부 ${p.shields}/2회`;
   return '';
