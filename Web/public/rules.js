@@ -11,6 +11,7 @@ export const games = {
   saboteur: { title: '사보타지', description: '광부는 금을 향해 굴을 파고, 숨은 방해꾼은 몰래 길을 막으세요.', mode: '3~10인 대전', max: 10, min: 3 },
   davinci: { title: '다빈치 코드', description: '숨겨진 숫자 패를 추리해 상대의 코드를 모두 밝혀내세요.', mode: '2~4인 대전', max: 4 },
   bluemarble: { title: '부루마불', description: '세계 도시를 사고 건물을 지어 통행료를 받으세요.', mode: '2~4인 대전', max: 4 },
+  jeungyut: { title: '증윷', description: '세 번의 증강 선택과 알까기! 나만의 전략으로 말 4개를 완주하세요.', mode: '2~4인 개인전', min: 2, max: 4 },
 };
 
 // The account with this nickname can delete any room from the lobby.

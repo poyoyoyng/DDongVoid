@@ -1096,3 +1096,5 @@ dialog .form-error { color: #a53745; margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   .bm-cell .bm-pawn.active, .bm-cell.landed, .bm-key, .bm-news li.latest { animation: none; }
 }
+
+.art-jeungyut{background:linear-gradient(135deg,#c4ed89,#83c3b0);display:grid;place-items:center}.yut-art{font-size:72px;color:#243b28;font-weight:900}.yut-art small{display:block;font-size:18px;text-align:center}.yut-open{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin:24px auto}

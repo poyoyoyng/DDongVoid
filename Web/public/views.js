@@ -25,6 +25,7 @@ const artwork = {
   saboteur: `<span class="art-mine">${startArt()}${saboteurCard(30)}${saboteurCard(4)}${goalArt('gold')}</span>`,
   davinci: `<span class="art-code">${tileArt('black', 6)}${tileArt('white', 15)}${tileArt('black', null)}${tileArt('white', 25)}</span>`,
   bluemarble: '<span class="bm-art-globe"></span><span class="bm-art-deed first"><i></i>서울</span><span class="bm-art-deed second"><i></i>파리</span><span class="bm-art-die first">⚃</span><span class="bm-art-die second">⚃</span>',
+  jeungyut: '<span class="yut-art">윷 <small>＋ 증강</small></span>',
 };
 
 export function home() {
@@ -193,6 +194,7 @@ function roomRoster(room, user, ranks) {
 
 // Every room follows the desktop app's dialog: eyebrow, big status title, the game, then full-width buttons.
 const waitingNotes = {
+  jeungyut: '2~4인 개인전입니다. 참가자 모두 준비 완료를 누르면 시작합니다.<br>각자의 5·10·15턴에 증강을 고르고, 증윷 게임판에서 드래그 알까기를 즐기세요.',
   slap: '두 사람 모두 준비 완료를 누르면 바로 시작합니다.<br>방을 만든 사람(P1)이 먼저 공격합니다.',
   ciao: '2~4명이 참가하고 모두 준비하면 시작합니다.',
   onecard: '2~4명이 참가하고 모두 준비하면 시작합니다.',
@@ -253,7 +255,8 @@ export function roomPage(state, user, ui) {
   const gameView = { slap: slapView, ciao: ciaoView, onecard: cardView, yacht: yachtView, omok: omokView, seotda: seotdaView,
     saboteur: (room, me, ui) => room.status === 'waiting' ? waitingSeats(room, me) : saboteurView(room, me, ui),
     davinci: (room, me, ui) => room.status === 'waiting' ? waitingSeats(room, me) : davinciBoard(room, me, ui),
-    bluemarble: (room, me, ui) => room.status === 'waiting' ? waitingSeats(room, me) : bluemarbleView(room, me, ui) }[room.game];
+    bluemarble: (room, me, ui) => room.status === 'waiting' ? waitingSeats(room, me) : bluemarbleView(room, me, ui),
+    jeungyut: (room, me) => `${room.status === 'waiting' ? waitingSeats(room, me) : ''}<p class="yut-open"><a class="button button-primary" href="/jeung-yut/index.html?room=${encodeURIComponent(room.id)}">증윷 게임판 열기 ↗</a><a class="button button-outline" href="/jeung-yut/index.html">AI · 같은 기기 연습</a></p>` }[room.game];
   const winnerNames = room.winners.map(id => nameOf(room, id)).join(' · ');
   const main = [
     me && !playing ? action(me.ready ? '준비 취소' : finished ? '다시 하기 · 준비 완료' : '준비 완료',

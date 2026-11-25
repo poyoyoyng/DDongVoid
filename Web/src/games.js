@@ -6,8 +6,9 @@ import { expireSeotda, leaveSeotda, seotdaAction, seotdaView, startSeotda } from
 import { expireSaboteur, saboteurAction, saboteurView, startSaboteur } from './saboteur.js';
 import { davinciAction, davinciView, expireDavinci, startDavinci } from './davinci.js';
 import { bluemarbleAction, bluemarbleView, expireBluemarble, startBluemarble } from './bluemarble.js';
+import { jeungYutAction, jeungYutView, startJeungYut } from './jeungyut.js';
 
-const roomGames = new Set(['slap', 'ciao', 'onecard', 'yacht', 'omok', 'seotda', 'saboteur', 'davinci', 'bluemarble']);
+const roomGames = new Set(['slap', 'ciao', 'onecard', 'yacht', 'omok', 'seotda', 'saboteur', 'davinci', 'bluemarble', 'jeungyut']);
 export const isRoomGame = game => roomGames.has(game);
 const current = room => room.players[room.index];
 const integerIn = (value, first, last) => Number.isInteger(value) && value >= first && value <= last;
@@ -69,6 +70,7 @@ export function applyAction(room, account, input, now, roll = randomInt, wallets
       if (room.game === 'saboteur') saboteurAction(room, player, input, now, roll);
       if (room.game === 'davinci') davinciAction(room, player, input, now);
       if (room.game === 'bluemarble') bluemarbleAction(room, player, input, now, roll);
+      if (room.game === 'jeungyut') jeungYutAction(room, player, input, roll);
     }
   }
   room.revision++;
@@ -120,6 +122,9 @@ function start(room, roll, now, wallets) {
       break;
     case 'bluemarble':
       startBluemarble(room, roll, now);
+      break;
+    case 'jeungyut':
+      startJeungYut(room, roll);
       break;
   }
 }
@@ -469,5 +474,6 @@ export function roomView(room, id) {
   if (view.game === 'saboteur') saboteurView(view, id);
   if (view.game === 'davinci') davinciView(view, id);
   if (view.game === 'bluemarble') bluemarbleView(view);
+  if (view.game === 'jeungyut') jeungYutView(view);
   return view;
 }
