@@ -1,13 +1,37 @@
 import {AUGMENTS,MILESTONES,NODES,LINES,createGame,act,legalMoves,position,has,label,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL,recruitOptions} from './engine.mjs';
+import {throwFaces} from './throw-view.mjs';
 const $=id=>document.getElementById(id);
 const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const requestedRoom=new URLSearchParams(location.search).get('room');
 const siteRoomId=/^[0-9a-f-]{36}$/.test(requestedRoom??'')?requestedRoom:null;
 let siteRoom=null,siteAccount=null,siteSyncing=false;
 let mode=siteRoomId?'site':'ai',state=createGame(['나','AI 여우','AI 고양이','AI 토끼']),online=null,selectedToken=null,selectedResult=null,busy=Boolean(siteRoomId),botTimer,pollTimer,toastTimer,lastWinner=null,drag=null,onlineError=false,shotAnimation=null,flightFrame=null,seenShot=null,aimAngle=-Math.PI/2,aimPull=FLICK_MAX_PULL/2;
+let throwAnimation=null,seenRoll=null,throwRevealTimer,throwEndTimer,renderedState=state;
 const storage={get(key){try{return JSON.parse(localStorage.getItem(key));}catch{return null;}},set(key,value){try{localStorage.setItem(key,JSON.stringify(value));}catch{}}};
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4000);}
-function canPlay(){return !busy&&!shotAnimation&&(!siteRoomId||siteRoom?.status==='playing'&&!siteRoom.paused)&&(!online||online.ready&&state.active===online.player)&&!(mode==='ai'&&state.active!==0);}
+function canPlay(){return !busy&&!shotAnimation&&!throwAnimation&&(!siteRoomId||siteRoom?.status==='playing'&&!siteRoom.paused)&&(!online||online.ready&&state.active===online.player)&&!(mode==='ai'&&state.active!==0);}
+function stopThrow(){
+  clearTimeout(throwRevealTimer);clearTimeout(throwEndTimer);throwAnimation=null;
+  $('throw-stage').hidden=true;$('throw-stage').className='throw-stage';$('action-content').hidden=false;
+}
+function startThrow(name){
+  stopThrow();throwAnimation={name,started:performance.now(),event:null,before:renderedState};
+  const stage=$('throw-stage');stage.hidden=false;stage.className='throw-stage is-rolling';
+  stage.innerHTML=`<p class="throw-owner">${esc(name)} · 윷 던지기</p><div class="toss-sticks" aria-hidden="true">${throwFaces(3).map((face,i)=>`<i class="toss-stick ${face}" style="--i:${i}"></i>`).join('')}</div><div class="throw-outcome"><strong>윷이 구르는 중…</strong><span>어떤 수가 나올까요?</span></div>`;
+}
+function showThrow(event){
+  const name=state.players[event.owner].name;
+  if(!throwAnimation||throwAnimation.event)startThrow(name);
+  throwAnimation.event=event;const current=throwAnimation;
+  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  throwRevealTimer=setTimeout(()=>{
+    if(throwAnimation!==current)return;
+    const stage=$('throw-stage');stage.className='throw-stage is-revealed';
+    stage.innerHTML=`<p class="throw-owner">${esc(name)} · ${event.reroll?'다시 던진 결과':'던진 결과'}</p><div class="toss-sticks" aria-hidden="true">${throwFaces(event.value).map((face,i)=>`<i class="toss-stick ${face}" style="--i:${i}"></i>`).join('')}</div><div class="throw-outcome"><strong>${label(event.value)}!</strong><span>${event.value<0?'뒤로 1칸':event.value+'칸 이동'}${event.extra?` · ${event.extra}번 더 던져요!`:''}</span></div>`;
+    $('phase-badge').textContent=`${label(event.value)} · 결과`;
+    throwEndTimer=setTimeout(()=>{if(throwAnimation!==current)return;stopThrow();render();},event.value===-1?1000:reduced?800:1150);
+  },Math.max(0,(reduced?80:760)-(performance.now()-current.started)));
+}
 function aug(id){return AUGMENTS.find(a=>a.id===id);}
 function augmentStatus(p,id){
   if(id==='dopamine'){const buff=dopamineTurnsLeft(p),debuff=dopamineDebuffTurnsLeft(p);return buff>0?`+1칸 ${buff}턴 · 이후 −1칸 ${debuff}턴`:debuff>0?`−1칸 · ${debuff}턴 남음`:'후유증 종료 · 정상 이동';}
@@ -19,7 +43,8 @@ function augmentStatus(p,id){
 function currentMoves(){return legalMoves(state).filter(m=>m.result===selectedResult&&m.token===selectedToken);}
 function tokenName(id){return `${id+1}번 말`;}
 function locationName(node){return node==='finish'?'완주':node==='home'?'대기':node==='c'?'중앙':node==='o0'?'도착 칸':node==='o5'||node==='o10'||node==='o15'?'모서리':'밝게 표시된 칸';}
-function renderPlayers(){
+function renderPlayers(view=state){
+  const state=view;
   const cards=Array.from({length:4},(_,i)=>{
     const p=state.players[i];
     if(!p||online&&!online.ready&&i>=online.names.length)return `<section class="player-card empty-seat"><span class="empty-icon">＋</span><p>플레이어 ${i+1}</p><small>${online&&!online.ready&&i<online.maxPlayers?'참가 대기':'빈 자리'}</small></section>`;
@@ -30,7 +55,8 @@ function renderPlayers(){
   $('players-right').innerHTML=[cards[1],cards[3]].join('');
   $('board-legend').innerHTML=state.players.filter((_,i)=>!online||online.ready||i<online.names.length).map((p,i)=>`<span><i class="legend p${i}"></i>${esc(p.name)}</span>`).join(' ');
 }
-function renderBoard(){
+function renderBoard(view=state){
+  const state=view;
   let svg='<defs><marker id="aim-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0L6 3L0 6" fill="none" stroke="#c4ed89" stroke-width="1.5"/></marker><pattern id="grain" width="9" height="9" patternUnits="userSpaceOnUse"><circle cx="2" cy="4" r=".55" fill="#bacb8b" opacity=".055"/></pattern></defs><rect class="board-surface" x="35" y="35" width="570" height="570" rx="26"/><rect x="35" y="35" width="570" height="570" rx="26" fill="url(#grain)"/>';
   for(const l of LINES)svg+=`<polyline class="board-path ${l[0]==='o5'&&l.includes('c')||l[0]==='o10'&&l.includes('c')?'board-diag':''}" points="${l.map(n=>`${NODES[n].x},${NODES[n].y}`).join(' ')}"/>`;
   svg+='<path class="board-ornament" d="M49 120V62Q49 49 62 49H120 M520 49H578Q591 49 591 62V120 M49 520V578Q49 591 62 591H120 M520 591H578Q591 591 591 578V520"/>';
@@ -61,8 +87,10 @@ function renderBoard(){
   svg+='<line id="pull-tether" class="pull-tether" x1="0" y1="0" x2="0" y2="0"/><circle id="pull-handle" class="pull-handle" r="0" cx="0" cy="0"/><line id="aim" class="aim-line" x1="0" y1="0" x2="0" y2="0"/>';
   $('board').innerHTML=svg;
 }
-function renderAction(){
+function renderAction(view=state){
+  const state=view;
   const p=state.players[state.active],mine=canPlay(),phase=state.phase;
+  $('action-content').hidden=Boolean(throwAnimation);
   $('phase-badge').textContent=!online?.ready&&online?'대기 중':phase==='won'?'게임 종료':phase==='augment'?'증강 선택':phase==='flick'?'알까기':state.throws>0?'던지기':'말 이동';
   let html='';
   if(siteRoomId&&!siteRoom)html='<h2 class="action-title">대전방에 연결하고 있어요</h2><p class="action-hint">현재 계정과 판을 확인합니다.</p>';
@@ -91,22 +119,26 @@ function renderAction(){
 }
 function render(){
   clearTimeout(botTimer);
+  if(state.lastRoll&&state.lastRoll.id!==seenRoll){seenRoll=state.lastRoll.id;showThrow(state.lastRoll);}
   if(!state.flick&&shotAnimation)stopFlight();
   if(state.flick?.sourceTokens&&state.flick.id!==seenShot){seenShot=state.flick.id;shotAnimation={shot:state.flick,started:performance.now()};}
-  if(!state.pending.some(r=>r.id===selectedResult))selectedResult=state.pending[0]?.id??null;
-  if(selectedToken!==null){const t=state.players[state.active].tokens[selectedToken];if(!t||t.done)selectedToken=null;}
-  renderPlayers();renderBoard();renderAction();
-  if(shotAnimation){$('phase-badge').textContent='알까기 비행 중';if(!flightFrame)flightFrame=requestAnimationFrame(animateFlight);}else if(state.phase==='flick'&&selectedToken!==null&&canPlay())showAim(-Math.cos(aimAngle)*aimPull,-Math.sin(aimAngle)*aimPull);
-  $('board-status').textContent=state.phase==='won'?'A BEAUTIFUL FINISH':online&&!online.ready?'WAITING FOR A FRIEND':`${state.players[state.active].name}의 차례`;
-  $('turn-label').textContent=`${state.players[state.active].turn}번째 턴`;
-  $('milestones').innerHTML='<div class="milestone-row">'+MILESTONES.map((t,i)=>`${i?'<i class="mile-line"></i>':''}<span class="mile ${state.players[state.active].augments.length>i?'done':''}">${t}</span>`).join('')+'</div>';
-  $('game-log').innerHTML=state.log.slice(0,10).map((text,i)=>`<li>${i===0?'↳ ':''}${esc(text)}</li>`).join('');
+  const view=throwAnimation?.before??state;
+  if(!throwAnimation)renderedState=state;
+  if(!view.pending.some(r=>r.id===selectedResult))selectedResult=view.pending[0]?.id??null;
+  if(selectedToken!==null){const t=view.players[view.active].tokens[selectedToken];if(!t||t.done)selectedToken=null;}
+  renderPlayers(view);renderBoard(view);renderAction(view);
+  if(throwAnimation)$('phase-badge').textContent=throwAnimation.event&&$('throw-stage').classList.contains('is-revealed')?`${label(throwAnimation.event.value)} · 결과`:'윷 던지는 중';
+  if(shotAnimation){$('phase-badge').textContent='알까기 비행 중';if(!flightFrame)flightFrame=requestAnimationFrame(animateFlight);}else if(view.phase==='flick'&&selectedToken!==null&&canPlay())showAim(-Math.cos(aimAngle)*aimPull,-Math.sin(aimAngle)*aimPull);
+  $('board-status').textContent=view.phase==='won'?'A BEAUTIFUL FINISH':online&&!online.ready?'WAITING FOR A FRIEND':`${view.players[view.active].name}의 차례`;
+  $('turn-label').textContent=`${view.players[view.active].turn}번째 턴`;
+  $('milestones').innerHTML='<div class="milestone-row">'+MILESTONES.map((t,i)=>`${i?'<i class="mile-line"></i>':''}<span class="mile ${view.players[view.active].augments.length>i?'done':''}">${t}</span>`).join('')+'</div>';
+  $('game-log').innerHTML=view.log.slice(0,10).map((text,i)=>`<li>${i===0?'↳ ':''}${esc(text)}</li>`).join('');
   $('online-banner').hidden=!online;
-  if(online)$('online-banner').innerHTML=`<span>초대 코드 <strong>${online.code}</strong> ${online.ready?`· 나는 ${esc(state.players[online.player].name)}`:`· 참가 ${online.names.length}/${online.maxPlayers}명`}</span><span class="connection-status ${onlineError?'danger':''}">${onlineError?'연결 확인 중…':'● 연결됨'}</span><button class="secondary" data-action="copy">초대 링크 복사 ↗</button>`;
+  if(online&&!siteRoomId)$('online-banner').innerHTML=`<span>초대 코드 <strong>${online.code}</strong> ${online.ready?`· 나는 ${esc(view.players[online.player].name)}`:`· 참가 ${online.names.length}/${online.maxPlayers}명`}</span><span class="connection-status ${onlineError?'danger':''}">${onlineError?'연결 확인 중…':'● 연결됨'}</span><button class="secondary" data-action="copy">초대 링크 복사 ↗</button>`;
   if(siteRoomId&&online)$('online-banner').innerHTML=`<span>${esc(siteRoom.title)} · ${online.player<0?'관전 중':`나는 ${esc(siteAccount.name)}`}</span><a class="secondary" href="/#room/${siteRoomId}">대전방 · 채팅 ↗</a>`;
-  const showDraft=state.phase==='augment'&&canPlay()&&!$('setup-dialog').open;
+  const showDraft=view.phase==='augment'&&canPlay()&&!$('setup-dialog').open;
   if(showDraft){renderDraft();if(!$('augment-dialog').open)$('augment-dialog').showModal();}else $('augment-dialog').close();
-  if(state.phase==='won'&&lastWinner!==state.winner){lastWinner=state.winner;$('winner-name').textContent=`${state.players[state.winner].name}, 승리!`;$('winner-reason').textContent=state.winReason;$('winner-dialog').showModal();}
+  if(view.phase==='won'&&lastWinner!==view.winner){lastWinner=view.winner;$('winner-name').textContent=`${view.players[view.winner].name}, 승리!`;$('winner-reason').textContent=view.winReason;$('winner-dialog').showModal();}
   scheduleBot();
 }
 function renderDraft(){
@@ -129,17 +161,19 @@ function applySnapshot(snap){
 async function send(action,fromBot=false){
   if(busy||(!fromBot&&!canPlay()&&!(siteRoomId&&['siteReady','siteJoin'].includes(action.type))&&!(action.type==='startRoom'&&online?.player===0&&!online.ready)))return;
   busy=true;clearTimeout(botTimer);
+  const throwing=['roll','reroll'].includes(action.type);
+  if(throwing){startThrow(state.players[state.active].name);render();}
   try{
     if(siteRoomId){
       const input=action.type==='siteReady'?{action:'ready',ready:!siteRoom.players[online.player].ready}:action.type==='siteJoin'?{action:'join'}:{action:'yut',move:action,gameRevision:state.revision,match:siteRoom.match,seatEpoch:siteRoom.seatEpoch};
       const data=await api(`/api/rooms/${siteRoomId}/action`,{method:'POST',data:input});acceptSiteRoom(data.room);
     }else if(online){const snap=await api(`/api/rooms/${online.code}/${action.type==='startRoom'?'start':'action'}`,{method:'POST',data:{version:online.version,action},auth:online.token});applySnapshot(snap);}
     else {const before=state.active,next=structuredClone(state);act(next,action);state=next;if(before!==state.active)selectedToken=null;}
-  }catch(e){toast(e.name==='AbortError'?'연결 시간이 초과되었습니다. 다시 시도해 주세요.':e.message);}
+  }catch(e){if(throwing&&!throwAnimation?.event)stopThrow();toast(e.name==='AbortError'?'연결 시간이 초과되었습니다. 다시 시도해 주세요.':e.message);}
   finally{busy=false;render();}
 }
 function scheduleBot(){
-  if(shotAnimation||mode!=='ai'||state.active===0||state.phase==='won'||busy||$('setup-dialog').open||$('info-dialog').open)return;
+  if(shotAnimation||throwAnimation||mode!=='ai'||state.active===0||state.phase==='won'||busy||$('setup-dialog').open||$('info-dialog').open)return;
   botTimer=setTimeout(()=>{const action=botAction(state);if(action)send(action,true);},700);
 }
 function chooseToken(id,owner){if(!canPlay()||owner!==state.active)return;const p=state.players[owner],t=p.tokens[id];if(!t||t.done)return;const at=position(t);selectedToken=NODES[at]?p.tokens.find(x=>position(x)===at).id:id;render();if(state.phase==='flick')$('board').focus({preventScroll:true});}
@@ -190,7 +224,7 @@ $('setup-form').addEventListener('submit',async e=>{
       nextOnline={code:data.code,token:data.token,player:data.player,version:data.version,ready:data.ready,names:data.names,maxPlayers:data.maxPlayers};storage.set(`jeung-yut-${data.code}`,{token:data.token,player:data.player});
       nextState=data.state??createGame([...data.names,...Array.from({length:Math.max(0,2-data.names.length)},()=>'참가 대기')],form.has('backdo'),()=>0);
     }else nextState=createGame(Array.from({length:Number(form.get('count'))},(_,i)=>i===0?name:nextMode==='ai'?['','AI 여우','AI 고양이','AI 토끼'][i]:String(form.get('name'+(i+1))).trim()||`플레이어 ${i+1}`),form.has('backdo'));
-    stopFlight();seenShot=null;drag=null;aimAngle=-Math.PI/2;aimPull=FLICK_MAX_PULL/2;
+    stopFlight();stopThrow();seenRoll=null;seenShot=null;drag=null;aimAngle=-Math.PI/2;aimPull=FLICK_MAX_PULL/2;
     clearInterval(pollTimer);online=nextOnline;mode=nextMode;state=nextState;selectedToken=null;selectedResult=null;lastWinner=null;onlineError=false;
     if(online){history.replaceState(null,'',`#room=${online.code}`);startPolling();}else history.replaceState(null,'',location.pathname+location.search);
     $('setup-dialog').close();render();
@@ -255,7 +289,7 @@ $('board').addEventListener('keydown',e=>{
 });
 function acceptSiteRoom(next){
   if(!next)return;if(siteRoom&&next.revision<siteRoom.revision)return;
-  if(!siteRoom||siteRoom.match!==next.match){stopFlight();seenShot=null;lastWinner=null;selectedToken=null;selectedResult=null;}
+  if(!siteRoom||siteRoom.match!==next.match){stopFlight();stopThrow();seenRoll=next.yut?.lastRoll?.id??null;seenShot=null;lastWinner=null;selectedToken=null;selectedResult=null;}
   const oldActive=state.active;siteRoom=next;
   const names=next.players.map(p=>p.name);
   state=next.yut??createGame([...names,...Array.from({length:Math.max(0,2-names.length)},()=>'참가 대기')],true,()=>0);

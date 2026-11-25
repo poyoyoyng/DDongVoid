@@ -52,7 +52,7 @@ function relieveDopamine(s,owner,reason) {
 }
 export function createGame(names=['플레이어 1','플레이어 2'],backdo=true,rng=Math.random) {
   if(!Array.isArray(names)||names.length<2||names.length>4)throw Error('개인전은 2~4명으로 진행합니다.');
-  const s={players:names.map(player),active:Math.floor(rng()*names.length),phase:'roll',round:1,throws:1,pending:[],offers:[],log:[],winner:null,winReason:null,backdo,nextId:1,flick:null,revision:0};
+  const s={players:names.map(player),active:Math.floor(rng()*names.length),phase:'roll',round:1,throws:1,pending:[],offers:[],log:[],winner:null,winReason:null,backdo,nextId:1,flick:null,lastRoll:null,revision:0};
   beginTurn(s,rng); return s;
 }
 function note(s,msg) {s.log.unshift(msg);s.log=s.log.slice(0,40);}
@@ -207,6 +207,7 @@ export function act(s,action,rng=Math.random) {
       let value;
       if(has(s,s.active,'choice')) {if(![1,2].includes(action.value))throw Error('도 또는 개를 고르세요.');value=action.value;} else value=rolledValue(s,rng);
       const extra=extraThrows(s,value);s.throws=s.throws-1+extra;
+      s.lastRoll={id:s.revision+1,owner:s.active,value,extra,reroll:false};
       s.pending.push({id:s.nextId++,value});note(s,`${p.name} · ${label(value)}${extra===2?'! 반찬맨, 두 번 더!':extra===1?'! 한 번 더':''}`);settle(s,rng);break;
     }
     case 'reroll': {
@@ -214,6 +215,7 @@ export function act(s,action,rng=Math.random) {
       if(!['roll','move'].includes(s.phase)||!has(s,s.active,'reroll')||p.rerolled||!r||r.value>=4)throw Error('이 결과는 다시 던질 수 없습니다.');
       if(has(s,s.active,'choice')&&![1,2].includes(action.value))throw Error('도 또는 개를 고르세요.');
       p.rerolled=true;r.value=has(s,s.active,'choice')?action.value:rolledValue(s,rng);const extra=extraThrows(s,r.value);s.throws+=extra;
+      s.lastRoll={id:s.revision+1,owner:s.active,value:r.value,extra,reroll:true};
       note(s,`${p.name} · 다시 던져 ${label(r.value)}${extra===2?'! 반찬맨, 두 번 더!':''}`);settle(s,rng);break;
     }
     case 'move': {
