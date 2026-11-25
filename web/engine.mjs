@@ -12,6 +12,9 @@ export const AUGMENTS = [
   { id:'comeback', icon:'⤴', name:'다시 출발', tier:'silver', kind:'재기', desc:'잡혔던 말은 대기에서 다시 출발할 때 딱 한 번 2칸 더 갑니다.' },
   { id:'forward', icon:'↑', name:'앞으로만', tier:'silver', kind:'안정', desc:'내 빽도 결과가 모두 도로 바뀝니다.' },
   { id:'finish', icon:'⚑', name:'완주의 기세', tier:'gold', kind:'연계', desc:'말을 완주시키면 추가 던지기 1회를 얻습니다. 한 턴에 한 번 발동합니다.' },
+  { id:'dopamine', icon:'↟', name:'도파민장아찌', tier:'gold', kind:'선불 쾌감', desc:'선택한 턴부터 내 7턴 동안 모든 전진 이동 +1칸. 이후 판이 끝날 때까지 −1칸입니다. 빽도는 그대로이며, 0칸이 되면 제자리에 머뭅니다.' },
+  { id:'aunt', icon:'✋', name:'어쩌라고아줌마', tier:'gold', kind:'잡힘 면역', desc:'잡히려는 순간 “어쩌라고” 하며 잡기·알까기를 총 3회 무시합니다. 업힌 묶음 전체를 보호하며, 한 번의 공격에 1회만 소모합니다.' },
+  { id:'banchan', icon:'🍱', name:'반찬맨', tier:'gold', kind:'뜻밖의 한 상', desc:'평소에는 도·개·걸만 나옵니다. 가끔 모가 나오면 두 번 더 던집니다! 윷·빽도는 나오지 않습니다.' },
 ];
 export const MILESTONES = [5,10,15];
 export const NODES = {};
@@ -30,7 +33,10 @@ export const LINES = [
 export const position=t=>t.done?'finish':t.path.at(-1)??'home';
 export const has=(s,p,id)=>s.players[p].augments.includes(id);
 export const label=n=>({'-1':'빽도',1:'도',2:'개',3:'걸',4:'윷',5:'모'})[n];
-const player=name=>({name,turn:0,tokens:Array.from({length:4},(_,id)=>({id,path:[],done:false,returning:false})),augments:[],shields:0,boost:0,rerolled:false,draftRerolls:1,strideUsed:false,finishUsed:false});
+const player=name=>({name,turn:0,tokens:Array.from({length:4},(_,id)=>({id,path:[],done:false,returning:false})),augments:[],shields:0,immunity:0,dopamineStart:null,boost:0,rerolled:false,draftRerolls:1,strideUsed:false,finishUsed:false});
+export function dopamineTurnsLeft(p) {
+  return p.augments.includes('dopamine')&&Number.isInteger(p.dopamineStart)?Math.max(0,7-(p.turn-p.dopamineStart)):0;
+}
 export function createGame(names=['플레이어 1','플레이어 2'],backdo=true,rng=Math.random) {
   if(!Array.isArray(names)||names.length<2||names.length>4)throw Error('개인전은 2~4명으로 진행합니다.');
   const s={players:names.map(player),active:Math.floor(rng()*names.length),phase:'roll',round:1,throws:1,pending:[],offers:[],log:[],winner:null,winReason:null,backdo,nextId:1,flick:null,revision:0};
@@ -38,7 +44,10 @@ export function createGame(names=['플레이어 1','플레이어 2'],backdo=true
 }
 function note(s,msg) {s.log.unshift(msg);s.log=s.log.slice(0,40);}
 function sample(pool,n,rng) {const a=[...pool],out=[];while(out.length<n&&a.length)out.push(a.splice(Math.floor(rng()*a.length),1)[0]);return out;}
-function draft(s,rng) {s.offers=sample(AUGMENTS.filter(a=>!has(s,s.active,a.id)).map(a=>a.id),3,rng);s.phase='augment';}
+function availableAugments(s) {
+  return AUGMENTS.filter(a=>!has(s,s.active,a.id)&&!(a.id==='choice'&&has(s,s.active,'banchan'))&&!(a.id==='banchan'&&has(s,s.active,'choice')));
+}
+function draft(s,rng) {s.offers=sample(availableAugments(s).map(a=>a.id),3,rng);s.phase='augment';}
 function beginTurn(s,rng) {
   const p=s.players[s.active];p.turn++;p.rerolled=false;p.strideUsed=false;p.finishUsed=false;s.throws=1;s.pending=[];s.flick=null;
   note(s,`${p.name} · ${p.turn}번째 턴`);
@@ -57,12 +66,19 @@ export function checkWin(s,p) {
   if(has(s,p,'line')&&new Set(pos).size===4&&pos.every(x=>NODES[x])&&LINES.some(l=>l.some((_,i)=>i+4<=l.length&&l.slice(i,i+4).every(x=>pos.includes(x)))))return win(s,p,'일렬횡대 · 연속 4칸');
 }
 function rolledValue(s,rng) {
+  if(has(s,s.active,'banchan')) {
+    const draw=rng(),moChance=.33/16;
+    if(draw<moChance)return 5;
+    const ordinary=(draw-moChance)/(1-moChance);
+    return ordinary<4/14?1:ordinary<10/14?2:3;
+  }
   const bits=Math.floor(rng()*16); const count=bits.toString(2).replaceAll('0','').length;
   let value=count===0?5:count;
   if(s.backdo&&bits===1)value=-1;
   if(value===-1&&has(s,s.active,'forward'))value=1;
   return value;
 }
+function extraThrows(s,value) {return value===5&&has(s,s.active,'banchan')?2:value>=4?1:0;}
 const NEXT={a1:'a2',a2:'c',a4:'a5',a5:'o15',b1:'b2',b2:'c',b4:'b5',b5:'o0'};
 export function walk(token,steps,route='outer') {
   const t=structuredClone(token);
@@ -90,7 +106,8 @@ function distance(s,result,g) {
   if(has(s,s.active,'stride')&&p.turn%3===0&&!p.strideUsed)n++;
   if(has(s,s.active,'solo')&&g.length===1&&n>0&&result.value===1)n++;
   if(has(s,s.active,'comeback')&&position(g[0])==='home'&&g[0].returning)n+=2;
-  return n+p.boost;
+  if(has(s,s.active,'dopamine'))n+=dopamineTurnsLeft(p)>0?1:-1;
+  return Math.max(0,n+p.boost);
 }
 export function legalMoves(s) {
   if(!['roll','move'].includes(s.phase))return [];
@@ -101,7 +118,7 @@ export function legalMoves(s) {
     for(const result of s.pending) {
       if(result.value<0&&pos==='home')continue;
       const steps=distance(s,result,g);
-      const routes=steps<0?['outer']:pos==='o5'||pos==='o10'?['outer','shortcut']:pos==='c'?['short','long']:['outer'];
+      const routes=steps<=0?['outer']:pos==='o5'||pos==='o10'?['outer','shortcut']:pos==='c'?['short','long']:['outer'];
       for(const route of routes) {const moved=walk(t,steps,route);moves.push({token:t.id,result:result.id,route,steps,to:position(moved),count:g.length,path:moved.path});}
     }
   }
@@ -120,6 +137,7 @@ function capture(s,owner,at) {
   if(!victim)return {caught:0,blocked:false};
   const caught=victim.tokens.filter(t=>position(t)===at);
   if(!caught.length)return {caught:0,blocked:false};
+  if(victim.immunity>0) {victim.immunity--;note(s,`${victim.name}: “어쩌라고!” 잡힘 면역 (${victim.immunity}/3회 남음)`);return {caught:0,blocked:true};}
   if(victim.shields>0) {victim.shields--;note(s,`${victim.name}의 호신부가 잡기를 막았습니다. (${victim.shields}회 남음)`);return {caught:0,blocked:true};}
   for(const t of caught){t.path=[];t.done=false;t.returning=true;}
   note(s,`${s.players[owner].name}, ${victim.name}의 말 ${caught.length}개 잡기!`);
@@ -146,25 +164,27 @@ export function act(s,action,rng=Math.random) {
     case 'augment': {
       if(s.phase!=='augment'||!s.offers.includes(action.id))throw Error('선택할 수 없는 증강입니다.');
       p.augments.push(action.id);if(action.id==='shield')p.shields=2;
+      if(action.id==='dopamine')p.dopamineStart=p.turn;
+      if(action.id==='aunt')p.immunity=3;
       note(s,`${p.name}의 증강: ${AUGMENTS.find(a=>a.id===action.id).name}`);s.offers=[];
       checkWin(s,s.active);if(s.winner===null)afterDraft(s);break;
     }
     case 'draftReroll':
       if(s.phase!=='augment'||p.draftRerolls<=0)throw Error('증강 재선택을 사용할 수 없습니다.');
-      {const previous=[...s.offers];p.draftRerolls--;s.offers=sample(AUGMENTS.filter(a=>!p.augments.includes(a.id)&&!previous.includes(a.id)).map(a=>a.id),3,rng);}break;
+      {const previous=[...s.offers];p.draftRerolls--;s.offers=sample(availableAugments(s).filter(a=>!previous.includes(a.id)).map(a=>a.id),3,rng);}break;
     case 'roll': {
       if(!['roll','move'].includes(s.phase)||s.throws<=0)throw Error('던질 수 없는 차례입니다.');
       let value;
       if(has(s,s.active,'choice')) {if(![1,2].includes(action.value))throw Error('도 또는 개를 고르세요.');value=action.value;} else value=rolledValue(s,rng);
-      s.throws--;if(value>=4)s.throws++;
-      s.pending.push({id:s.nextId++,value});note(s,`${p.name} · ${label(value)}${value>=4?'! 한 번 더':''}`);settle(s,rng);break;
+      const extra=extraThrows(s,value);s.throws=s.throws-1+extra;
+      s.pending.push({id:s.nextId++,value});note(s,`${p.name} · ${label(value)}${extra===2?'! 반찬맨, 두 번 더!':extra===1?'! 한 번 더':''}`);settle(s,rng);break;
     }
     case 'reroll': {
       const r=s.pending.find(x=>x.id===action.result);
       if(!['roll','move'].includes(s.phase)||!has(s,s.active,'reroll')||p.rerolled||!r||r.value>=4)throw Error('이 결과는 다시 던질 수 없습니다.');
       if(has(s,s.active,'choice')&&![1,2].includes(action.value))throw Error('도 또는 개를 고르세요.');
-      p.rerolled=true;r.value=has(s,s.active,'choice')?action.value:rolledValue(s,rng);if(r.value>=4)s.throws++;
-      note(s,`${p.name} · 다시 던져 ${label(r.value)}`);settle(s,rng);break;
+      p.rerolled=true;r.value=has(s,s.active,'choice')?action.value:rolledValue(s,rng);const extra=extraThrows(s,r.value);s.throws+=extra;
+      note(s,`${p.name} · 다시 던져 ${label(r.value)}${extra===2?'! 반찬맨, 두 번 더!':''}`);settle(s,rng);break;
     }
     case 'move': {
       const move=legalMoves(s).find(m=>m.token===action.token&&m.result===action.result&&m.route===action.route);
@@ -172,7 +192,7 @@ export function act(s,action,rng=Math.random) {
       const result=s.pending.find(x=>x.id===move.result),g=group(s,s.active,move.token),moved=walk(g[0],move.steps,move.route);
       s.pending=s.pending.filter(x=>x.id!==move.result);
       // Consume the old boost before applying a newly earned capture boost.
-      if(move.steps>0){p.boost=0;p.strideUsed=true;}
+      if(result.value>0){p.boost=0;p.strideUsed=true;}
       const outcome=NODES[move.to]?capture(s,s.active,move.to):{caught:0,blocked:false};
       if(!outcome.blocked) {
         for(const t of g){t.path=[...moved.path];t.done=moved.done;if(move.steps>0)t.returning=false;}
@@ -199,7 +219,7 @@ export function act(s,action,rng=Math.random) {
 }
 export function botAction(s,rng=Math.random) {
   if(s.phase==='augment') {
-    const rank={choice:3,flick:4,tower:2,line:2,shield:7,hunter:8,solo:6,stride:6,finish:8,forward:4,comeback:5,reroll:6};
+    const rank={choice:3,flick:4,tower:2,line:2,shield:7,hunter:8,solo:6,stride:6,finish:8,forward:4,comeback:5,reroll:6,dopamine:5,aunt:8,banchan:6};
     return {type:'augment',id:[...s.offers].sort((a,b)=>rank[b]-rank[a])[0]};
   }
   if(s.phase==='flick') {
