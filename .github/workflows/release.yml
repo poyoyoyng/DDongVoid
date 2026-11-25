@@ -3,6 +3,10 @@ name: Build and release
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'web/**'
+      - 'README.md'
+      - '.github/workflows/web.yml'
   workflow_dispatch:
 
 permissions:
