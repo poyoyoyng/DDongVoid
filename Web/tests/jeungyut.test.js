@@ -84,3 +84,14 @@ test('운영 방에서도 드래그 알까기 빗나감은 발사한 말을 대�
   assert.equal(position(room.yut.players[1 - active].tokens[0]), 'o4');
   assert.equal(room.yut.flick.outcome, 'miss');
 });
+test('운영 방의 성어말? 판정은 서버 난수를 사용하고 클라이언트 보정값은 무시한다', () => {
+  const { room } = match(2), active = room.index;
+  room.yut.players[active].augments = ['stutter'];
+  room.yut.phase = 'move'; room.yut.throws = 0; room.yut.pending = [{ id: 99, value: 2 }];
+  applyAction(room, accounts[active], {
+    action: 'yut', match: room.match, seatEpoch: room.seatEpoch, gameRevision: room.yut.revision,
+    move: { type: 'move', token: 0, result: 99, route: 'outer', offset: -1, steps: 999, to: 'finish' },
+  }, 1000, () => 0);
+  assert.equal(position(room.yut.players[active].tokens[0]), 'o3');
+  assert.equal(roomView(room, accounts[1 - active].id).yut.players[active].tokens[0].path.at(-1), 'o3');
+});

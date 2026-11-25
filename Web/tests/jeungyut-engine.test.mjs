@@ -180,7 +180,7 @@ test('banchan mo grants exactly two additional rolls, including a reroll and a c
   const reroll=fresh();pick(reroll,'banchan');reroll.players[0].augments.push('reroll');pending(reroll,2);act(reroll,{type:'reroll',result:1},()=>0);assert.equal(reroll.throws,2);assert.equal(reroll.pending[0].value,5);
 });
 test('mutually exclusive throw replacements are filtered from drafting and draft rerolls',()=>{
-  assert.equal(AUGMENTS.length,15);
+  assert.equal(AUGMENTS.length,16);
   for(const [owned,excluded] of [['banchan','choice'],['choice','banchan']]){
     const s=createGame(['A','B'],true,()=>0);pick(s,owned);s.players[0].turn=9;s.active=1;act(s,{type:'roll'},()=>1.1/16);
     assert.equal(s.phase,'augment');assert.ok(!s.offers.includes(excluded));act(s,{type:'draftReroll'},()=>.9);assert.ok(!s.offers.includes(excluded));
@@ -251,4 +251,54 @@ test('expired dopamine cannot regain a penalty, and older persisted players defa
   put(old,1,0,'o1');pending(old,2);move(old);assert.equal(old.players[0].dopamineRelief,1);
   const expired=dopamineGame(22);put(expired,1,0,'o2');pending(expired,2);move(expired);
   assert.equal(dopamineDebuffTurnsLeft(expired.players[0]),0);assert.equal(expired.players[0].dopamineRelief,0);
+});
+test('성어말?은 이동 확정 때 +1 5%, -1 5%, 정상 90%로 판정한다',()=>{
+  const counts={o1:0,o2:0,o3:0};
+  for(let i=0;i<1000;i++){
+    const s=fresh();s.players[0].augments=['stutter'];pending(s,2);
+    act(s,{type:'move',token:0,result:1,route:'outer'},()=>(i+.5)/1000);
+    counts[position(s.players[0].tokens[0])]++;
+  }
+  assert.deepEqual(counts,{o1:50,o2:900,o3:50});
+  for(const [draw,to] of [[0,'o3'],[.05-1e-9,'o3'],[.05,'o1'],[.1-1e-9,'o1'],[.1,'o2']]){
+    const s=fresh();s.players[0].augments=['stutter'];pending(s,2);act(s,{type:'move',token:0,result:1,route:'outer'},()=>draw);assert.equal(position(s.players[0].tokens[0]),to);
+  }
+});
+test('성어말? 미리보기는 예정 목적지이며 잘못된 요청은 확률을 소모하지 않는다',()=>{
+  const s=fresh();s.players[0].augments=['stutter'];pending(s,2);let calls=0;const rng=()=>{calls++;return 0;};
+  assert.equal(legalMoves(s)[0].to,'o2');assert.equal(legalMoves(s)[0].to,'o2');const before=structuredClone(s);
+  assert.throws(()=>act(s,{type:'move',token:0,result:1,route:'shortcut'},rng));assert.equal(calls,0);assert.deepEqual(s,before);
+  act(s,{type:'move',token:0,result:1,route:'outer'},rng);assert.equal(calls,1);assert.equal(position(s.players[0].tokens[0]),'o3');assert.match(s.log.join('\n'),/성어말.*예정 2 → 실제 3/);
+});
+test('성어말? 잡기는 예정 칸이 아닌 실제 도착 칸의 상대 묶음에만 적용한다',()=>{
+  const s=fresh();s.players[0].augments=['stutter'];put(s,1,0,'o2');put(s,1,1,'o3');put(s,1,2,'o3');pending(s,2);
+  act(s,{type:'move',token:0,result:1,route:'outer'},()=>0);
+  assert.equal(position(s.players[0].tokens[0]),'o3');assert.equal(position(s.players[1].tokens[0]),'o2');assert.equal(position(s.players[1].tokens[1]),'home');assert.equal(position(s.players[1].tokens[2]),'home');assert.equal(s.throws,1);
+  const blocked=fresh();blocked.players[0].augments=['stutter'];put(blocked,1,0,'o3');blocked.players[1].immunity=1;pending(blocked,2);act(blocked,{type:'move',token:0,result:1,route:'outer'},()=>0);
+  assert.equal(position(blocked.players[0].tokens[0]),'home');assert.equal(position(blocked.players[1].tokens[0]),'o3');assert.equal(blocked.players[1].immunity,0);assert.match(blocked.log.join('\n'),/성어말.*어쩌라고/);
+});
+test('성어말? 업힌 말은 한 번 판정해 함께 이동하며 실제 칸의 내 말과 업힌다',()=>{
+  const s=fresh();s.players[0].augments=['stutter'];put(s,0,0,'o1');put(s,0,1,'o1');put(s,0,2,'o4');pending(s,2);let calls=0;
+  act(s,{type:'move',token:0,result:1,route:'outer'},()=>{calls++;return 0;});
+  assert.equal(calls,1);assert.deepEqual(s.players[0].tokens.slice(0,3).map(position),['o4','o4','o4']);assert.equal(position(s.players[0].tokens[3]),'home');
+});
+test('성어말? 완주도 실제 칸으로 판정하며 -1로 이동량이 0이 되면 제자리다',()=>{
+  const short=fresh();short.players[0].augments=['stutter','finish'];put(short,0,0,'o0');for(let i=1;i<4;i++)short.players[0].tokens[i].done=true;pending(short,1);
+  act(short,{type:'move',token:0,result:1,route:'outer'},()=>.075);assert.equal(position(short.players[0].tokens[0]),'o0');assert.equal(short.winner,null);assert.equal(short.players[0].finishUsed,false);
+  const home=fresh();home.players[0].augments=['stutter'];pending(home,1);act(home,{type:'move',token:0,result:1,route:'outer'},()=>.075);assert.equal(position(home.players[0].tokens[0]),'home');assert.equal(home.active,1);
+  const long=fresh();long.players[0].augments=['stutter'];put(long,0,0,'o19');for(let i=1;i<4;i++)long.players[0].tokens[i].done=true;pending(long,1);
+  act(long,{type:'move',token:0,result:1,route:'outer'},()=>0);assert.equal(position(long.players[0].tokens[0]),'finish');assert.equal(long.winner,0);
+});
+test('성어말?은 고른 지름길을 따라 이동하고 도파민 보정 이후에 적용한다',()=>{
+  for(const [draw,to] of [[0,'a4'],[.075,'a2']]){
+    const s=fresh();s.players[0].augments=['stutter'];put(s,0,0,'o5');pending(s,3);act(s,{type:'move',token:0,result:1,route:'shortcut'},()=>draw);assert.equal(position(s.players[0].tokens[0]),to);
+  }
+  const s=dopamineGame(5);s.players[0].augments.push('stutter');pending(s,2);assert.equal(legalMoves(s)[0].steps,3);
+  act(s,{type:'move',token:0,result:1,route:'outer'},()=>.075);assert.equal(position(s.players[0].tokens[0]),'o2');
+});
+test('성어말?은 빽도·알까기·증강이 없는 말에는 적용하지 않는다',()=>{
+  const unexpected=()=>{throw Error('확률 판정을 하면 안 됩니다.');};
+  const back=fresh();back.players[0].augments=['stutter'];put(back,0,0,['o1','o2']);pending(back,-1);act(back,{type:'move',token:0,result:1,route:'outer'},unexpected);assert.equal(position(back.players[0].tokens[0]),'o1');
+  const normal=fresh();pending(normal,2);act(normal,{type:'move',token:0,result:1,route:'outer'},unexpected);assert.equal(position(normal.players[0].tokens[0]),'o2');
+  const flick=fresh();flick.players[0].augments=['stutter'];put(flick,0,0,'o1');put(flick,1,0,'o4');flick.phase='flick';act(flick,{type:'flick',token:0,pullX:0,pullY:90},unexpected);assert.equal(flick.flick.outcome,'hit');
 });

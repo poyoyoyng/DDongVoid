@@ -15,6 +15,7 @@ export const AUGMENTS = [
   { id:'dopamine', icon:'↟', name:'도파민장아찌', tier:'gold', kind:'선불 쾌감', desc:'선택한 턴부터 내 7턴 동안 전진 이동 +1칸, 이후 10턴 동안 −1칸입니다. 상대 잡기·내 말 완주 한 번마다 디버프가 1턴 줄어듭니다. 버프 중 성공도 미리 차감하며, 디버프 종료 후 정상 이동합니다. 빽도는 그대로입니다.' },
   { id:'aunt', icon:'✋', name:'어쩌라고아줌마', tier:'gold', kind:'잡힘 면역', desc:'잡히려는 순간 “어쩌라고” 하며 잡기·알까기를 총 3회 무시합니다. 업힌 묶음 전체를 보호하며, 한 번의 공격에 1회만 소모합니다.' },
   { id:'banchan', icon:'🍱', name:'반찬맨', tier:'gold', kind:'뜻밖의 한 상', desc:'평소에는 도·개·걸만 나옵니다. 가끔 모가 나오면 두 번 더 던집니다! 윷·빽도는 나오지 않습니다.' },
+  { id:'stutter', icon:'〰', name:'성어말?', tier:'silver', kind:'말 더듬기', desc:'전진 이동을 확정하면 말이 더듬거려 각각 5% 확률로 예정한 칸보다 1칸 더 가거나 덜 갑니다. 나머지는 정상 이동하며, 실제 도착 칸에서 잡기·업기·완주를 판정합니다. 빽도는 그대로, 최소 이동은 0칸입니다.' },
 ];
 export const MILESTONES = [5,10,15];
 export const NODES = {};
@@ -210,18 +211,22 @@ export function act(s,action,rng=Math.random) {
     case 'move': {
       const move=legalMoves(s).find(m=>m.token===action.token&&m.result===action.result&&m.route===action.route);
       if(!move)throw Error('이동할 수 없는 자리입니다.');
-      const result=s.pending.find(x=>x.id===move.result),g=group(s,s.active,move.token),moved=walk(g[0],move.steps,move.route);
+      const result=s.pending.find(x=>x.id===move.result),g=group(s,s.active,move.token);
+      let offset=0;
+      if(result.value>0&&has(s,s.active,'stutter')){const draw=rng();offset=draw<.05?1:draw<.1?-1:0;}
+      const steps=result.value<0?move.steps:Math.max(0,move.steps+offset),moved=walk(g[0],steps,move.route),to=position(moved);
+      const stumble=offset?` · “성어말?” ${offset>0?'+1':'−1'}칸! (예정 ${move.steps} → 실제 ${steps}칸)`:'';
       s.pending=s.pending.filter(x=>x.id!==move.result);
       // Consume the old boost before applying a newly earned capture boost.
       if(result.value>0){p.boost=0;p.strideUsed=true;}
-      const outcome=NODES[move.to]?capture(s,s.active,move.to):{caught:0,blocked:false};
+      const outcome=NODES[to]?capture(s,s.active,to):{caught:0,blocked:false};
       if(!outcome.blocked) {
-        for(const t of g){t.path=[...moved.path];t.done=moved.done;if(move.steps>0)t.returning=false;}
-        note(s,`${p.name} ${g.map(t=>t.id+1).join('·')}번 말 ${move.steps===-1?'뒤로 1':move.steps}칸${moved.done?' · 완주!':''}`);
+        for(const t of g){t.path=[...moved.path];t.done=moved.done;if(steps>0)t.returning=false;}
+        note(s,`${p.name} ${g.map(t=>t.id+1).join('·')}번 말 ${steps===-1?'뒤로 1':steps}칸${stumble}${moved.done?' · 완주!':''}`);
         if(moved.done)relieveDopamine(s,s.active,'말 완주');
         if(outcome.caught&&result.value<4)s.throws++;
         if(moved.done&&has(s,s.active,'finish')&&!p.finishUsed){s.throws++;p.finishUsed=true;note(s,'완주의 기세 · 한 번 더!');}
-      }
+      }else if(offset)note(s,`${p.name}${stumble} · ${s.log[0]}`);
       checkWin(s,s.active);settle(s,rng);break;
     }
     case 'flick': {
@@ -252,7 +257,7 @@ export function act(s,action,rng=Math.random) {
 }
 export function botAction(s,rng=Math.random) {
   if(s.phase==='augment') {
-    const rank={choice:3,flick:4,tower:2,line:2,shield:7,hunter:8,solo:6,stride:6,finish:8,forward:4,comeback:5,reroll:6,dopamine:5,aunt:8,banchan:6};
+    const rank={choice:3,flick:4,tower:2,line:2,shield:7,hunter:8,solo:6,stride:6,finish:8,forward:4,comeback:5,reroll:6,dopamine:5,aunt:8,banchan:6,stutter:3};
     return {type:'augment',id:[...s.offers].sort((a,b)=>rank[b]-rank[a])[0]};
   }
   if(s.phase==='flick') {
