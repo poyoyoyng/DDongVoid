@@ -15,7 +15,8 @@ export const AUGMENTS = [
   { id:'dopamine', icon:'↟', name:'도파민장아찌', tier:'gold', kind:'선불 쾌감', desc:'선택한 턴부터 내 7턴 동안 전진 이동 +1칸, 이후 10턴 동안 −1칸입니다. 상대 잡기·내 말 완주 한 번마다 디버프가 1턴 줄어듭니다. 버프 중 성공도 미리 차감하며, 디버프 종료 후 정상 이동합니다. 빽도는 그대로입니다.' },
   { id:'aunt', icon:'✋', name:'어쩌라고아줌마', tier:'gold', kind:'잡힘 면역', desc:'잡히려는 순간 “어쩌라고” 하며 잡기·알까기를 총 3회 무시합니다. 업힌 묶음 전체를 보호하며, 한 번의 공격에 1회만 소모합니다.' },
   { id:'banchan', icon:'🍱', name:'반찬맨', tier:'gold', kind:'뜻밖의 한 상', desc:'평소에는 도·개·걸만 나옵니다. 가끔 모가 나오면 두 번 더 던집니다! 윷·빽도는 나오지 않습니다.' },
-  { id:'stutter', icon:'〰', name:'성어말?', tier:'silver', kind:'말 더듬기', desc:'전진 이동을 확정하면 말이 더듬거려 각각 5% 확률로 예정한 칸보다 1칸 더 가거나 덜 갑니다. 나머지는 정상 이동하며, 실제 도착 칸에서 잡기·업기·완주를 판정합니다. 빽도는 그대로, 최소 이동은 0칸입니다.' },
+  { id:'stutter', icon:'〰', name:'성어말?', tier:'silver', kind:'말 더듬기', desc:'전진 이동을 확정하면 +1칸 15%, −1칸 15%, 정상 이동 70%로 예정 목적지가 달라집니다. 실제 도착 칸에서 잡기·업기·완주를 판정합니다. 빽도는 그대로, 최소 이동은 0칸입니다.' },
+  { id:'recruit', icon:'♙', name:'뒹학 사람좀 모아봐', tier:'gold', kind:'일회 집결', desc:'내 말이 정확히 2개 완주한 상태에서 판당 딱 한 번! 창고의 말 하나를 달리고 있는 내 말에 업습니다. 사용하면 남은 이동·추가 던지기를 포기하고 즉시 턴이 끝납니다.' },
 ];
 export const MILESTONES = [5,10,15];
 export const NODES = {};
@@ -34,7 +35,7 @@ export const LINES = [
 export const position=t=>t.done?'finish':t.path.at(-1)??'home';
 export const has=(s,p,id)=>s.players[p].augments.includes(id);
 export const label=n=>({'-1':'빽도',1:'도',2:'개',3:'걸',4:'윷',5:'모'})[n];
-const player=name=>({name,turn:0,tokens:Array.from({length:4},(_,id)=>({id,path:[],done:false,returning:false})),augments:[],shields:0,immunity:0,dopamineStart:null,dopamineRelief:0,boost:0,rerolled:false,draftRerolls:1,strideUsed:false,finishUsed:false});
+const player=name=>({name,turn:0,tokens:Array.from({length:4},(_,id)=>({id,path:[],done:false,returning:false})),augments:[],shields:0,immunity:0,dopamineStart:null,dopamineRelief:0,recruitUsed:false,boost:0,rerolled:false,draftRerolls:1,strideUsed:false,finishUsed:false});
 export function dopamineTurnsLeft(p) {
   return p.augments.includes('dopamine')&&Number.isInteger(p.dopamineStart)?Math.max(0,7-(p.turn-p.dopamineStart)):0;
 }
@@ -137,6 +138,12 @@ export function legalMoves(s) {
   }
   return moves;
 }
+export function recruitOptions(s) {
+  const p=s.players[s.active];
+  if(s.winner!==null||!['roll','move','flick'].includes(s.phase)||!has(s,s.active,'recruit')||p.recruitUsed||p.tokens.filter(t=>t.done).length!==2)return [];
+  const reserves=p.tokens.filter(t=>position(t)==='home'),runners=p.tokens.filter(t=>NODES[position(t)]);
+  return reserves.flatMap(reserve=>runners.map(target=>({reserve:reserve.id,target:target.id})));
+}
 function settle(s,rng) {
   if(s.winner!==null)return;
   if(s.throws>0){s.phase='roll';return;}
@@ -188,6 +195,7 @@ export function act(s,action,rng=Math.random) {
       p.augments.push(action.id);if(action.id==='shield')p.shields=2;
       if(action.id==='dopamine'){p.dopamineStart=p.turn;p.dopamineRelief=0;}
       if(action.id==='aunt')p.immunity=3;
+      if(action.id==='recruit')p.recruitUsed=false;
       note(s,`${p.name}의 증강: ${AUGMENTS.find(a=>a.id===action.id).name}`);s.offers=[];
       checkWin(s,s.active);if(s.winner===null)afterDraft(s);break;
     }
@@ -213,7 +221,7 @@ export function act(s,action,rng=Math.random) {
       if(!move)throw Error('이동할 수 없는 자리입니다.');
       const result=s.pending.find(x=>x.id===move.result),g=group(s,s.active,move.token);
       let offset=0;
-      if(result.value>0&&has(s,s.active,'stutter')){const draw=rng();offset=draw<.05?1:draw<.1?-1:0;}
+      if(result.value>0&&has(s,s.active,'stutter')){const draw=rng();offset=draw<.15?1:draw<.3?-1:0;}
       const steps=result.value<0?move.steps:Math.max(0,move.steps+offset),moved=walk(g[0],steps,move.route),to=position(moved);
       const stumble=offset?` · “성어말?” ${offset>0?'+1':'−1'}칸! (예정 ${move.steps} → 실제 ${steps}칸)`:'';
       s.pending=s.pending.filter(x=>x.id!==move.result);
@@ -228,6 +236,13 @@ export function act(s,action,rng=Math.random) {
         if(moved.done&&has(s,s.active,'finish')&&!p.finishUsed){s.throws++;p.finishUsed=true;note(s,'완주의 기세 · 한 번 더!');}
       }else if(offset)note(s,`${p.name}${stumble} · ${s.log[0]}`);
       checkWin(s,s.active);settle(s,rng);break;
+    }
+    case 'recruit': {
+      if(!recruitOptions(s).some(option=>option.reserve===action.reserve&&option.target===action.target))throw Error('내 말 2개가 완주하고 창고 말과 달리는 말이 있어야 판당 한 번 사용할 수 있습니다.');
+      const reserve=p.tokens.find(t=>t.id===action.reserve),target=p.tokens.find(t=>t.id===action.target);
+      reserve.path=[...target.path];reserve.done=false;reserve.returning=false;p.recruitUsed=true;
+      note(s,`${p.name}: “뒹학 사람좀 모아봐!” ${reserve.id+1}번 말을 ${target.id+1}번 말에 업었습니다. 턴 종료!`);
+      s.pending=[];s.throws=0;settle(s,rng);break;
     }
     case 'flick': {
       if(s.phase!=='flick')throw Error('알까기 차례가 아닙니다.');
@@ -257,9 +272,10 @@ export function act(s,action,rng=Math.random) {
 }
 export function botAction(s,rng=Math.random) {
   if(s.phase==='augment') {
-    const rank={choice:3,flick:4,tower:2,line:2,shield:7,hunter:8,solo:6,stride:6,finish:8,forward:4,comeback:5,reroll:6,dopamine:5,aunt:8,banchan:6,stutter:3};
+    const rank={choice:3,flick:4,tower:2,line:2,shield:7,hunter:8,solo:6,stride:6,finish:8,forward:4,comeback:5,reroll:6,dopamine:5,aunt:8,banchan:6,stutter:3,recruit:6};
     return {type:'augment',id:[...s.offers].sort((a,b)=>rank[b]-rank[a])[0]};
   }
+  const recruits=recruitOptions(s);if(recruits.length)return {type:'recruit',...recruits[0]};
   if(s.phase==='flick') {
     for(const t of s.players[s.active].tokens)if(NODES[position(t)])for(const e of s.players.flatMap((p,i)=>i===s.active?[]:p.tokens))if(NODES[position(e)]) {
       const a=NODES[position(t)],b=NODES[position(e)],distance=Math.hypot(b.x-a.x,b.y-a.y);

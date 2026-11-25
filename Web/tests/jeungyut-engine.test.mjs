@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {AUGMENTS,NODES,act,createGame,walk,position,legalMoves,checkWin,simulateFlick,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL} from '../public/jeung-yut/engine.mjs';
+import {AUGMENTS,NODES,act,createGame,walk,position,legalMoves,checkWin,simulateFlick,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL,recruitOptions} from '../public/jeung-yut/engine.mjs';
 const fixed=()=>.4;
 const fresh=()=>createGame(['청','홍'],true,fixed);
 function put(s,p,id,path){s.players[p].tokens[id].path=Array.isArray(path)?path:[path];}
@@ -180,7 +180,7 @@ test('banchan mo grants exactly two additional rolls, including a reroll and a c
   const reroll=fresh();pick(reroll,'banchan');reroll.players[0].augments.push('reroll');pending(reroll,2);act(reroll,{type:'reroll',result:1},()=>0);assert.equal(reroll.throws,2);assert.equal(reroll.pending[0].value,5);
 });
 test('mutually exclusive throw replacements are filtered from drafting and draft rerolls',()=>{
-  assert.equal(AUGMENTS.length,16);
+  assert.equal(AUGMENTS.length,17);
   for(const [owned,excluded] of [['banchan','choice'],['choice','banchan']]){
     const s=createGame(['A','B'],true,()=>0);pick(s,owned);s.players[0].turn=9;s.active=1;act(s,{type:'roll'},()=>1.1/16);
     assert.equal(s.phase,'augment');assert.ok(!s.offers.includes(excluded));act(s,{type:'draftReroll'},()=>.9);assert.ok(!s.offers.includes(excluded));
@@ -252,15 +252,15 @@ test('expired dopamine cannot regain a penalty, and older persisted players defa
   const expired=dopamineGame(22);put(expired,1,0,'o2');pending(expired,2);move(expired);
   assert.equal(dopamineDebuffTurnsLeft(expired.players[0]),0);assert.equal(expired.players[0].dopamineRelief,0);
 });
-test('성어말?은 이동 확정 때 +1 5%, -1 5%, 정상 90%로 판정한다',()=>{
+test('성어말?은 이동 확정 때 +1 15%, -1 15%, 정상 70%로 판정한다',()=>{
   const counts={o1:0,o2:0,o3:0};
   for(let i=0;i<1000;i++){
     const s=fresh();s.players[0].augments=['stutter'];pending(s,2);
     act(s,{type:'move',token:0,result:1,route:'outer'},()=>(i+.5)/1000);
     counts[position(s.players[0].tokens[0])]++;
   }
-  assert.deepEqual(counts,{o1:50,o2:900,o3:50});
-  for(const [draw,to] of [[0,'o3'],[.05-1e-9,'o3'],[.05,'o1'],[.1-1e-9,'o1'],[.1,'o2']]){
+  assert.deepEqual(counts,{o1:150,o2:700,o3:150});
+  for(const [draw,to] of [[0,'o3'],[.15-1e-9,'o3'],[.15,'o1'],[.3-1e-9,'o1'],[.3,'o2']]){
     const s=fresh();s.players[0].augments=['stutter'];pending(s,2);act(s,{type:'move',token:0,result:1,route:'outer'},()=>draw);assert.equal(position(s.players[0].tokens[0]),to);
   }
 });
@@ -284,21 +284,71 @@ test('성어말? 업힌 말은 한 번 판정해 함께 이동하며 실제 칸�
 });
 test('성어말? 완주도 실제 칸으로 판정하며 -1로 이동량이 0이 되면 제자리다',()=>{
   const short=fresh();short.players[0].augments=['stutter','finish'];put(short,0,0,'o0');for(let i=1;i<4;i++)short.players[0].tokens[i].done=true;pending(short,1);
-  act(short,{type:'move',token:0,result:1,route:'outer'},()=>.075);assert.equal(position(short.players[0].tokens[0]),'o0');assert.equal(short.winner,null);assert.equal(short.players[0].finishUsed,false);
-  const home=fresh();home.players[0].augments=['stutter'];pending(home,1);act(home,{type:'move',token:0,result:1,route:'outer'},()=>.075);assert.equal(position(home.players[0].tokens[0]),'home');assert.equal(home.active,1);
+  act(short,{type:'move',token:0,result:1,route:'outer'},()=>.225);assert.equal(position(short.players[0].tokens[0]),'o0');assert.equal(short.winner,null);assert.equal(short.players[0].finishUsed,false);
+  const home=fresh();home.players[0].augments=['stutter'];pending(home,1);act(home,{type:'move',token:0,result:1,route:'outer'},()=>.225);assert.equal(position(home.players[0].tokens[0]),'home');assert.equal(home.active,1);
   const long=fresh();long.players[0].augments=['stutter'];put(long,0,0,'o19');for(let i=1;i<4;i++)long.players[0].tokens[i].done=true;pending(long,1);
   act(long,{type:'move',token:0,result:1,route:'outer'},()=>0);assert.equal(position(long.players[0].tokens[0]),'finish');assert.equal(long.winner,0);
 });
 test('성어말?은 고른 지름길을 따라 이동하고 도파민 보정 이후에 적용한다',()=>{
-  for(const [draw,to] of [[0,'a4'],[.075,'a2']]){
+  for(const [draw,to] of [[0,'a4'],[.225,'a2']]){
     const s=fresh();s.players[0].augments=['stutter'];put(s,0,0,'o5');pending(s,3);act(s,{type:'move',token:0,result:1,route:'shortcut'},()=>draw);assert.equal(position(s.players[0].tokens[0]),to);
   }
   const s=dopamineGame(5);s.players[0].augments.push('stutter');pending(s,2);assert.equal(legalMoves(s)[0].steps,3);
-  act(s,{type:'move',token:0,result:1,route:'outer'},()=>.075);assert.equal(position(s.players[0].tokens[0]),'o2');
+  act(s,{type:'move',token:0,result:1,route:'outer'},()=>.225);assert.equal(position(s.players[0].tokens[0]),'o2');
 });
 test('성어말?은 빽도·알까기·증강이 없는 말에는 적용하지 않는다',()=>{
   const unexpected=()=>{throw Error('확률 판정을 하면 안 됩니다.');};
   const back=fresh();back.players[0].augments=['stutter'];put(back,0,0,['o1','o2']);pending(back,-1);act(back,{type:'move',token:0,result:1,route:'outer'},unexpected);assert.equal(position(back.players[0].tokens[0]),'o1');
   const normal=fresh();pending(normal,2);act(normal,{type:'move',token:0,result:1,route:'outer'},unexpected);assert.equal(position(normal.players[0].tokens[0]),'o2');
   const flick=fresh();flick.players[0].augments=['stutter'];put(flick,0,0,'o1');put(flick,1,0,'o4');flick.phase='flick';act(flick,{type:'flick',token:0,pullX:0,pullY:90},unexpected);assert.equal(flick.flick.outcome,'hit');
+});
+function recruitGame(phase='roll'){
+  const s=fresh(),p=s.players[0];p.augments=['recruit'];p.tokens[0].done=true;p.tokens[1].done=true;
+  put(s,0,2,['o5','a1','a2']);p.tokens[3].returning=true;s.phase=phase;return s;
+}
+test('뒹학 집결은 완주 2개일 때 창고 말을 달리는 말에 업고 즉시 다음 턴으로 넘긴다',()=>{
+  for(const phase of ['roll','move','flick']){
+    const s=recruitGame(phase),p=s.players[0],target=[...p.tokens[2].path];
+    assert.deepEqual(recruitOptions(s),[{reserve:3,target:2}]);
+    act(s,{type:'recruit',reserve:3,target:2},fixed);
+    assert.deepEqual(p.tokens[3].path,target);assert.notEqual(p.tokens[3].path,p.tokens[2].path);assert.equal(p.tokens[3].returning,false);
+    assert.equal(p.recruitUsed,true);assert.equal(p.tokens.filter(t=>t.done).length,2);assert.equal(s.active,1);assert.equal(s.players[1].turn,1);assert.equal(s.round,2);assert.equal(s.winner,null);assert.match(s.log.join('\n'),/뒹학 사람좀 모아봐.*턴 종료/);
+  }
+});
+test('집결은 남은 윷 결과·추가 던지기·알까기를 버리고 다음 사람은 새 턴을 시작한다',()=>{
+  const s=recruitGame();s.pending=[{id:1,value:4},{id:2,value:2},{id:3,value:-1}];s.throws=3;s.flick={id:1};
+  act(s,{type:'recruit',reserve:3,target:2},fixed);
+  assert.deepEqual(s.pending,[]);assert.equal(s.throws,1);assert.equal(s.flick,null);assert.equal(s.phase,'roll');assert.equal(s.active,1);assert.equal(s.players[0].recruitUsed,true);
+});
+test('집결은 완주 수·창고·달리는 말·증강·단계 조건과 선택한 말을 검증한다',()=>{
+  const invalids=[];
+  for(const count of [0,1,3,4]){const s=recruitGame();s.players[0].tokens.forEach((t,i)=>{t.done=i<count;});invalids.push(s);}
+  const noReserve=recruitGame();put(noReserve,0,3,'o4');invalids.push(noReserve);
+  const noRunner=recruitGame();noRunner.players[0].tokens[2].path=[];invalids.push(noRunner);
+  const noAugment=recruitGame();noAugment.players[0].augments=[];invalids.push(noAugment);
+  for(const phase of ['augment','won']){const s=recruitGame(phase);invalids.push(s);}
+  for(const s of invalids){const before=structuredClone(s);assert.deepEqual(recruitOptions(s),[]);assert.throws(()=>act(s,{type:'recruit',reserve:3,target:2},fixed));assert.deepEqual(s,before);}
+  for(const action of [{reserve:2,target:3},{reserve:3,target:0},{reserve:3,target:3},{reserve:3,target:'2'},{}]){
+    const s=recruitGame(),before=structuredClone(s);assert.throws(()=>act(s,{type:'recruit',...action},fixed));assert.deepEqual(s,before);
+  }
+});
+test('집결 사용 횟수는 다음 자기 턴에도 남고 다시 창고로 돌아가도 재사용할 수 없다',()=>{
+  const s=recruitGame();act(s,{type:'recruit',reserve:3,target:2},fixed);
+  act(s,{type:'roll'},()=>1.1/16);assert.equal(s.active,0);assert.equal(s.players[0].recruitUsed,true);
+  s.players[0].tokens[3].path=[];assert.deepEqual(recruitOptions(s),[]);const before=structuredClone(s);
+  assert.throws(()=>act(s,{type:'recruit',reserve:3,target:2},fixed));assert.deepEqual(s,before);
+});
+test('집결한 묶음은 대상 말의 지름길 경로를 이어받아 빽도도 함께 움직인다',()=>{
+  const s=recruitGame();act(s,{type:'recruit',reserve:3,target:2},fixed);act(s,{type:'roll'},()=>1.1/16);
+  pending(s,-1);move(s,2);assert.equal(position(s.players[0].tokens[2]),'a1');assert.equal(position(s.players[0].tokens[3]),'a1');
+});
+test('집결 증강을 방금 골라도 조건이 맞으면 바로 사용할 수 있고 AI도 사용한다',()=>{
+  const s=recruitGame();s.players[0].augments=[];s.players[0].turn=15;pick(s,'recruit');
+  assert.deepEqual(botAction(s),{type:'recruit',reserve:3,target:2});act(s,botAction(s),fixed);assert.equal(s.players[0].recruitUsed,true);
+  const freshMatch=createGame(['A','B'],true,fixed);assert.equal(freshMatch.players[0].recruitUsed,false);
+});
+test('집결은 전진·잡기·완주가 아니므로 다른 이동 증강이나 보너스를 발동하지 않는다',()=>{
+  const s=recruitGame(),p=s.players[0];p.augments.push('dopamine','stutter');p.dopamineStart=5;p.turn=12;p.boost=2;
+  act(s,{type:'recruit',reserve:3,target:2},()=>{throw Error('집결에 확률 판정을 하면 안 됩니다.');});
+  assert.equal(position(p.tokens[3]),'a2');assert.equal(p.dopamineRelief,0);assert.equal(dopamineDebuffTurnsLeft(p),10);assert.equal(p.boost,2);assert.equal(p.tokens.filter(t=>t.done).length,2);
 });

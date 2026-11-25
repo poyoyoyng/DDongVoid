@@ -69,7 +69,7 @@ test('웹 게임 목록·게임설명·방 화면에서 실제 증윷 게임판�
   const { room } = match(2);
   assert.match(home(), /#lobby\/jeungyut/);
   const explanation = guide('jeungyut');
-  for (const name of ['증윷', '도파민장아찌', '어쩌라고아줌마', '반찬맨', '드래그 알까기']) assert.ok(explanation.includes(name));
+  for (const name of ['증윷', '도파민장아찌', '어쩌라고아줌마', '반찬맨', '드래그 알까기', '뒹학 사람좀 모아봐']) assert.ok(explanation.includes(name));
   assert.match(roomPage(roomView(room, accounts[0].id), accounts[0].id, {}), /jeung-yut\/index\.html\?room=/);
 });
 
@@ -94,4 +94,14 @@ test('운영 방의 성어말? 판정은 서버 난수를 사용하고 클라이
   }, 1000, () => 0);
   assert.equal(position(room.yut.players[active].tokens[0]), 'o3');
   assert.equal(roomView(room, accounts[1 - active].id).yut.players[active].tokens[0].path.at(-1), 'o3');
+});
+test('운영 방의 집결은 자기 차례에만 가능하고 업기·사용 완료·턴 종료를 모두에게 공유한다', () => {
+  const { room, play } = match(2), active = room.index, opponent = 1 - active, p = room.yut.players[active];
+  p.augments = ['recruit'];p.tokens[0].done = true;p.tokens[1].done = true;p.tokens[2].path = ['o5','a1'];
+  room.yut.pending = [{id:30,value:4}];room.yut.throws = 3;
+  assert.throws(() => play(opponent, {action:'yut',move:{type:'recruit',reserve:3,target:2}}), /내 차례/);
+  play(active, {action:'yut',move:{type:'recruit',reserve:3,target:2}});
+  const view = roomView(room, accounts[opponent].id);
+  assert.equal(room.index, opponent);assert.equal(view.yut.players[active].recruitUsed,true);
+  assert.deepEqual(view.yut.players[active].tokens[3].path,['o5','a1']);assert.deepEqual(view.yut.pending,[]);assert.equal(view.yut.throws,1);
 });
