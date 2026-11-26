@@ -69,7 +69,8 @@ function sample(pool,n,rng) {const a=[...pool],out=[];while(out.length<n&&a.leng
 function availableAugments(s) {
   return AUGMENTS.filter(a=>!has(s,s.active,a.id)&&!(a.id==='choice'&&has(s,s.active,'banchan'))&&!(a.id==='banchan'&&has(s,s.active,'choice')));
 }
-function draft(s,rng) {s.offers=sample(availableAugments(s).map(a=>a.id),3,rng);s.phase='augment';}
+// Every draft comes with its own reroll; an unused one does not carry over.
+function draft(s,rng) {s.players[s.active].draftRerolls=1;s.offers=sample(availableAugments(s).map(a=>a.id),3,rng);s.phase='augment';}
 function beginTurn(s,rng) {
   const p=s.players[s.active];p.turn++;p.rerolled=false;p.strideUsed=false;p.finishUsed=false;s.throws=1;s.pending=[];s.flick=null;
   note(s,`${p.name} · ${p.turn}번째 턴`);

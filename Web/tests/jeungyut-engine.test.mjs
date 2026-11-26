@@ -60,12 +60,12 @@ test('special wins require the corresponding augment, four distinct consecutive 
   const l=fresh();for(let i=0;i<4;i++)put(l,0,i,'o'+(i+1));checkWin(l,0);assert.equal(l.winner,null);l.players[0].augments=['line'];checkWin(l,0);assert.equal(l.winner,0);
   const gap=fresh();gap.players[0].augments=['line'];['o1','o2','o4','o5'].forEach((n,i)=>put(gap,0,i,n));checkWin(gap,0);assert.equal(gap.winner,null);
 });
-test('each player independently drafts at turn 5, 10, 15, with one reroll per game',()=>{
+test('each player independently drafts at turn 5, 10, 15, with a fresh reroll at every draft',()=>{
   const s=fresh();const history=[[],[]];let guard=0;
   while(s.players.some(p=>p.turn<16)&&guard++<200){
     if(s.phase==='augment'){
       const p=s.players[s.active];history[s.active].push(p.turn);assert.equal(s.offers.length,3);
-      if(p.draftRerolls){const old=[...s.offers];act(s,{type:'draftReroll'},fixed);assert.ok(s.offers.every(x=>!old.includes(x)));assert.throws(()=>act(s,{type:'draftReroll'},fixed));}
+      assert.equal(p.draftRerolls,1);{const old=[...s.offers];act(s,{type:'draftReroll'},fixed);assert.ok(s.offers.every(x=>!old.includes(x)));assert.throws(()=>act(s,{type:'draftReroll'},fixed));}
       act(s,{type:'augment',id:s.offers.find(x=>x!=='choice')??s.offers[0]},fixed);
     }
     // Advance only through real legal rolls/moves; force all pieces back each turn so no accidental finish wins.
