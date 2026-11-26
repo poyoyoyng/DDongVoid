@@ -1,10 +1,11 @@
 import {AUGMENTS,MILESTONES,NODES,LINES,createGame,act,legalMoves,position,has,label,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL,recruitOptions} from './engine.mjs';
 import {throwFaces} from './throw-view.mjs';
+import {createChat} from '../chat.js';
 const $=id=>document.getElementById(id);
 const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const requestedRoom=new URLSearchParams(location.search).get('room');
 const siteRoomId=/^[0-9a-f-]{36}$/.test(requestedRoom??'')?requestedRoom:null;
-let siteRoom=null,siteAccount=null,siteSyncing=false;
+let siteRoom=null,siteAccount=null,siteSyncing=false,chat=null;
 let mode=siteRoomId?'site':'ai',state=createGame(['나','AI 여우','AI 고양이','AI 토끼']),online=null,selectedToken=null,selectedResult=null,busy=Boolean(siteRoomId),botTimer,pollTimer,toastTimer,lastWinner=null,drag=null,onlineError=false,shotAnimation=null,flightFrame=null,seenShot=null,aimAngle=-Math.PI/2,aimPull=FLICK_MAX_PULL/2;
 let throwAnimation=null,seenRoll=null,throwRevealTimer,throwEndTimer,renderedState=state;
 const storage={get(key){try{return JSON.parse(localStorage.getItem(key));}catch{return null;}},set(key,value){try{localStorage.setItem(key,JSON.stringify(value));}catch{}}};
@@ -135,7 +136,7 @@ function render(){
   $('game-log').innerHTML=view.log.slice(0,10).map((text,i)=>`<li>${i===0?'↳ ':''}${esc(text)}</li>`).join('');
   $('online-banner').hidden=!online;
   if(online&&!siteRoomId)$('online-banner').innerHTML=`<span>초대 코드 <strong>${online.code}</strong> ${online.ready?`· 나는 ${esc(view.players[online.player].name)}`:`· 참가 ${online.names.length}/${online.maxPlayers}명`}</span><span class="connection-status ${onlineError?'danger':''}">${onlineError?'연결 확인 중…':'● 연결됨'}</span><button class="secondary" data-action="copy">초대 링크 복사 ↗</button>`;
-  if(siteRoomId&&online)$('online-banner').innerHTML=`<span>${esc(siteRoom.title)} · ${online.player<0?'관전 중':`나는 ${esc(siteAccount.name)}`}</span><a class="secondary" href="/#room/${siteRoomId}">대전방 · 채팅 ↗</a>`;
+  if(siteRoomId&&online)$('online-banner').innerHTML=`<span>${esc(siteRoom.title)} · ${online.player<0?'관전 중':`나는 ${esc(siteAccount.name)}`}</span><a class="secondary" href="/#room/${siteRoomId}">대전방 ↗</a>`;
   const showDraft=view.phase==='augment'&&canPlay()&&!$('setup-dialog').open;
   if(showDraft){renderDraft();if(!$('augment-dialog').open)$('augment-dialog').showModal();}else $('augment-dialog').close();
   if(view.phase==='won'&&lastWinner!==view.winner){lastWinner=view.winner;$('winner-name').textContent=`${view.players[view.winner].name}, 승리!`;$('winner-reason').textContent=view.winReason;$('winner-dialog').showModal();}
@@ -197,6 +198,7 @@ async function handleClick(e){
   if(b.dataset.action==='skipFlick')return send({type:'skipFlick'});
   if(b.dataset.action==='draft'){$('augment-dialog').showModal();return;}
   if(b.dataset.action==='new')return openSetup();
+  if(b.dataset.action==='chat')return toggleChat();
   if(b.dataset.action==='copy'){
     const link=new URL(location.href);link.hash=`room=${online.code}`;
     try{await navigator.clipboard.writeText(link.href);toast('초대 링크를 복사했습니다.');}catch{toast(`초대 코드: ${online.code}`);}return;
@@ -303,15 +305,28 @@ async function refreshSiteRoom(){
 }
 function siteSocket(){
   const socket=new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/rooms/${siteRoomId}/socket`);
-  socket.onmessage=()=>{void refreshSiteRoom();};socket.onclose=()=>setTimeout(siteSocket,3000);
+  socket.onopen=()=>chat?.setConnected(true);
+  socket.onmessage=event=>{let packet={};try{packet=JSON.parse(event.data);}catch{}chat?.receive(packet);if(packet.chatMessage&&packet.chatMessage.playerId!==siteAccount.id&&$('yut-chat').hidden)$('chat-toggle').querySelector('.chat-unread').hidden=false;if(!packet.chatMessage)void refreshSiteRoom();};
+  socket.onclose=()=>{chat?.setConnected(false);setTimeout(siteSocket,3000);};
 }
+// The room chat floats over the board, so it opens only when asked for and remembers that choice.
+function toggleChat(open){
+  const panel=$('yut-chat'),next=open??panel.hidden;panel.hidden=!next;$('chat-toggle').setAttribute('aria-expanded',String(next));storage.set('jeung-yut-chat-open',next);
+  if(next){$('chat-toggle').querySelector('.chat-unread').hidden=true;panel.querySelector('[data-chat-input]')?.focus({preventScroll:true});}
+}
+function mountChat(){
+  chat=createChat($('yut-chat'),'방 채팅',siteAccount.id,text=>api(`/api/rooms/${siteRoomId}/chat`,{method:'POST',data:{text}}));
+  $('yut-chat').querySelector('.section-head').insertAdjacentHTML('beforeend','<button type="button" class="chat-close" data-action="chat" aria-label="채팅 닫기">×</button>');
+  $('chat-toggle').hidden=false;if(storage.get('jeung-yut-chat-open'))toggleChat(true);
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('yut-chat').hidden&&$('yut-chat').contains(document.activeElement)){toggleChat(false);$('chat-toggle').focus();}});
 if(requestedRoom&&!siteRoomId)location.replace('/#lobby/jeungyut');
 $('online-setup').innerHTML='<p class="muted">온라인 대전은 기존 계정으로 공용 대기방에서 방을 만들어 진행합니다.</p>';
 document.querySelector('.brand').href='/#home';
 if(siteRoomId){
   $('new-button').textContent='대전방으로 ↗';
   render();
-  (async()=>{try{const account=await api('/api/me');if(!account.user)throw Error('먼저 대전방에서 로그인하고 참가해 주세요.');siteAccount=account.user;const data=await api(`/api/rooms/${siteRoomId}`);acceptSiteRoom(data.room);busy=false;render();pollTimer=setInterval(refreshSiteRoom,1000);siteSocket();}
+  (async()=>{try{const account=await api('/api/me');if(!account.user)throw Error('먼저 대전방에서 로그인하고 참가해 주세요.');siteAccount=account.user;const data=await api(`/api/rooms/${siteRoomId}`);acceptSiteRoom(data.room);busy=false;render();mountChat();pollTimer=setInterval(refreshSiteRoom,1000);siteSocket();}
   catch(error){$('action-content').innerHTML=`<h2 class="action-title">대전방을 확인해 주세요</h2><p class="action-hint">${esc(error.message)}</p><a class="primary full" href="/#room/${siteRoomId}">대전방으로 →</a>`;}})();
 }else render();
 const invited=location.hash.match(/^#room=([A-Fa-f0-9]{6})$/)?.[1]?.toUpperCase();
