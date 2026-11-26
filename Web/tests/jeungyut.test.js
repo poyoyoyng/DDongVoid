@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyAction, createRoom, isRoomGame, roomView } from '../src/games.js';
+import { applyAction, createRoom, expireRoom, isRoomGame, roomView } from '../src/games.js';
 import { home, roomPage } from '../public/views.js';
 import { guide } from '../public/guide.js';
 import { botAction, position } from '../public/jeung-yut/engine.mjs';
@@ -104,4 +104,21 @@ test('운영 방의 집결은 자기 차례에만 가능하고 업기·사용 �
   const view = roomView(room, accounts[opponent].id);
   assert.equal(room.index, opponent);assert.equal(view.yut.players[active].recruitUsed,true);
   assert.deepEqual(view.yut.players[active].tokens[3].path,['o5','a1']);assert.deepEqual(view.yut.pending,[]);assert.equal(view.yut.throws,1);
+});
+
+test('대전방 알까기는 시간 제한이 걸리고, 지나면 서버가 턴을 넘긴다', () => {
+  const { room, play, roll } = match(2);
+  const seat = room.index, other = 1 - seat;
+  Object.assign(room.yut, { phase: 'augment', offers: ['flick'] });
+  room.yut.players[seat].turn = 4;
+  room.yut.players[seat].tokens[0].path = ['o3'];
+  room.yut.players[other].tokens[0].path = ['o7'];
+  play(seat, { action: 'yut', move: { type: 'augment', id: 'flick' } });
+  assert.equal(room.yut.phase, 'flick');
+  assert.equal(room.deadline, 1000 + 3000 + 5000);
+  assert.equal(expireRoom(room, 8999, roll), false);
+  assert.equal(expireRoom(room, 9000, roll), true);
+  assert.equal(room.index, other);
+  assert.notEqual(room.yut.phase, 'flick');
+  assert.equal(room.deadline, null);
 });

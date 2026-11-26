@@ -356,3 +356,10 @@ test('집결은 전진·잡기·완주가 아니므로 다른 이동 증강이�
   act(s,{type:'recruit',reserve:3,target:2},()=>{throw Error('집결에 확률 판정을 하면 안 됩니다.');});
   assert.equal(position(p.tokens[3]),'a2');assert.equal(p.dopamineRelief,0);assert.equal(dopamineDebuffTurnsLeft(p),10);assert.equal(p.boost,2);assert.equal(p.tokens.filter(t=>t.done).length,2);
 });
+test('알까기 시간 초과는 던지지 않고 턴을 넘기며, 알까기 차례가 아니면 거부한다',()=>{
+  const s=fresh();s.active=0;put(s,0,0,'o3');put(s,1,0,'o7');s.phase='flick';s.throws=1;
+  act(s,{type:'flickTimeout'},fixed);
+  assert.equal(s.active,1);assert.notEqual(s.phase,'flick');assert.equal(position(s.players[0].tokens[0]),'o3');
+  assert.ok(s.log.some(text=>text.includes('알까기 시간 초과')));
+  assert.throws(()=>act(s,{type:'flickTimeout'},fixed),/알까기 차례가 아닙니다/);
+});

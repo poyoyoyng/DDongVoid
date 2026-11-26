@@ -1,4 +1,4 @@
-import {AUGMENTS,MILESTONES,NODES,LINES,createGame,act,legalMoves,position,has,label,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL,recruitOptions} from './engine.mjs';
+import {AUGMENTS,MILESTONES,NODES,LINES,createGame,act,legalMoves,position,has,label,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_SECONDS,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL,recruitOptions} from './engine.mjs';
 import {throwFaces} from './throw-view.mjs';
 import {createChat} from '../chat.js';
 const $=id=>document.getElementById(id);
@@ -7,7 +7,7 @@ const requestedRoom=new URLSearchParams(location.search).get('room');
 const siteRoomId=/^[0-9a-f-]{36}$/.test(requestedRoom??'')?requestedRoom:null;
 let siteRoom=null,siteAccount=null,siteSyncing=false,chat=null;
 let mode=siteRoomId?'site':'ai',state=createGame(['나','AI 여우','AI 고양이','AI 토끼']),online=null,selectedToken=null,selectedResult=null,busy=Boolean(siteRoomId),botTimer,pollTimer,toastTimer,lastWinner=null,drag=null,onlineError=false,shotAnimation=null,flightFrame=null,seenShot=null,aimAngle=-Math.PI/2,aimPull=FLICK_MAX_PULL/2;
-let throwAnimation=null,seenRoll=null,throwRevealTimer,throwEndTimer,renderedState=state;
+let flickClock=null,throwAnimation=null,seenRoll=null,throwRevealTimer,throwEndTimer,renderedState=state;
 const storage={get(key){try{return JSON.parse(localStorage.getItem(key));}catch{return null;}},set(key,value){try{localStorage.setItem(key,JSON.stringify(value));}catch{}}};
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4000);}
 function canPlay(){return !busy&&!shotAnimation&&!throwAnimation&&(!siteRoomId||siteRoom?.status==='playing'&&!siteRoom.paused)&&(!online||online.ready&&state.active===online.player)&&!(mode==='ai'&&state.active!==0);}
@@ -103,6 +103,7 @@ function renderAction(view=state){
   else if(phase==='augment')html=`<div class="waiting-mark">✧</div><h2 class="action-title">전략이 바뀌는 순간</h2><p class="action-hint">${esc(p.name)}의 ${p.turn}번째 턴.<br>${mine?'세 가지 증강 중 하나를 선택하세요.':'상대가 증강을 고르고 있습니다.'}</p>${mine?'<button class="primary full" data-action="draft">증강 선택하기 →</button>':''}`;
   else if(phase==='flick') {
     html=`<h2 class="action-title">당기고, 놓고, 날려요!</h2><p id="flick-help" class="action-hint">${mine?'내 알을 뒤로 당겼다 놓으면 반대 방향으로 날아갑니다. 길게 당길수록 강해져요. 빗나가면 내 묶음이 탈락합니다!':'상대가 알까기를 조준하고 있습니다.'}</p>`;
+    html=flickTimer(state)+html;
     if(mine){html+='<div class="flick-power"><span id="flick-power-label">파워 0%</span><progress id="flick-power-bar" max="100" value="0" aria-label="알까기 파워"></progress></div><p class="inline-help">알을 선택하고 방향키로 조준·파워 조절, Space로 발사할 수도 있어요.</p><button class="secondary full" data-action="skipFlick">이번 알까기 넘기기</button>';}
   }else {
     html=`<div class="yut-sticks" aria-hidden="true"><i class="stick flat"></i><i class="stick flat"></i><i class="stick round"></i><i class="stick flat"></i></div><h2 class="action-title">${mine?state.throws>0?'당신의 한 수.':'어디로 갈까요?':mode==='ai'?'AI가 생각 중…':'상대의 차례예요'}</h2><p class="action-hint">${mine?state.pending.length?'결과 → 내 말 → 밝게 표시된 목적지 순서로 선택하세요.':'도·개·걸·윷·모, 당신의 운을 던져보세요.':`${esc(p.name)}의 다음 수를 기다리고 있습니다.`}</p>`;
@@ -117,6 +118,24 @@ function renderAction(view=state){
   if(mine){const options=recruitOptions(state);if(options.length)html+=`<section class="recruit-skill"><strong>♙ 뒹학 사람좀 모아봐</strong><p>완주 2개! 창고 말을 업고 이번 턴을 끝낼 수 있어요.</p>${options.map(o=>`<button class="primary full" data-recruit-reserve="${o.reserve}" data-recruit-target="${o.target}">${o.reserve+1}번 → ${o.target+1}번에 업고 턴 종료</button>`).join('')}<small>판당 한 번 · 남은 이동과 추가 던지기는 사라집니다.</small></section>`;}
   const event=state.log.find(text=>!text.endsWith('번째 턴'));
   $('action-content').innerHTML=(event&&(!online||online.ready)?`<p class="action-event">${esc(event)}</p>`:'')+html;
+  if(flickClock&&!flickClock.frame&&phase==='flick'&&!shotAnimation)flickClock.frame=requestAnimationFrame(tickFlick);
+}
+// The clock starts when this page first shows the flick, so throw and flight animations never eat into the 3 seconds.
+const flickTime=FLICK_SECONDS*1000,flickKey=view=>`${view.round}:${view.active}:${view.players[view.active].turn}`;
+function flickTimer(view){
+  const key=flickKey(view);
+  if(flickClock?.key!==key){if(flickClock?.frame)cancelAnimationFrame(flickClock.frame);flickClock={key,endsAt:performance.now()+flickTime,frame:null,sent:false};}
+  const left=Math.max(0,flickClock.endsAt-performance.now());
+  return `<div id="flick-timer" class="flick-timer ${left<=1000?'urgent':''}" role="timer" aria-label="알까기 남은 시간"><div><strong id="flick-seconds">${Math.ceil(left/1000)}</strong><span>초</span></div><i class="flick-timer-track"><b id="flick-timer-bar" style="transform:scaleX(${left/flickTime})"></b></i><p>${FLICK_SECONDS}초 안에 쏘지 않으면 턴이 끝나요!</p></div>`;
+}
+function tickFlick(){
+  const clock=flickClock;if(!clock)return;clock.frame=null;
+  if(state.phase!=='flick'||flickKey(state)!==clock.key)return;
+  const left=Math.max(0,clock.endsAt-performance.now());
+  if($('flick-seconds')){$('flick-seconds').textContent=Math.ceil(left/1000);$('flick-timer').classList.toggle('urgent',left<=1000);$('flick-timer-bar').style.transform=`scaleX(${left/flickTime})`;}
+  // A request already in flight (a shot being sent) gets to finish before the clock decides.
+  if(left>0||!clock.sent&&busy){clock.frame=requestAnimationFrame(tickFlick);return;}
+  if(!clock.sent&&canPlay()){clock.sent=true;drag=null;send({type:'flickTimeout'});}
 }
 function render(){
   clearTimeout(botTimer);

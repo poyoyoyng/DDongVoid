@@ -6,7 +6,7 @@ import { expireSeotda, leaveSeotda, seotdaAction, seotdaView, startSeotda } from
 import { expireSaboteur, saboteurAction, saboteurView, startSaboteur } from './saboteur.js';
 import { davinciAction, davinciView, expireDavinci, startDavinci } from './davinci.js';
 import { bluemarbleAction, bluemarbleView, expireBluemarble, startBluemarble } from './bluemarble.js';
-import { jeungYutAction, jeungYutView, startJeungYut } from './jeungyut.js';
+import { expireJeungYut, jeungYutAction, jeungYutView, startJeungYut } from './jeungyut.js';
 
 const roomGames = new Set(['slap', 'ciao', 'onecard', 'yacht', 'omok', 'seotda', 'saboteur', 'davinci', 'bluemarble', 'jeungyut']);
 export const isRoomGame = game => roomGames.has(game);
@@ -70,7 +70,7 @@ export function applyAction(room, account, input, now, roll = randomInt, wallets
       if (room.game === 'saboteur') saboteurAction(room, player, input, now, roll);
       if (room.game === 'davinci') davinciAction(room, player, input, now);
       if (room.game === 'bluemarble') bluemarbleAction(room, player, input, now, roll);
-      if (room.game === 'jeungyut') jeungYutAction(room, player, input, roll);
+      if (room.game === 'jeungyut') jeungYutAction(room, player, input, roll, now);
     }
   }
   room.revision++;
@@ -276,6 +276,7 @@ export function expireRoom(room, now, roll = randomInt) {
   else if (room.game === 'saboteur') expireSaboteur(room, now, roll);
   else if (room.game === 'davinci') expireDavinci(room, now);
   else if (room.game === 'bluemarble') expireBluemarble(room, now, roll);
+  else if (room.game === 'jeungyut') expireJeungYut(room, now, roll);
   else return false;
   room.revision++;
   return true;

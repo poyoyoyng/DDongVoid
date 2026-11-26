@@ -1,7 +1,9 @@
-import { act, createGame } from '../public/jeung-yut/engine.mjs';
+import { FLICK_SECONDS, act, createGame } from '../public/jeung-yut/engine.mjs';
 import { requireThat } from './http.js';
 
 const random = roll => () => roll(0x1000000) / 0x1000000;
+// The player's page ends a flick after FLICK_SECONDS; the room waits a little longer for slow connections and animations.
+const flickGrace = 5_000;
 
 export function startJeungYut(room, roll) {
   room.yut = createGame(room.players.map(player => player.name), true, random(roll));
@@ -10,23 +12,33 @@ export function startJeungYut(room, roll) {
   room.deadline = null;
 }
 
-export function jeungYutAction(room, player, input, roll) {
-  requireThat(input.action === 'yut', '증윷 행동을 선택해 주세요.');
-  requireThat(room.players[room.yut.active].id === player.id, '내 차례가 아닙니다.', 403);
-  requireThat(input.gameRevision === room.yut.revision, '판이 바뀌었습니다. 최신 화면에서 다시 선택해 주세요.', 409);
+function applyYut(room, move, roll, now) {
   const next = structuredClone(room.yut);
   next.players.forEach((entry, seat) => { entry.name = room.players[seat].name; });
-  try { act(next, input.move ?? {}, random(roll)); }
-  catch (error) { requireThat(false, error.message); }
+  act(next, move, random(roll));
   room.yut = next;
   room.index = next.active;
   room.turn = next.round;
   room.last = next.log[0];
+  room.deadline = next.phase === 'flick' ? now + FLICK_SECONDS * 1000 + flickGrace : null;
   if (next.winner !== null) {
     room.status = 'finished';
     room.winners = [room.players[next.winner].id];
     room.endReason = next.winReason;
   }
+}
+
+export function jeungYutAction(room, player, input, roll, now) {
+  requireThat(input.action === 'yut', '증윷 행동을 선택해 주세요.');
+  requireThat(room.players[room.yut.active].id === player.id, '내 차례가 아닙니다.', 403);
+  requireThat(input.gameRevision === room.yut.revision, '판이 바뀌었습니다. 최신 화면에서 다시 선택해 주세요.', 409);
+  try { applyYut(room, input.move ?? {}, roll, now); }
+  catch (error) { requireThat(false, error.message); }
+}
+
+export function expireJeungYut(room, now, roll) {
+  if (room.yut?.phase === 'flick') applyYut(room, { type: 'flickTimeout' }, roll, now);
+  else room.deadline = null;
 }
 
 export function jeungYutView(view) {

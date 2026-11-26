@@ -3,7 +3,7 @@ export const AUGMENTS = [
   { id:'tower', icon:'♜', name:'사단 합체', tier:'prism', kind:'특수 승리', desc:'판 위에서 내 말 4개를 한 칸에 업으면 즉시 승리합니다.' },
   { id:'line', icon:'⁙', name:'일렬횡대', tier:'prism', kind:'특수 승리', desc:'판 위의 직선 경로에서 서로 다른 연속 4칸에 말을 하나씩 세우면 즉시 승리합니다.' },
   { id:'choice', icon:'⑫', name:'작지만 확실한', tier:'gold', kind:'운명 선택', desc:'윷을 던지는 대신 도 또는 개를 직접 고릅니다. 윷·모는 나오지 않습니다.' },
-  { id:'flick', icon:'↗', name:'알까기의 달인', tier:'prism', kind:'미니게임', desc:'내 4·8·12…번째 턴에 알을 뒤로 당겨 발사! 당긴 길이로 파워를 조절합니다. 명중하면 상대 묶음을 잡고 한 번 더, 빗나가면 내 묶음이 탈락해 대기로 돌아갑니다.' },
+  { id:'flick', icon:'↗', name:'알까기의 달인', tier:'prism', kind:'미니게임', desc:'내 4·8·12…번째 턴에 알을 뒤로 당겨 발사! 당긴 길이로 파워를 조절합니다. 명중하면 상대 묶음을 잡고 한 번 더, 빗나가면 내 묶음이 탈락해 대기로 돌아갑니다. 3초 안에 쏘지 않으면 턴이 끝납니다.' },
   { id:'reroll', icon:'⟳', name:'한 번 더 생각해', tier:'silver', kind:'행운', desc:'매 턴 한 번, 도·개·걸·빽도 결과 하나를 다시 던질 수 있습니다. 도·개 선택 증강과 함께라면 다시 고릅니다.' },
   { id:'shield', icon:'♧', name:'든든한 호신부', tier:'gold', kind:'방어', desc:'이번 판에 상대의 잡기 또는 알까기를 총 2회 막습니다. 잡으러 온 말은 이동 전 자리로 돌아갑니다.' },
   { id:'stride', icon:'⇉', name:'세 번째 큰 걸음', tier:'silver', kind:'기동', desc:'내 3·6·9…번째 턴의 첫 전진 이동 거리가 1칸 늘어납니다.' },
@@ -19,6 +19,7 @@ export const AUGMENTS = [
   { id:'recruit', icon:'♙', name:'뒹학 사람좀 모아봐', tier:'gold', kind:'일회 집결', desc:'내 말이 정확히 2개 완주한 상태에서 판당 딱 한 번! 창고의 말 하나를 달리고 있는 내 말에 업습니다. 사용하면 남은 이동·추가 던지기를 포기하고 즉시 턴이 끝납니다.' },
 ];
 export const MILESTONES = [5,10,15];
+export const FLICK_SECONDS = 3;
 export const NODES = {};
 for(let i=0;i<20;i++) {
   let x,y;
@@ -274,6 +275,9 @@ export function act(s,action,rng=Math.random) {
       s.phase='roll';break;
     }
     case 'skipFlick':if(s.phase!=='flick')throw Error('알까기 차례가 아닙니다.');s.phase='roll';break;
+    case 'flickTimeout':
+      if(s.phase!=='flick')throw Error('알까기 차례가 아닙니다.');
+      note(s,`${p.name} · 알까기 시간 초과! 턴 종료`);s.pending=[];s.throws=0;settle(s,rng);break;
     default:throw Error('알 수 없는 행동입니다.');
   }
   s.revision++;return s;
