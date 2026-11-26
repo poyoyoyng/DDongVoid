@@ -18,7 +18,7 @@ export function reactionMarkup() {
       </div>
       <div id="reaction-ranking" class="rankings"></div>
     </div>
-    <p class="muted">준비 시간은 매번 랜덤 2~5초 · 짧은 기록이 높은 순위 · 화면을 벗어나면 이번 측정은 취소됩니다.</p>
+    <p class="muted">랜덤한 시간 동안 기다리세요 · 짧은 기록이 높은 순위 · 화면을 벗어나면 이번 측정은 취소됩니다.</p>
   </section>`;
 }
 
