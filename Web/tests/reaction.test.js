@@ -4,26 +4,26 @@ import { reactionDelay, reactionRankChange, validReaction } from '../public/reac
 import { playReaction } from '../public/reaction.js';
 import { home, rankings } from '../public/views.js';
 
-test('준비 시간은 무작위 시드에 따라 2~5초이고 양 끝값을 포함한다', () => {
-  assert.equal(reactionDelay(0), 2000);
-  assert.equal(reactionDelay(0xffffffff), 5000);
+test('준비 시간은 무작위 시드에 따라 1~6초이고 양 끝값을 포함한다', () => {
+  assert.equal(reactionDelay(0), 1000);
+  assert.equal(reactionDelay(0xffffffff), 6000);
   const delays = new Set();
   for (let seed = 0; seed < 0x100000000; seed += 100003) {
     const delay = reactionDelay(seed);
-    assert.ok(Number.isInteger(delay) && delay >= 2000 && delay <= 5000);
+    assert.ok(Number.isInteger(delay) && delay >= 1000 && delay <= 6000);
     delays.add(delay);
   }
-  assert.equal(delays.size, 3001);
+  assert.equal(delays.size, 5001);
 });
 
 test('반응 기록은 준비 시간을 포함하고 서버 경과 시간과 맞아야 한다', () => {
-  assert.equal(validReaction(0, 250, 2250, 2250), true);
-  assert.equal(validReaction(0xffffffff, 250, 5250, 5250), true);
+  assert.equal(validReaction(0, 250, 1250, 1250), true);
+  assert.equal(validReaction(0xffffffff, 250, 6250, 6250), true);
   for (const ms of [undefined, null, '250', -1, 0, 1.5, NaN, Infinity, 60001]) {
     assert.equal(validReaction(0, ms, 10000, 10000), false);
   }
-  assert.equal(validReaction(0, 250, 2249, 2250), false);
-  assert.equal(validReaction(0, 250, 2250, 0), false);
+  assert.equal(validReaction(0, 250, 1249, 1250), false);
+  assert.equal(validReaction(0, 250, 1250, 0), false);
   assert.equal(validReaction(0, 250, Infinity, 10000), false);
 });
 
@@ -101,19 +101,19 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
 test('초록색 터치 즉시 ms·다시하기를 표시하고 최고 기록과 순위 상승을 함께 보여 준다', async context => {
   const ui = setup(context, { rows: index => [{ id: 'me', name: '나', score: index ? 250 : 400, rank: index ? 2 : 5 }] });
   ui.frame(0);
-  ui.frame(1999);
+  ui.frame(999);
   assert.notEqual(ui.pad.dataset.phase, 'ready');
-  ui.frame(2000);
+  ui.frame(1000);
   assert.equal(ui.pad.dataset.phase, 'ready');
   assert.equal(ui.title.textContent, '눌러!');
-  ui.press(2250);
+  ui.press(1250);
   assert.equal(ui.title.textContent, '250 ms');
   assert.equal(ui.restart.hidden, false);
   await settle();
-  assert.deepEqual(ui.saved, [{ id: 'test-run', reactionMs: 250, elapsedMs: 2250 }]);
+  assert.deepEqual(ui.saved, [{ id: 'test-run', reactionMs: 250, elapsedMs: 1250 }]);
   assert.equal(ui.subtitle.textContent, '내 랭킹 2위 · ↑ 3계단 상승');
   assert.match(ui.get('reaction-ranking').children[0].textContent, /내 최고 기록 250 ms · 내 순위 2위/);
-  ui.press(2300);
+  ui.press(1300);
   assert.equal(ui.saved.length, 1);
   ui.fire(ui.restart, 'click');
   assert.equal(ui.restarts(), 1);
@@ -135,8 +135,8 @@ test('키를 길게 누르거나 보조 포인터를 대는 입력은 무시하�
   ui.frame(0);
   ui.fire(ui.window, 'keydown', { code: 'Space', repeat: true });
   ui.fire(ui.pad, 'pointerdown', { isPrimary: false, button: 0 });
-  ui.frame(2000);
-  ui.frame(2260);
+  ui.frame(1000);
+  ui.frame(1260);
   ui.fire(ui.window, 'keydown', { code: 'Space', repeat: false });
   await settle();
   assert.equal(ui.saved[0].reactionMs, 260);
@@ -159,8 +159,8 @@ test('저장 실패 후에는 같은 기록을 재시도하고 하락한 순위�
   const ui = setup(context, { save: async () => { if (++attempts === 1) throw new Error('연결 실패'); },
     rows: index => [{ id: 'me', name: '나', score: 250, rank: index ? 5 : 2 }] });
   ui.frame(0);
-  ui.frame(2000);
-  ui.press(2300);
+  ui.frame(1000);
+  ui.press(1300);
   await settle();
   assert.equal(ui.get('reaction-save').hidden, false);
   ui.fire(ui.get('reaction-save'), 'click');

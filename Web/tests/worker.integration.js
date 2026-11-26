@@ -56,7 +56,7 @@ test('반응속도는 짧은 최고 기록·공동 순위·중복 저장·계정
     data: { id: first.id, reactionMs: 450, elapsedMs: reactionDelay(first.seed) - 1 }, status: 400 });
   await reactionRequest('/solo/finish', { cookie: a.cookie,
     data: { id: first.id, reactionMs: 450, elapsedMs: 1_000_000 }, status: 400 });
-  await new Promise(resolve => setTimeout(resolve, 5600));
+  await new Promise(resolve => setTimeout(resolve, 6600));
   for (const { member, run, ms } of runs) {
     const finished = await reactionRequest('/solo/finish', { cookie: member.cookie,
       data: { id: run.id, reactionMs: ms, elapsedMs: reactionDelay(run.seed) + ms } });

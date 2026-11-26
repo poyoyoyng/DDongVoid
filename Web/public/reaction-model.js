@@ -1,7 +1,7 @@
 export const maxReactionMs = 60_000;
 
 // Each run receives a fresh random uint32 from the server.
-export const reactionDelay = seed => 2000 + Math.floor((seed >>> 0) / 0x100000000 * 3001);
+export const reactionDelay = seed => 1000 + Math.floor((seed >>> 0) / 0x100000000 * 5001);
 
 export function reactionRankChange(previousRank, currentRank) {
   if (previousRank == null) return '첫 랭킹 진입';
