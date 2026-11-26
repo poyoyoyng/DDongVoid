@@ -338,6 +338,8 @@ test('섯다는 판이 끝나면 D1 잔액과 돈 랭킹에 반영하고 다음 
   await act(members[1], { action: 'bet', kind: 'ping' });
   await act(members[0], { action: 'die' });
   await eventually(money, balances => balances[0] === 9_980_000 && balances[1] === 10_020_000);
+  const refreshed = await request('/rooms/' + room.id, { cookie: members[0].cookie });
+  assert.deepEqual(refreshed.room.players.map(player => player.balance), [9_980_000, 10_020_000]);
 });
 
 test('다빈치 코드는 상대에게 숨긴 숫자를 보내지 않고, 끝까지 추리하면 승자를 랭킹에 반영한다', { timeout: 60_000 }, async () => {

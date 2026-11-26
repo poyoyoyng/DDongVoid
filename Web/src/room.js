@@ -5,6 +5,7 @@ import { errorResponse, json, readBody, requireThat } from './http.js';
 import { extendsStreak, ratingChanges, startRating, streakBonus } from './ratings.js';
 import { isRoomMember } from './room-members.js';
 import { refillMoney, startMoney } from '../public/seotda.js';
+import { walletStatements } from './wallets.js';
 
 const retryDelay = 5000;
 // In a team game every member of the winning team wins.
@@ -95,15 +96,7 @@ export class GameRoom extends DurableObject {
     }
     for (const result of results) {
       if (result.money) {
-        // Like ratings, balances change only while the hand is not yet recorded, so a retried batch skips them.
-        for (const { id, delta, refill } of result.money) {
-          statements.push(db.prepare(`
-            INSERT INTO wallets (account_id, balance, bankruptcies)
-            SELECT ?1, ?2 + ?3, ?4 WHERE NOT EXISTS (SELECT 1 FROM match_results WHERE room_id = ?5 AND match_no = ?6)
-            ON CONFLICT (account_id) DO UPDATE SET balance = CASE WHEN ?4 THEN ?7 ELSE wallets.balance END + ?3,
-              bankruptcies = wallets.bankruptcies + ?4
-          `).bind(id, startMoney, delta, refill ? 1 : 0, result.id, result.match, refillMoney));
-        }
+        statements.push(...walletStatements(db, result));
       } else {
         const entry = id => ratings.get(result.game + ':' + id) ?? { rating: startRating, streak: 0 };
         const current = new Map(result.outcomes.map(player => [player.id, entry(player.id).rating]));
@@ -253,6 +246,15 @@ export class GameRoom extends DurableObject {
         const response = openLiveSocket(this.ctx, request, account.id, { revision: room.revision, chat: chatHistory(this.ctx) });
         this.ctx.waitUntil(this.reportPresence());
         return response;
+      }
+      // Finished/waiting snapshots may predate a refill; show the current persisted balance on refresh.
+      if (room.game === 'seotda' && room.status !== 'playing') {
+        const balances = await this.loadWallets(room);
+        for (const player of room.players) {
+          const balance = balances.get(player.id);
+          if (player.balance === 0 && balance === refillMoney) player.refilledAfter = true;
+          player.balance = balance;
+        }
       }
       return json({ room: roomView(room, account.id) });
     } catch (error) {

@@ -620,7 +620,10 @@ function seotdaSeat(room, player, seat, me, ui) {
     else if (player.folded) lines.push('다이');
     else if (playing && seat === room.index) lines.push('베팅 차례');
     if (delta === undefined) lines.push('건 돈 ' + won(stake.paid), '잔액 ' + won(player.balance - stake.paid));
-    else lines.push(`<span class="${delta >= 0 ? 'gain' : 'loss'}">${delta >= 0 ? '+' : ''}${won(delta)}</span>`, '잔액 ' + won(player.balance));
+    else {
+      lines.push(`<span class="${delta >= 0 ? 'gain' : 'loss'}">${delta >= 0 ? '+' : ''}${won(delta)}</span>`, '잔액 ' + won(player.balance));
+      if (player.refilledAfter) lines.push('파산 · ' + won(refillMoney) + ' 충전 완료');
+    }
   }
   const highlight = playing ? seat === room.index : room.winners.includes(player.id);
   return `<li class="seotda-seat seat-${seat}${highlight ? ' current' : ''}${player.folded || player.vacant ? ' folded' : ''}">

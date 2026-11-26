@@ -31,7 +31,7 @@ export function startSeotda(room, random, now, wallets) {
   room.log = [];
   for (const player of room.players) {
     const refill = wallets.get(player.id) <= bankruptLine;
-    Object.assign(player, { balance: refill ? refillMoney : wallets.get(player.id), cards: [], folded: false, roundBet: 0 });
+    Object.assign(player, { balance: refill ? refillMoney : wallets.get(player.id), cards: [], folded: false, roundBet: 0, refilledAfter: false });
     room.stakes[player.id] = { paid: baseBet, refill };
     if (refill) note(room, player.name + ' · 파산해서 ' + won(refillMoney) + ' 지원');
   }
@@ -92,7 +92,14 @@ function settle(room, winners, reason) {
   const money = Object.entries(room.stakes).map(([id, stake]) => ({ id, delta: (gains.get(id) ?? 0) - stake.paid, refill: stake.refill }));
   for (const player of room.players) {
     const entry = money.find(item => item.id === player.id);
-    if (entry) player.balance += entry.delta;
+    if (entry) {
+      player.balance += entry.delta;
+      if (player.balance <= 0) {
+        player.balance = refillMoney;
+        player.refilledAfter = true;
+        note(room, player.name + ' · 잔액 0원으로 파산해서 ' + won(refillMoney) + ' 즉시 충전');
+      }
+    }
   }
   room.settlement = {
     match: room.match, money,

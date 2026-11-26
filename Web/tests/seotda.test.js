@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { applyAction, createRoom, expireRoom, roomView } from '../src/games.js';
 import { canTakeSeat } from '../public/rules.js';
-import { bankruptLine, baseBet, handOf, refillMoney, showdown, startMoney, turnTime, won } from '../public/seotda.js';
+import { bankruptLine, baseBet, betOptions, handOf, refillMoney, showdown, startMoney, turnTime, won } from '../public/seotda.js';
 import { peekKey, roomPage } from '../public/views.js';
 
 const card = (month, picture = true) => (month - 1) * 2 + (picture ? 0 : 1);
@@ -162,6 +162,24 @@ test('한 판에 걸 수 있는 돈은 가장 적은 잔액까지이고, 10만�
   assert.equal(room.stakes['0'].refill, true);
   assert.equal(room.cap, refillMoney);
   assert.equal(table(2, [bankruptLine + 1, startMoney]).room.stakes['0'].refill, false);
+});
+
+test('판이 끝나 잔액이 0원이면 즉시 300만원으로 충전하고 결과에 표시한다', () => {
+  const { room, play } = table(2, [200_000, 200_000]);
+  setHands(room, [[card(1), card(1, false)], [card(2), card(3)]]);
+  for (let turn = 0; turn < 50 && room.status === 'playing'; turn++) {
+    const options = betOptions(room, room.players[room.index]);
+    play(room.index, options.half ? { action: 'bet', kind: 'half' } : { action: options.toCall ? 'call' : 'check' });
+  }
+  assert.equal(room.status, 'finished');
+  assert.equal(room.players[1].balance, refillMoney);
+  assert.equal(room.players[1].refilledAfter, true);
+  assert.equal(room.players[0].balance, 400_000);
+  assert.equal(room.players[0].refilledAfter, false);
+  assert.equal(total(room), 0);
+  assert.equal(room.settlement.money[1].delta, -200_000);
+  assert.match(room.log.join('\n'), /300만원 즉시 충전/);
+  assert.match(roomPage(roomView(room, '1'), '1', { connected: true, peeked: new Set() }), /300만원 충전 완료/);
 });
 
 test('시간이 지나면 체크할 수 있을 때는 체크, 아니면 다이한다', () => {
