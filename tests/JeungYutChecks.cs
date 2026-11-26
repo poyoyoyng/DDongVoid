@@ -45,7 +45,13 @@ internal static class JeungYutChecks
             assert(JeungYut.Position(JeungYut.Walk(T("o19"), 1)) == "o0" && JeungYut.Position(JeungYut.Walk(T("o19"), 2)) == "finish", "완주 경계 오류");
             var center = T("o5", "a1", "a2", "c");
             assert(JeungYut.Position(JeungYut.Walk(center, 1, "short")) == "b4" && JeungYut.Position(JeungYut.Walk(center, 1, "long")) == "a4", "중앙 출구 오류");
-            assert(JeungYut.Position(JeungYut.Walk(T("o1"), -1)) == "home", "첫 칸 빽도는 대기");
+            assert(JeungYut.Position(JeungYut.Walk(T("o1"), -1)) == "o0", "첫 칸 빽도는 출발·도착 칸");
+            assert(JeungYut.Position(JeungYut.Walk(T("o0"), -1)) == "o19", "출발·도착 칸 빽도 오류");
+        });
+        check("증윷 첫 칸 빽도 뒤 다음 이동은 완주", () =>
+        {
+            var s = Fresh(); Put(s, 0, 0, "o1"); Pending(s, -1); Move(s); assert(At(s, 0, 0) == "o0", "첫 칸 빽도가 판을 벗어남");
+            s.Active = 0; Pending(s, 1); Move(s); assert(s.Players[0].Tokens[0].Done, "출발·도착 칸에서 완주하지 않음");
         });
         check("증윷 빽도는 지나온 길로 · 대기 말은 빽도 불가 · 막힌 빽도는 턴 넘김", () =>
         {

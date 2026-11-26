@@ -152,6 +152,10 @@ public static class JeungYut
     {
         ["a1"] = "a2", ["a2"] = "c", ["a4"] = "a5", ["a5"] = "o15", ["b1"] = "b2", ["b2"] = "c", ["b4"] = "b5", ["b5"] = "o0",
     };
+    private static readonly Dictionary<string, string> Back = new()
+    {
+        ["a1"] = "o5", ["a2"] = "a1", ["c"] = "a2", ["a4"] = "c", ["a5"] = "a4", ["b1"] = "o10", ["b2"] = "b1", ["b4"] = "c", ["b5"] = "b4",
+    };
 
     public static bool OnBoard(string node) => Nodes.ContainsKey(node);
     public static string Position(JeungYutToken t) => t.Done ? Finish : t.Path.Count > 0 ? t.Path[^1] : Home;
@@ -253,7 +257,15 @@ public static class JeungYut
     public static JeungYutToken Walk(JeungYutToken token, int steps, string route = "outer")
     {
         var t = new JeungYutToken { Id = token.Id, Path = [.. token.Path], Done = token.Done, Returning = token.Returning };
-        if (steps < 0) { if (t.Path.Count > 0) t.Path.RemoveAt(t.Path.Count - 1); return t; }
+        if (steps < 0)
+        {
+            if (t.Path.Count == 0) return t;
+            var from = t.Path[^1];
+            t.Path.RemoveAt(t.Path.Count - 1);
+            // Backing off the first square stops on the start square, which is also the finish; a piece on the board never returns to reserve.
+            if (t.Path.Count == 0) t.Path.Add(Back.TryGetValue(from, out var back) ? back : "o" + (int.Parse(from[1..]) + 19) % 20);
+            return t;
+        }
         for (var i = 0; i < steps && !t.Done; i++)
         {
             var here = Position(t); string next;
