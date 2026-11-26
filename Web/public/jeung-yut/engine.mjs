@@ -93,9 +93,15 @@ function rolledValue(s,rng) {
 }
 function extraThrows(s,value) {return value===5&&has(s,s.active,'banchan')?2:value>=4?1:0;}
 const NEXT={a1:'a2',a2:'c',a4:'a5',a5:'o15',b1:'b2',b2:'c',b4:'b5',b5:'o0'};
+const BACK={a1:'o5',a2:'a1',c:'a2',a4:'c',a5:'a4',b1:'o10',b2:'b1',b4:'c',b5:'b4'};
 export function walk(token,steps,route='outer') {
   const t=structuredClone(token);
-  if(steps<0) {t.path.pop();return t;}
+  if(steps<0) {
+    const from=t.path.pop();
+    // Backing off the first square stops on the start square, which is also the finish; a piece on the board never returns to reserve.
+    if(from&&!t.path.length)t.path.push(BACK[from]??'o'+((Number(from.slice(1))+19)%20));
+    return t;
+  }
   for(let i=0;i<steps&&!t.done;i++) {
     const here=position(t); let next;
     if(here==='home')next='o1';

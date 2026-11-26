@@ -30,7 +30,11 @@ test('a center stop can take the short exit; passing continues straight',()=>{
 test('backdo retraces the actual shortcut and cannot launch a reserve',()=>{
   const s=fresh();put(s,0,0,['o5','a1','a2','c']);pending(s,-1);move(s);assert.equal(position(s.players[0].tokens[0]),'a2');
   const home=fresh();pending(home,-1);assert.equal(legalMoves(home).length,0);
-  const t={path:['o1'],done:false};assert.equal(position(walk(t,-1)),'home');
+});
+test('backdo from the first square stops on the start square and the next move finishes',()=>{
+  const s=fresh();put(s,0,0,'o1');pending(s,-1);move(s);assert.equal(position(s.players[0].tokens[0]),'o0');
+  s.active=0;pending(s,1);move(s);assert.equal(s.players[0].tokens[0].done,true);
+  assert.equal(position(walk({path:['o0'],done:false},-1)),'o19');
 });
 test('an unplayable backdo passes the turn without deadlocking',()=>{
   const s=fresh();act(s,{type:'roll'},()=>1.1/16);assert.equal(s.active,1);assert.equal(s.players[1].turn,1);
