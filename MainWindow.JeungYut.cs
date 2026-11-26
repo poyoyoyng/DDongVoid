@@ -47,6 +47,7 @@ public partial class MainWindow
         yutTimer.Stop(); yutSyncCancellation?.Cancel(); yutStateVersion++;
         yutRoomId = null; yutRoom = null; yutDrawn = null; yutSyncStatus = null; yutResignArmed = null;
         yutSelectedResult = null; yutSelectedToken = null;
+        StopYutAnimations(); yutAnimationScope = null;
     }
     private void ShowYutLobby()
     {
@@ -258,7 +259,7 @@ public partial class MainWindow
     }
     private void YutPlay(JeungYutRoom room, JeungYutAction action)
     {
-        if (busy) return;
+        if (busy || YutAnimating) return;
         yutSelectedToken = null;
         _ = RunYutAsync((s, id) => s.Play(room.Id, id, room.Revision, action));
     }
@@ -273,16 +274,19 @@ public partial class MainWindow
     {
         if (yutRoom is not { } room || userId is null || room.Find(userId) is not { } me) { ShowYutLobby(); return; }
         if (yutResignArmed is { } armed && armed != (room.Id, room.Revision)) yutResignArmed = null;
+        DetectYutAnimations(room);
         var game = room.Game;
         var playing = room.Status == JeungYutStatus.Playing;
         var finished = room.Status == JeungYutStatus.Finished;
         var myTurn = playing && room.CurrentPlayerId == userId;
         if (game is not null) NormalizeYutSelection(game, myTurn);
-        var signature = "room|" + userId + "|" + yutResignArmed + "|" + yutSelectedResult + "|" + yutSelectedToken + "|" + JsonSerializer.Serialize(room);
+        var signature = "room|" + userId + "|" + yutResignArmed + "|" + yutSelectedResult + "|" + yutSelectedToken + "|" + YutAnimationKey() + "|" + JsonSerializer.Serialize(room);
+        yutDrawnAnimation = YutAnimationKey();
         if (panel == "jeungyut-room" && yutDrawn == signature) return;
-        yutDrawn = signature;
+        yutDrawn = signature; yutFrames.Clear();
         var title = finished ? room.Winners.Contains(userId) ? room.Winners.Count > 1 ? "공동 승리!" : "이겼어요!" : "아쉽게 졌어요"
             : !playing ? "준비되면 시작!"
+            : myTurn && yutThrow is not null ? "내 차례 · 윷 던지는 중"
             : myTurn ? game!.Phase switch
             {
                 JeungYut.Augment => "내 차례 · 증강 선택",
@@ -306,7 +310,8 @@ public partial class MainWindow
             DialogContent.Children.Add(layout);
             if (finished) AddText(room.LastMessage ?? "", 11.5, "#FFE29A", 2, 6, true);
             else AddYutActions(room, game, myTurn, highlight);
-            AddYutLog(game);
+            // The log would give the throw away before the sticks land.
+            if (yutThrow is null) AddYutLog(game);
         }
         else
         {
@@ -348,6 +353,9 @@ public partial class MainWindow
     private void AddYutActions(JeungYutRoom room, JeungYutState game, bool mine, Ellipse highlight)
     {
         var p = game.Players[game.Active];
+        // While the sticks are in the air or a flicked piece is flying, the stage replaces the controls.
+        if (yutThrow is { } toss) { AddYutThrowStage(toss.Roll, toss.Owner); return; }
+        if (yutFlight is { } flight) { AddYutFlightResult(flight.Shot); return; }
         if (game.LastRoll is { } roll && roll.Id == game.Revision) AddYutThrow(game, roll);
         else if (game.Log.FirstOrDefault(text => !text.EndsWith("번째 턴")) is { } latest) AddText(latest, 11, "#F4C59D", 0, 6);
         if (game.Phase == JeungYut.Augment)
@@ -585,6 +593,8 @@ public partial class MainWindow
         {
             foreach (var stack in game.Players[owner].Tokens.Where(t => JeungYut.OnBoard(JeungYut.Position(t))).GroupBy(JeungYut.Position))
             {
+                // A stack still flying or hopping there is drawn by the animation instead.
+                if (YutHiddenStack(owner, stack.Key)) continue;
                 var tokens = stack.ToList(); var n = JeungYut.Nodes[stack.Key];
                 var lead = tokens[0].Id;
                 var isMine = owner == game.Active && (picking || flicking);
@@ -625,6 +635,7 @@ public partial class MainWindow
                 Place(mark, spot.Item1, spot.Item2);
             }
         }
+        AddYutBoardAnimations(canvas);
         canvas.Children.Add(highlight);
         var view = new Viewbox { Child = canvas, Width = YutBoardSide, Height = YutBoardSide };
         return (new Border { Name = "YutBoard", Child = view, VerticalAlignment = VerticalAlignment.Top }, highlight);

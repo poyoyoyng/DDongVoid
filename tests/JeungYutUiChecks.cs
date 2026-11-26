@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -84,9 +85,13 @@ internal static class JeungYutUiChecks
             MainWindow Current() => Room(host).CurrentPlayerId == "p0" ? host : guest;
             MainWindow Other() => Current() == host ? guest : host;
             Assert(Buttons(Other()).All(b => Label(b) != "윷 던지기  ↗") && Buttons(Current()).Any(b => Label(b) == "윷 던지기  ↗"), "차례인 사람에게만 던지기 버튼 표시");
-            var moved = false;
+            bool Animating(MainWindow w) => (bool)typeof(MainWindow).GetProperty("YutAnimating", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w)!;
+            bool Stage(MainWindow w) => Find<FrameworkElement>((DependencyObject)w.Content).Any(e => e.Name == "YutThrowStage");
+            bool Hopping(MainWindow w) => Get(w, "yutMotion") is not null;
+            var moved = false; bool sawStage = false, sawStageOther = false, sawHop = false;
             for (var step = 0; step < 8; step++)
             {
+                Wait(() => !Animating(host) && !Animating(guest));
                 var w = Current(); Set(w, "yutDrawn", null); Call(w, "DrawYutRoom"); Layout(w);
                 var game = Room(w).Game!; var buttons = Buttons(w);
                 var button = game.Phase == JeungYut.Augment ? buttons.First(b => b.Tag is string tag && tag.StartsWith("augment:"))
@@ -95,9 +100,20 @@ internal static class JeungYutUiChecks
                     : buttons.First(b => b.Tag is JeungYutMove);
                 moved |= button.Tag is JeungYutMove;
                 var revision = Room(w).Revision;
+                var other = w == host ? guest : host;
                 Press(button);
                 Wait(() => Idle() && Room(host).Revision > revision && Room(guest).Revision > revision);
+                if (Label(button) == "윷 던지기  ↗")
+                {
+                    if (!sawStage && Stage(w)) Screenshot(w, "-throw");
+                    sawStage |= Animating(w) && Stage(w) && Buttons(w).All(b => Label(b) != "윷 던지기  ↗");
+                    Wait(() => Animating(other) || Room(other).Game!.LastRoll is null); Layout(other); sawStageOther |= Stage(other);
+                }
+                if (button.Tag is JeungYutMove) sawHop |= Hopping(w);
             }
+            Wait(() => !Animating(host) && !Animating(guest) && !Hopping(host) && !Hopping(guest));
+            Assert(sawStage && sawStageOther, "윷을 던지면 두 화면 모두 던지기 애니메이션을 보여 주고 그동안 버튼을 숨김");
+            Assert(sawHop, "말을 옮기면 칸을 따라 이동하는 애니메이션");
             Assert(moved && Room(host).Revision == Room(guest).Revision && Room(host).Game!.Log.SequenceEqual(Room(guest).Game!.Log), "던지기·이동이 두 화면에 같은 판으로 갱신");
             var onBoard = Room(host).Game!.Players.SelectMany(p => p.Tokens).Count(t => JeungYut.OnBoard(JeungYut.Position(t)));
             Set(host, "yutDrawn", null); Call(host, "DrawYutRoom"); Layout(host);
@@ -115,6 +131,21 @@ internal static class JeungYutUiChecks
                 Assert(boardBounds.Right <= viewport.ActualWidth + .5 && boardBounds.Bottom <= viewport.ActualHeight + .5,
                     $"기본 창 크기({(transparent ? "투명" : "일반")} 모드)에서 말판이 가로·세로로 잘리지 않음");
             }
+            var between = typeof(MainWindow).GetMethod("YutMotionBetween", BindingFlags.Static | BindingFlags.NonPublic)!;
+            var before = JeungYut.Create(["p0", "p1"], true, () => 0); var after = JsonSerializer.Deserialize<JeungYutState>(JsonSerializer.Serialize(before))!;
+            before.Players[0].Tokens[0].Path = ["o1", "o2"]; before.Players[0].Tokens[1].Path = ["o1", "o2"]; before.Players[1].Tokens[0].Path = ["o1", "o2", "o3", "o4"];
+            after.Players[0].Tokens[0].Path = ["o1", "o2", "o3", "o4"]; after.Players[0].Tokens[1].Path = ["o1", "o2", "o3", "o4"];
+            var motion = between.Invoke(null, [before, after, 0.0])!;
+            var hops = (System.Collections.IList)motion.GetType().GetProperty("Hops")!.GetValue(motion)!; var fades = (System.Collections.IList)motion.GetType().GetProperty("Fades")!.GetValue(motion)!;
+            Assert(hops.Count == 1 && hops[0]!.ToString()!.Contains("×2") && fades.Count == 1, "업힌 두 말은 한 묶음으로 칸을 따라 이동하고 잡힌 말은 사라지는 애니메이션");
+            var shotRoom = Room(host).Copy(); var shotGame = shotRoom.Game!; var shooter = shotGame.Active; var target = 1 - shooter;
+            shotGame.Players[shooter].Tokens[0].Path = ["o1"]; shotGame.Revision += 1000;
+            shotGame.Flick = new() { Id = shotGame.Revision, Owner = shooter, FromX = 560, FromY = 464, ToX = 560, ToY = 222, Hit = "o4", SourceNode = "o1",
+                SourceTokens = [0], Victim = target, VictimTokens = [0], Outcome = "hit" };
+            Set(host, "yutRoom", shotRoom); Set(host, "yutDrawn", null); Call(host, "DrawYutRoom"); Layout(host);
+            Assert(Animating(host) && Find<TextBlock>((DependencyObject)host.Content).Any(t => t.Text == "제대로 맞았다!"), "알까기 명중은 비행 애니메이션과 결과를 보여 줌");
+            Wait(() => !Animating(host));
+            Set(host, "yutRoom", store.Join(id, "p0")); Set(host, "yutPreviousGame", Room(host).Game); Set(host, "yutDrawn", null); Call(host, "DrawYutRoom");
             Click(guest, "기권하기"); Layout(guest);
             Assert(Room(guest).Status == JeungYutStatus.Playing && Buttons(guest).Any(b => Label(b) == "정말 기권할까요?"), "기권은 한 번 더 눌러야 확정");
             Click(guest, "정말 기권할까요?");
