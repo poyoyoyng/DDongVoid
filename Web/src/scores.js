@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { replayRhythm, tickRate as rhythmTickRate } from '../public/rhythm-model.js';
 import { replayScore, tickRate as dodgeTickRate } from '../public/solo-model.js';
 import { replaySides, tickRate as sidesTickRate } from '../public/sides-model.js';
-import { validReaction } from '../public/reaction-model.js';
+import { minReactionMs, validReaction } from '../public/reaction-model.js';
 import { errorResponse, json, readBody, requireThat } from './http.js';
 
 const soloGames = {
@@ -41,6 +41,7 @@ export class ScoreVerifier extends DurableObject {
       if (run.finished_score !== null) return json({ score: run.finished_score });
       let score;
       if (run.game === 'reaction') {
+        requireThat(!(typeof reactionMs === 'number' && reactionMs < minReactionMs), '예측하지마라잉?');
         requireThat(validReaction(run.seed, reactionMs, elapsedMs, Date.now() - run.started_at), '반응 시간 기록을 확인할 수 없습니다.');
         score = reactionMs;
       } else {

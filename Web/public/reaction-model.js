@@ -1,3 +1,4 @@
+export const minReactionMs = 100;
 export const maxReactionMs = 60_000;
 
 // Each run receives a fresh random uint32 from the server.
@@ -12,7 +13,7 @@ export function reactionRankChange(previousRank, currentRank) {
 }
 
 export function validReaction(seed, reactionMs, elapsedMs, serverElapsedMs) {
-  return Number.isInteger(reactionMs) && reactionMs >= 1 && reactionMs <= maxReactionMs &&
+  return Number.isInteger(reactionMs) && reactionMs >= minReactionMs && reactionMs <= maxReactionMs &&
     Number.isFinite(elapsedMs) && elapsedMs >= reactionDelay(seed) + reactionMs &&
     elapsedMs <= serverElapsedMs + 1000;
 }

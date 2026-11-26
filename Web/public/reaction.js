@@ -1,4 +1,4 @@
-import { maxReactionMs, reactionDelay, reactionRankChange } from './reaction-model.js';
+import { minReactionMs, maxReactionMs, reactionDelay, reactionRankChange } from './reaction-model.js';
 import { reactionRankingTable } from './views.js';
 
 export function reactionMarkup() {
@@ -127,6 +127,12 @@ export function playReaction(run, save, loadRanks, restart, userId) {
     } else if (phase === 'ready') {
       const reactionMs = Math.max(1, Math.round(now - greenAt));
       if (reactionMs > maxReactionMs) return cancel();
+      if (reactionMs < minReactionMs) {
+        end('predicted', '예측하지마라잉?', `${reactionMs} ms · 100ms 미만은 기록하지 않아요`);
+        status.textContent = '초록색을 확인한 뒤 눌러 주세요. 이번 기록은 저장하지 않았어요.';
+        void refreshRanks();
+        return;
+      }
       record = { id: run.id, reactionMs, elapsedMs: Math.ceil(now - startedAt) };
       end('result', `${reactionMs.toLocaleString('ko-KR')} ms`, '내 랭킹 확인 중…');
       void saveRecord();

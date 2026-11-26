@@ -45,7 +45,7 @@ test('반응속도는 짧은 최고 기록·공동 순위·중복 저장·계정
   const initial = await reactionRequest('/rankings?game=reaction', { cookie: a.cookie });
   assert.ok(initial.rows.every(row => !members.some(member => member.user.id === row.id)));
   const runs = [];
-  for (const [member, ms] of [[a, 450], [a, 250], [a, 500], [b, 250], [c, 400]]) {
+  for (const [member, ms] of [[a, 450], [a, 250], [a, 500], [b, 250], [c, 100]]) {
     const run = await reactionRequest('/solo/start', { cookie: member.cookie, data: { game: 'reaction' }, status: 201 });
     runs.push({ member, run, ms });
   }
@@ -57,6 +57,13 @@ test('반응속도는 짧은 최고 기록·공동 순위·중복 저장·계정
   await reactionRequest('/solo/finish', { cookie: a.cookie,
     data: { id: first.id, reactionMs: 450, elapsedMs: 1_000_000 }, status: 400 });
   await new Promise(resolve => setTimeout(resolve, 6600));
+  for (const ms of [27, 99]) {
+    const rejected = await reactionRequest('/solo/finish', { cookie: a.cookie,
+      data: { id: first.id, reactionMs: ms, elapsedMs: reactionDelay(first.seed) + ms }, status: 400 });
+    assert.equal(rejected.error, '예측하지마라잉?');
+  }
+  const beforeSave = await reactionRequest('/rankings?game=reaction', { cookie: a.cookie });
+  assert.ok(beforeSave.rows.every(row => row.id !== a.user.id));
   for (const { member, run, ms } of runs) {
     const finished = await reactionRequest('/solo/finish', { cookie: member.cookie,
       data: { id: run.id, reactionMs: ms, elapsedMs: reactionDelay(run.seed) + ms } });
@@ -67,9 +74,9 @@ test('반응속도는 짧은 최고 기록·공동 순위·중복 저장·계정
   assert.equal(repeat.score, 450);
   const { rows } = await reactionRequest('/rankings?game=reaction', { cookie: a.cookie });
   const own = members.map(member => rows.find(row => row.id === member.user.id));
-  assert.deepEqual(own.map(row => row.score), [250, 250, 400]);
+  assert.deepEqual(own.map(row => row.score), [250, 250, 100]);
   assert.equal(own[0].rank, own[1].rank);
-  assert.ok(own[2].rank > own[1].rank);
+  assert.ok(own[2].rank < own[1].rank);
   assert.ok(rows.every((row, index) => index === 0 || rows[index - 1].score <= row.score));
 });
 

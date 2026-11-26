@@ -662,7 +662,8 @@ button.card-face.picked { outline: 3px solid var(--app-mint); transform: transla
 /* The signal changes instantly: an animated color transition would blur the timing. */
 .reaction-pad[data-phase="ready"] { background: #197648; }
 .reaction-pad[data-phase="result"] { background: var(--dark); padding-bottom: 112px; }
-.reaction-pad[data-phase="early"], .reaction-pad[data-phase="cancelled"] { background: #58617d; padding-bottom: 112px; }
+.reaction-pad[data-phase="early"], .reaction-pad[data-phase="cancelled"], .reaction-pad[data-phase="predicted"] { background: #58617d; padding-bottom: 112px; }
+.reaction-pad[data-phase="predicted"] strong { font-size: clamp(30px, 6vw, 64px); }
 .reaction-result { display: grid; gap: 20px; }
 .reaction-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .reaction-best { margin-block: 0 18px; font-size: 20px; font-weight: 850; }

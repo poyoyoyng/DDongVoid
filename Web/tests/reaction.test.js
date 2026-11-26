@@ -19,7 +19,8 @@ test('준비 시간은 무작위 시드에 따라 1~6초이고 양 끝값을 포
 test('반응 기록은 준비 시간을 포함하고 서버 경과 시간과 맞아야 한다', () => {
   assert.equal(validReaction(0, 250, 1250, 1250), true);
   assert.equal(validReaction(0xffffffff, 250, 6250, 6250), true);
-  for (const ms of [undefined, null, '250', -1, 0, 1.5, NaN, Infinity, 60001]) {
+  assert.equal(validReaction(0, 100, 1100, 1100), true);
+  for (const ms of [undefined, null, '250', -1, 0, 1, 27, 99, 99.9, 1.5, NaN, Infinity, 60001]) {
     assert.equal(validReaction(0, ms, 10000, 10000), false);
   }
   assert.equal(validReaction(0, 250, 1249, 1250), false);
@@ -117,6 +118,33 @@ test('초록색 터치 즉시 ms·다시하기를 표시하고 최고 기록과 
   assert.equal(ui.saved.length, 1);
   ui.fire(ui.restart, 'click');
   assert.equal(ui.restarts(), 1);
+});
+
+test('100ms 미만이면 예측하지마라잉?을 표시하고 저장 없이 바로 다시하기가 가능하다', async context => {
+  const ui = setup(context);
+  ui.frame(0);
+  ui.frame(1000);
+  ui.press(1099);
+  await settle();
+  assert.equal(ui.title.textContent, '예측하지마라잉?');
+  assert.match(ui.subtitle.textContent, /99 ms/);
+  assert.equal(ui.pad.dataset.phase, 'predicted');
+  assert.equal(ui.restart.hidden, false);
+  assert.deepEqual(ui.saved, []);
+  ui.press(1200);
+  assert.deepEqual(ui.saved, []);
+  ui.fire(ui.restart, 'click');
+  assert.equal(ui.restarts(), 1);
+});
+
+test('정확히 100ms는 정상 기록으로 저장한다', async context => {
+  const ui = setup(context);
+  ui.frame(0);
+  ui.frame(1000);
+  ui.press(1100);
+  await settle();
+  assert.equal(ui.title.textContent, '100 ms');
+  assert.deepEqual(ui.saved, [{ id: 'test-run', reactionMs: 100, elapsedMs: 1100 }]);
 });
 
 test('빨간색에서 미리 누르면 실패하고 저장하지 않으며 다시 시작할 수 있다', async context => {
