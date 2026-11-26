@@ -6,12 +6,14 @@ import WebSocket from 'ws';
 import { hitRhythm, makeRhythm, stepRhythm, tickRate as rhythmTickRate } from '../public/rhythm-model.js';
 import { makeSolo, stepSolo, tickRate } from '../public/solo-model.js';
 import { makeSides, pressSides, sideOf, stepSides, tickRate as sidesTickRate } from '../public/sides-model.js';
+import { reactionDelay } from '../public/reaction-model.js';
 
 const url = new URL(process.env.DDONGVOID_TEST_URL ?? 'http://127.0.0.1:8787');
 assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname), '로컬 실행기에서만 테스트할 수 있습니다.');
 
-async function request(path, { cookie, data, status = 200 } = {}) {
+async function request(path, { cookie, data, status = 200, address } = {}) {
   const headers = { Origin: url.origin };
+  if (address) headers['CF-Connecting-IP'] = address;
   if (cookie) headers.Cookie = cookie;
   if (data !== undefined) headers['Content-Type'] = 'application/json';
   const response = await fetch(new URL('/api' + path, url), {
@@ -29,6 +31,47 @@ function connect(path, cookie) {
   target.protocol = 'ws:';
   return new WebSocket(target, { headers: { Cookie: cookie, Origin: url.origin } });
 }
+
+test('반응속도는 짧은 최고 기록·공동 순위·중복 저장·계정 소유권을 지킨다', { timeout: 20_000 }, async () => {
+  // Keep this test's signups separate from the existing authentication rate-limit checks.
+  const address = '192.0.2.' + (Math.floor(Math.random() * 254) + 1);
+  const reactionRequest = (path, options = {}) => request(path, { ...options, address });
+  const prefix = 'qa-reaction-' + randomUUID().slice(0, 6);
+  const members = [];
+  for (const suffix of ['a', 'b', 'c']) {
+    members.push(await reactionRequest('/join', { data: { name: prefix + suffix, password: 'test1234' }, status: 201 }));
+  }
+  const [a, b, c] = members;
+  const initial = await reactionRequest('/rankings?game=reaction', { cookie: a.cookie });
+  assert.ok(initial.rows.every(row => !members.some(member => member.user.id === row.id)));
+  const runs = [];
+  for (const [member, ms] of [[a, 450], [a, 250], [a, 500], [b, 250], [c, 400]]) {
+    const run = await reactionRequest('/solo/start', { cookie: member.cookie, data: { game: 'reaction' }, status: 201 });
+    runs.push({ member, run, ms });
+  }
+  const first = runs[0].run;
+  await reactionRequest('/solo/finish', { cookie: b.cookie,
+    data: { id: first.id, reactionMs: 250, elapsedMs: 10000 }, status: 404 });
+  await reactionRequest('/solo/finish', { cookie: a.cookie,
+    data: { id: first.id, reactionMs: 450, elapsedMs: reactionDelay(first.seed) - 1 }, status: 400 });
+  await reactionRequest('/solo/finish', { cookie: a.cookie,
+    data: { id: first.id, reactionMs: 450, elapsedMs: 1_000_000 }, status: 400 });
+  await new Promise(resolve => setTimeout(resolve, 5600));
+  for (const { member, run, ms } of runs) {
+    const finished = await reactionRequest('/solo/finish', { cookie: member.cookie,
+      data: { id: run.id, reactionMs: ms, elapsedMs: reactionDelay(run.seed) + ms } });
+    assert.equal(finished.score, ms);
+  }
+  const repeat = await reactionRequest('/solo/finish', { cookie: a.cookie,
+    data: { id: first.id, reactionMs: 1, elapsedMs: 10000 } });
+  assert.equal(repeat.score, 450);
+  const { rows } = await reactionRequest('/rankings?game=reaction', { cookie: a.cookie });
+  const own = members.map(member => rows.find(row => row.id === member.user.id));
+  assert.deepEqual(own.map(row => row.score), [250, 250, 400]);
+  assert.equal(own[0].rank, own[1].rank);
+  assert.ok(own[2].rank > own[1].rank);
+  assert.ok(rows.every((row, index) => index === 0 || rows[index - 1].score <= row.score));
+});
 
 function nextRevision(socket, timeout = 3000) {
   return nextPacket(socket, timeout).then(packet => packet.revision);

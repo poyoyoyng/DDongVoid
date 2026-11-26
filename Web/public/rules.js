@@ -2,6 +2,7 @@ export const games = {
   dodge: { title: '똥 피하기', description: '떨어지는 똥을 피해서 오래 살아남으세요.', mode: '싱글', max: 1 },
   rhythm: { title: '키보드 리듬', description: '내려오는 블록이 판정선에 닿을 때 S D K L 키를 누르세요.', mode: '싱글', max: 1 },
   sides: { title: '니편내편', description: '줄 선 캐릭터를 같은 편이 있는 쪽으로 재빨리 보내세요.', mode: '싱글', max: 1 },
+  reaction: { title: '반응속도 테스트', description: '빨강에서 초록으로 바뀌면 터치! 나의 반응속도는 몇 ms일까요?', mode: '싱글', max: 1 },
   slap: { title: '맞짱', description: '공격, 방어, 기 모으기로 상대의 체력을 깎으세요.', mode: '2인 대전', max: 2 },
   ciao: { title: '차오차오', description: '주사위 눈을 속이고 상대의 선언을 의심하세요.', mode: '2~4인 대전', max: 4 },
   onecard: { title: '원카드', description: '특수 카드를 활용해 손패를 먼저 모두 내세요.', mode: '2~4인 대전', max: 4 },

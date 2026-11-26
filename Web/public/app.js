@@ -4,6 +4,7 @@ import { escape, heading, home, lobby, presenceText, rankings, roomList, roomPag
 import { guide } from './guide.js';
 import { playSolo, soloMarkup } from './solo.js';
 import { createMusic } from './music.js';
+import { playReaction, reactionMarkup } from './reaction.js';
 
 const app = document.querySelector('#app');
 const accountButton = document.querySelector('#account-button');
@@ -168,7 +169,7 @@ async function navigate() {
   try {
     if (section === 'rankings') {
       const data = await api('/rankings?game=' + key);
-      if (token === generation) paint(rankings(key, data.rows));
+      if (token === generation) paint(rankings(key, data.rows, user.id));
     }
     if (section === 'lobby') {
       await refreshLobby(token);
@@ -226,6 +227,12 @@ function mountChat(path, title, token, options) {
 }
 
 const soloIntro = {
+  reaction: {
+    art: '준비 → 눌러!',
+    help: ['빨간색 준비 화면에서 기다리세요. 2~5초 사이의 무작위 시간이 지나면 초록색으로 바뀝니다.',
+      '초록색의 “눌러!”가 보이는 순간 게임 화면을 터치하거나 클릭하세요. Space·Enter 키로도 가능합니다.',
+      '너무 일찍 누르면 실패! 성공하면 반응 시간(ms), 개인 최고 기록과 랭킹을 확인할 수 있습니다. 짧은 시간이 높은 순위입니다.'],
+  },
   dodge: {
     art: '← →',
     help: ['← → 키 또는 A D 키로 좌우 이동합니다. 생존 시간과 피한 똥 개수로 점수를 얻습니다.', '터치 버튼으로도 플레이할 수 있습니다.'],
@@ -260,6 +267,12 @@ async function beginSolo() {
     const run = await api('/solo/start', { game });
     if (token !== generation) return;
     solo?.stop();
+    if (game === 'reaction') {
+      paint(heading(games[game].title) + reactionMarkup());
+      solo = playReaction(run, data => api('/solo/finish', data),
+        () => api('/rankings?game=reaction'), beginSolo, user.id);
+      return;
+    }
     paint(heading(games[game].title) + soloMarkup(game));
     // 한 판 더 starts the next run right away instead of going back to the start screen.
     solo = playSolo(game, run, data => api('/solo/finish', data), beginSolo);

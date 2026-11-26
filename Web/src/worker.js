@@ -28,6 +28,10 @@ async function rankings(db, game) {
     )
     SELECT id, name, money, bankruptcies, wins, draws, losses, RANK() OVER (ORDER BY money DESC) AS rank
     FROM board ORDER BY rank, name LIMIT 1000
+  ` : game === 'reaction' ? `
+    SELECT accounts.id AS id, name, score, RANK() OVER (ORDER BY score ASC) AS rank
+    FROM solo_bests JOIN accounts ON accounts.id = solo_bests.account_id
+    WHERE game = ? ORDER BY rank, name
   ` : isSoloGame(game) ? `
     WITH board AS (
       SELECT name, COALESCE(score, 0) AS score

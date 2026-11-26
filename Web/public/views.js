@@ -13,6 +13,7 @@ export const escape = value => String(value ?? '').replace(/[&<>"']/g, char => (
 })[char]);
 
 const artwork = {
+  reaction: '<span class="reaction-art-light red">준비</span><span class="reaction-art-arrow">→</span><span class="reaction-art-light green">눌러!</span>',
   dodge: '<span class="fall fall-one">●</span><span class="fall fall-two">●</span><span class="fall fall-three">●</span><span class="dodge-player"><i></i><i></i></span>',
   rhythm: '<span class="art-lane left"><i class="key">S</i><i class="key low">D</i></span><span class="art-lane right"><i class="key">L</i><i class="key mid">K</i></span><span class="art-hit"></span>',
   sides: `<span class="art-camp left">${critterSvg(0)}${critterSvg(2)}</span><span class="art-queue">${critterSvg(4)}${critterSvg(5)}</span><span class="art-camp right">${critterSvg(5)}${critterSvg(3)}</span>`,
@@ -127,8 +128,10 @@ export function roomList(rooms, account) {
 const rankingTabs = game => `<div class="tabs" aria-label="랭킹 게임">${Object.entries(games).map(([id, item]) =>
   `<a class="${id === game ? 'selected' : ''}" href="#rankings/${id}" ${id === game ? 'aria-current="page"' : ''}>${item.title}</a>`).join('')}</div>`;
 
-export function rankings(game, rows) {
+export function rankings(game, rows, userId) {
   if (game === 'seotda') return moneyRankings(game, rows);
+  if (game === 'reaction') return heading('랭킹', '반응 시간이 짧을수록 높은 순위! 같은 기록은 공동 순위입니다.') +
+    rankingTabs(game) + `<section class="panel rankings"><h2>반응속도 테스트</h2>${reactionRankingTable(rows, userId)}</section>`;
   const solo = games[game].max === 1;
   return heading('랭킹', solo ? '게임별 최고 점수를 확인하세요.' : '대전 게임은 점수 순입니다. 모두 1000점에서 시작해 이기면 오르고 지면 내려가요.') + `
     ${rankingTabs(game)}
@@ -140,6 +143,14 @@ export function rankings(game, rows) {
         '<td>' + row.score.toLocaleString('ko-KR') + '</td>' : `<td class="mmr">${row.mmr}</td><td>${row.wins}</td><td>${row.draws}</td><td>${row.losses}</td>`}</tr>`).join('')
         : `<tr><td colspan="${solo ? 3 : 6}" class="empty">아직 기록이 없습니다.</td></tr>`}</tbody></table>
     </section>`;
+}
+
+export function reactionRankingTable(rows, userId) {
+  return `<table><thead><tr><th scope="col">순위</th><th scope="col">닉네임</th><th scope="col">최고 기록</th></tr></thead>
+    <tbody>${rows.length ? rows.map(row => `<tr${row.id === userId ? ' class="reaction-mine"' : ''}>
+      <td>${row.rank}위</td><th scope="row">${escape(row.name)}${row.id === userId ? ' · 나' : ''}</th>
+      <td>${row.score.toLocaleString('ko-KR')} ms</td></tr>`).join('')
+    : '<tr><td colspan="3" class="empty">아직 기록이 없습니다. 첫 기록에 도전하세요!</td></tr>'}</tbody></table>`;
 }
 
 function moneyRankings(game, rows) {

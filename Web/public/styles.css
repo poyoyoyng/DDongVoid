@@ -646,6 +646,27 @@ button.card-face.picked { outline: 3px solid var(--app-mint); transform: transla
 .solo-hud strong { font-size: 22px; }
 #solo-pause { margin-left: auto; }
 .solo-panel .muted { margin-top: 10px; }
+
+.art-reaction { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; background: #e0f4e9; gap: 6px; }
+.reaction-art-light { display: grid; place-items: center; width: 66px; height: 66px; border-radius: 50%; color: #fff; font-size: 19px; font-weight: 900; box-shadow: 0 5px 0 #22306a22; }
+.reaction-art-light.red { background: #c43b46; }
+.reaction-art-light.green { background: #197648; }
+.reaction-art-arrow { font-size: 28px; }
+.reaction-panel { display: grid; gap: 20px; }
+.reaction-help { text-align: center; font-weight: 700; }
+.reaction-stage { position: relative; }
+.reaction-restart { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); white-space: nowrap; }
+.reaction-pad { width: 100%; min-height: clamp(260px, 48svh, 480px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 28px 18px; border: 0; border-radius: 18px; background: #c43b46; color: #fff; user-select: none; -webkit-user-select: none; touch-action: none; }
+.reaction-pad strong { font-size: clamp(44px, 9vw, 88px); letter-spacing: -.045em; line-height: 1.2; }
+.reaction-pad span { font-size: clamp(15px, 2.5vw, 19px); line-height: 1.6; }
+/* The signal changes instantly: an animated color transition would blur the timing. */
+.reaction-pad[data-phase="ready"] { background: #197648; }
+.reaction-pad[data-phase="result"] { background: var(--dark); padding-bottom: 112px; }
+.reaction-pad[data-phase="early"], .reaction-pad[data-phase="cancelled"] { background: #58617d; padding-bottom: 112px; }
+.reaction-result { display: grid; gap: 20px; }
+.reaction-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.reaction-best { margin-block: 0 18px; font-size: 20px; font-weight: 850; }
+.reaction-mine { background: #fff3bd; }
 .canvas-wrap { position: relative; overflow: hidden; border-radius: 12px; background: var(--dark); }
 canvas { display: block; width: 100%; aspect-ratio: 2; }
 .canvas-cover { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 7px; padding: 12px; color: white; background: #131729e8; text-align: center; }
