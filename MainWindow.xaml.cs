@@ -20,7 +20,7 @@ public partial class MainWindow : Window
     private const string DefaultDataFolder = @"\\192.168.0.120\SW Team\팀원\최지운\DD";
     private enum PlayState { Home, Playing, Paused, Over }
     private enum MiniGame { Dodge, Rhythm }
-    private enum RankingGame { Dodge, Rhythm, Slap, Ciao, OneCard, Yacht, Omok }
+    private enum RankingGame { Dodge, Rhythm, Slap, Ciao, OneCard, Yacht, Omok, JeungYut }
     // Room games rank by wins; the solo games rank by best score.
     private static bool RanksByWins(RankingGame game) => game is not (RankingGame.Dodge or RankingGame.Rhythm);
     private RankingGame rankingGame;
@@ -111,6 +111,7 @@ public partial class MainWindow : Window
             if (panel is "onecard-lobby" or "onecard-room") { StartOneCardTimer(); _ = PollOneCardAsync(); }
             if (panel is "yacht-lobby" or "yacht-room") { StartYachtTimer(); _ = PollYachtAsync(); }
             if (panel is "omok-lobby" or "omok-room") { StartOmokTimer(); _ = PollOmokAsync(); }
+            if (panel is "jeungyut-lobby" or "jeungyut-room") { StartYutTimer(); _ = PollYutAsync(); }
             Dispatcher.BeginInvoke((Action)(() => OfferUpdate(false)));
         };
         // The render loop starts with a game (StartGame / ResumeGame), not with the window.
@@ -316,9 +317,9 @@ public partial class MainWindow : Window
     private void BeginPanel(string name, string eyebrow, string title, string description)
     {
         var gameList = name == "games";
-        // The yacht table and the omok board need the whole room on screen, so their rooms use tighter margins.
-        var compact = name is "yacht-room" or "omok-room";
-        Dialog.HorizontalAlignment = name is "slap-room" or "ciao-room" or "onecard-room" or "yacht-room" or "omok-room" ? HorizontalAlignment.Stretch : HorizontalAlignment.Center;
+        // The yacht table and the omok and yut boards need the whole room on screen, so their rooms use tighter margins.
+        var compact = name is "yacht-room" or "omok-room" or "jeungyut-room";
+        Dialog.HorizontalAlignment = name is "slap-room" or "ciao-room" or "onecard-room" or "yacht-room" or "omok-room" or "jeungyut-room" ? HorizontalAlignment.Stretch : HorizontalAlignment.Center;
         Dialog.Margin = new Thickness(gameList || compact ? 10 : 22);
         Dialog.Padding = gameList ? new Thickness(18, 14, 18, 14) : compact ? new Thickness(14, 12, 14, 12) : new Thickness(28);
         OneCardCallout.Visibility = Visibility.Collapsed;
@@ -375,7 +376,7 @@ public partial class MainWindow : Window
         if (pendingRecord is not null) { ShowEnd(); return; }
         if (!RequireLogin()) return;
         BeginPanel("games", "AKC MINI GAMES", "게임선택", "");
-        var games = new System.Windows.Controls.Primitives.UniformGrid { Name = "GameList", Columns = 2, Rows = 3, Margin = new Thickness(-3, 0, -3, 0) };
+        var games = new System.Windows.Controls.Primitives.UniformGrid { Name = "GameList", Columns = 2, Rows = 4, Margin = new Thickness(-3, 0, -3, 0) };
         DialogContent.Children.Add(games);
         AddGameItem(games, "똥 피하기", () => StartGame(MiniGame.Dodge));
         AddGameItem(games, "맞짱", ShowSlapLobby);
@@ -383,6 +384,7 @@ public partial class MainWindow : Window
         AddGameItem(games, "원카드", ShowOneCardLobby);
         AddGameItem(games, "야추", ShowYachtLobby);
         AddGameItem(games, "오목", ShowOmokLobby);
+        AddGameItem(games, "증강윷놀이", ShowYutLobby);
         AddButton("돌아가기", ShowHome);
     }
     private FrameworkElement ActiveSurface => activeGame == MiniGame.Rhythm ? RhythmView : Surface;
@@ -468,6 +470,7 @@ public partial class MainWindow : Window
         else if (oneCardRoomId is not null) ShowOneCardRoom();
         else if (yachtRoomId is not null) ShowYachtRoom();
         else if (omokRoomId is not null) ShowOmokRoom();
+        else if (yutRoomId is not null) ShowYutRoom();
         else if (playState == PlayState.Paused) ShowPause();
         else if (playState == PlayState.Over) ShowEnd();
         else ShowHome();
@@ -602,7 +605,7 @@ public partial class MainWindow : Window
     private void Logout()
     {
         if (pendingRecord is not null) { ShowEnd(); return; }
-        DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom(); DetachYachtRoom(); DetachOmokRoom();
+        DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom(); DetachYachtRoom(); DetachOmokRoom(); DetachYutRoom();
         ForgetSession(); userId = null; bestScore = 0; ResetToHome(); ShowHome();
         SetMessage("로그아웃했습니다.", true);
     }
@@ -627,6 +630,7 @@ public partial class MainWindow : Window
                 RankingGame.OneCard => new GameResultStore(rankingStore.Folder).Rankings(GameResultStore.OneCard),
                 RankingGame.Yacht => new GameResultStore(rankingStore.Folder).Rankings(GameResultStore.Yacht),
                 RankingGame.Omok => new GameResultStore(rankingStore.Folder).Rankings(GameResultStore.Omok),
+                RankingGame.JeungYut => new GameResultStore(rankingStore.Folder).Rankings(GameResultStore.JeungYut),
                 _ => rankingStore.Rankings()
             }, game == RankingGame.Yacht ? new GameResultStore(rankingStore.Folder).YachtBest() : null));
             if (panel != "ranking" || request != rankingRequest || store != rankingStore) return;
@@ -695,7 +699,7 @@ public partial class MainWindow : Window
             ? rankingGame == RankingGame.Slap ? "누적 승수 순위 · 승수가 같으면 공동 순위" : "누적 승수 순위 · 공동 1위는 무승부로 집계" : "아이디별 최고 점수 순위 · 같은 점수는 공동 순위");
         var games = new System.Windows.Controls.Primitives.UniformGrid { Name = "RankingTabs", Rows = 2, Columns = 4, Margin = new Thickness(0, 0, 0, 14) };
         foreach (var (game, title) in new[] { (RankingGame.Dodge, "똥 피하기"), (RankingGame.Rhythm, "키보드 리듬"), (RankingGame.Slap, "맞짱"),
-            (RankingGame.Ciao, "차오차오"), (RankingGame.OneCard, "원카드"), (RankingGame.Yacht, "야추"), (RankingGame.Omok, "오목") })
+            (RankingGame.Ciao, "차오차오"), (RankingGame.OneCard, "원카드"), (RankingGame.Yacht, "야추"), (RankingGame.Omok, "오목"), (RankingGame.JeungYut, "증강윷놀이") })
         {
             var button = new Button { Content = new TextBlock { Text = title, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center },
                 Padding = new Thickness(6, 10, 6, 10), Margin = new Thickness(2, 0, 2, 4) };
@@ -793,7 +797,7 @@ public partial class MainWindow : Window
     {
         var update = availableUpdate;
         if (update is null || offeringUpdate || installingUpdate || busy || sizeModeRestore is not null || !IsVisible || !IsActive ||
-            pendingRecord is not null || playState == PlayState.Playing || InSlapMatch || InCiaoMatch || InOneCardMatch || InYachtMatch || InOmokMatch || (!manual && offeredUpdates.Contains(update.Tag))) return;
+            pendingRecord is not null || playState == PlayState.Playing || InSlapMatch || InCiaoMatch || InOneCardMatch || InYachtMatch || InOmokMatch || InYutMatch || (!manual && offeredUpdates.Contains(update.Tag))) return;
         offeringUpdate = true; offeredUpdates.Add(update.Tag);
         try
         {
@@ -871,7 +875,7 @@ public partial class MainWindow : Window
             using (new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose)) { }
             var old = preferences.DataFolder; preferences.DataFolder = candidate.Folder;
             if (!SavePreferences()) { preferences.DataFolder = old; return; }
-            DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom(); DetachYachtRoom(); DetachOmokRoom();
+            DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom(); DetachYachtRoom(); DetachOmokRoom(); DetachYutRoom();
             store = candidate; userId = null; bestScore = 0; pendingRecord = null;
             ResetToHome(); startupError = null;
             UpdateHud(); ShowSettings(); SetMessage("저장 폴더를 변경했습니다. 이 폴더의 계정으로 로그인해 주세요.", true);
@@ -1021,6 +1025,8 @@ public partial class MainWindow : Window
                 System.Windows.Controls.Primitives.TextBoxBase or PasswordBox or
                 System.Windows.Controls.Primitives.RangeBase or System.Windows.Controls.Primitives.Selector)
                 return;
+            // The yut board takes its own clicks and drags (picking a piece, pulling a flick).
+            if (item is FrameworkElement { Name: "YutBoard" }) return;
         }
         e.Handled = true;
         DragMove();
@@ -1050,7 +1056,7 @@ public partial class MainWindow : Window
         if (busy) { e.Cancel = true; return; }
         if (pendingRecord is not null && MessageBox.Show(this, "저장하지 못한 기록이 있습니다. 저장하지 않고 종료할까요?", "미저장 기록", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
         { e.Cancel = true; ShowEnd(); return; }
-        DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom(); DetachYachtRoom(); DetachOmokRoom();
+        DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom(); DetachYachtRoom(); DetachOmokRoom(); DetachYutRoom();
         ExitSizeMode(false); RememberWindowSize();
         PauseGame(); SavePreferences();
     }

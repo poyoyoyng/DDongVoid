@@ -48,7 +48,7 @@ public partial class MainWindow
     private void ShowOneCardLobby()
     {
         if (!RequireLogin()) return;
-        DetachSlapRoom(); DetachCiaoRoom(); DetachYachtRoom(); DetachOneCardRoom(); DetachOmokRoom();
+        DetachSlapRoom(); DetachCiaoRoom(); DetachYachtRoom(); DetachOneCardRoom(); DetachOmokRoom(); DetachYutRoom();
         DrawOneCardLobby(); StartOneCardTimer(); _ = PollOneCardAsync();
     }
     private void DrawOneCardLobby()

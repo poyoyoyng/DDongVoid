@@ -16,7 +16,7 @@ public sealed class GameResultDatabase
 // which rewrites the room files without knowing about results, cannot erase it.
 public sealed class GameResultStore
 {
-    public const string Yacht = "yacht", OneCard = "onecard", Ciao = "ciao", Omok = "omok";
+    public const string Yacht = "yacht", OneCard = "onecard", Ciao = "ciao", Omok = "omok", JeungYut = "jeungyut";
     public string Folder { get; }
     public string FilePath => Path.Combine(Folder, "ddongvoid-results.json");
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };

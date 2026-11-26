@@ -36,6 +36,7 @@ try
     OneCardChecks.Run(root, Check, Assert);
     YachtChecks.Run(root, Check, Assert);
     OmokChecks.Run(root, Check, Assert);
+    JeungYutChecks.Run(root, Check, Assert);
     GameResultChecks.Run(root, Check, Assert);
     var store = new LocalStore(Path.Combine(root, "계정 저장 폴더"));
     Check("새 폴더 읽기에는 파일 생성 없음", () => { store.Validate(); Assert(!Directory.Exists(store.Folder), "읽기 작업에서 파일을 만들었습니다."); });

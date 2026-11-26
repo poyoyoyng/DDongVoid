@@ -252,7 +252,7 @@ internal static class RankingChecks
         gameResults.Add(new GameResult(GameResultStore.Yacht, Guid.NewGuid(), 1, DateTimeOffset.UtcNow, ["player00", "player01"], ["player00", "player01"]));
         gameResults.Add(new GameResult(GameResultStore.OneCard, Guid.NewGuid(), 1, DateTimeOffset.UtcNow, ["player00", "player01", "player02"], ["player02"]));
         Assert(Find<System.Windows.Controls.Primitives.UniformGrid>(content).Single(g => g.Name == "RankingTabs").Children.Cast<Button>().Select(b => ((TextBlock)b.Content).Text)
-            .SequenceEqual(["똥 피하기", "키보드 리듬", "맞짱", "차오차오", "원카드", "야추", "오목"]), "랭킹에 모든 게임 탭 표시");
+            .SequenceEqual(["똥 피하기", "키보드 리듬", "맞짱", "차오차오", "원카드", "야추", "오목", "증강윷놀이"]), "랭킹에 모든 게임 탭 표시");
         ClickGame("야추"); Wait(() => Labels().Contains("1승 1무 0패"));
         Assert(Labels().Contains("0승 1무 1패") && Labels().Any(t => t.StartsWith("내 순위  1위") && t.Contains("1승 1무 0패")), "야추 승·무·패와 내 순위 표시");
         Assert(Labels().Contains("역대 최고점수  ·  돼지현  274점"), "야추 랭킹에 역대 최고점수 표시");

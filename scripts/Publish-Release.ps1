@@ -29,6 +29,8 @@ if (-not $SkipTests) {
     if ($LASTEXITCODE -ne 0) { throw 'Yacht UI checks failed.' }
     dotnet run --project (Join-Path $taskProjectRoot 'tests\OmokUiChecks.csproj') -c Release -p:NuGetAudit=false
     if ($LASTEXITCODE -ne 0) { throw 'Omok UI checks failed.' }
+    dotnet run --project (Join-Path $taskProjectRoot 'tests\JeungYutUiChecks.csproj') -c Release -p:NuGetAudit=false
+    if ($LASTEXITCODE -ne 0) { throw 'JeungYut UI checks failed.' }
 }
 dotnet publish (Join-Path $taskProjectRoot 'DDongVoid.csproj') -c Release -r win-x64 --no-self-contained -o $taskPackageDirectory "-p:Version=$Version" -p:NuGetAudit=false
 if ($LASTEXITCODE -ne 0) { throw 'Game publish failed.' }

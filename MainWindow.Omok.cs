@@ -46,7 +46,7 @@ public partial class MainWindow
     private void ShowOmokLobby()
     {
         if (!RequireLogin()) return;
-        DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom(); DetachYachtRoom(); DetachOmokRoom();
+        DetachSlapRoom(); DetachCiaoRoom(); DetachOneCardRoom(); DetachYachtRoom(); DetachOmokRoom(); DetachYutRoom();
         DrawOmokLobby(); StartOmokTimer(); _ = PollOmokAsync();
     }
     private void DrawOmokLobby()

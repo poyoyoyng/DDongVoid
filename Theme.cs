@@ -34,6 +34,8 @@ public static class Theme
         // So are the omok board and its stones.
         [0xDCB36A] = 0xDCB36A, [0xB88A3E] = 0xB88A3E, [0x5B4220] = 0x5B4220, [0x1A1A1A] = 0x1A1A1A, [0xF7F7F2] = 0xF7F7F2,
         [0x8A8A80] = 0x8A8A80, [0xE5484D] = 0xE5484D,
+        // So are the yut pieces on that wooden board.
+        [0x3B82F6] = 0x3B82F6, [0x8B5CF6] = 0x8B5CF6, [0xD99A00] = 0xD99A00,
     };
     // Translucent colors whose meaning changes with alpha.
     private static readonly Dictionary<uint, uint> LightArgb = new()
