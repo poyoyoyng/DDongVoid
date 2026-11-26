@@ -98,8 +98,8 @@ test('flick swept collision hits the first target; limited power and misses do n
   const src={x:0,y:0},targets=[{x:200,y:0,node:'first'},{x:400,y:0,node:'second'}];
   assert.equal(simulateFlick(src,1,0,650,targets).hit,'first');assert.equal(simulateFlick(src,1,0,80,targets).hit,null);assert.equal(simulateFlick(src,0,1,650,targets).hit,null);
 });
-test('flick obeys phase and defense and grants a bonus only for a successful hit',()=>{
-  const s=fresh();s.players[0].augments=['flick'];put(s,0,0,'o1');put(s,1,0,'o4');s.phase='flick';act(s,{type:'flick',token:0,pullX:0,pullY:FLICK_MAX_PULL});assert.equal(position(s.players[1].tokens[0]),'home');assert.equal(s.throws,2);assert.equal(position(s.players[0].tokens[0]),'o1');
+test('a successful flick takes the victim square and ends the turn; a blocked one keeps the throw',()=>{
+  const s=fresh();s.active=0;s.players[0].augments=['flick'];put(s,0,0,'o1');put(s,1,0,['o1','o2','o3','o4']);s.phase='flick';act(s,{type:'flick',token:0,pullX:0,pullY:FLICK_MAX_PULL});assert.equal(position(s.players[1].tokens[0]),'home');assert.deepEqual(s.players[0].tokens[0].path,['o1','o2','o3','o4']);assert.equal(s.active,1);assert.equal(s.flick.outcome,'hit');assert.match(s.log.find(text=>text.includes('알까기')),/턴 종료/);
   assert.throws(()=>act(s,{type:'flick',token:0,pullX:0,pullY:FLICK_MAX_PULL}));
   const block=fresh();put(block,0,0,'o1');put(block,1,0,'o4');block.players[1].shields=1;block.phase='flick';act(block,{type:'flick',token:0,pullX:0,pullY:FLICK_MAX_PULL});assert.equal(block.throws,1);assert.equal(position(block.players[1].tokens[0]),'o4');
 });
@@ -205,7 +205,7 @@ test('aiming correctly with insufficient drag still misses; extra client power c
   const weak=fresh();put(weak,0,0,'o1');put(weak,1,0,'o4');weak.phase='flick';act(weak,{type:'flick',token:0,pullX:0,pullY:FLICK_MIN_PULL,power:1e9});
   assert.equal(weak.flick.outcome,'miss');assert.equal(position(weak.players[0].tokens[0]),'home');assert.equal(position(weak.players[1].tokens[0]),'o4');
   const strong=fresh();put(strong,0,0,'o1');put(strong,1,0,'o4');put(strong,1,1,'o4');strong.phase='flick';act(strong,{type:'flick',token:0,pullX:0,pullY:90});
-  assert.equal(strong.flick.outcome,'hit');assert.equal(position(strong.players[0].tokens[0]),'o1');assert.equal(position(strong.players[1].tokens[0]),'home');assert.equal(position(strong.players[1].tokens[1]),'home');assert.equal(strong.throws,2);assert.equal(strong.flick.victim,1);assert.deepEqual(strong.flick.victimTokens,[0,1]);
+  assert.equal(strong.flick.outcome,'hit');assert.equal(position(strong.players[0].tokens[0]),'o4');assert.equal(position(strong.players[1].tokens[0]),'home');assert.equal(position(strong.players[1].tokens[1]),'home');assert.equal(strong.active,1);assert.equal(strong.flick.victim,1);assert.deepEqual(strong.flick.victimTokens,[0,1]);
 });
 test('short taps, malformed drags and non-board launchers are rejected without changing the game',()=>{
   const s=fresh();put(s,0,0,'o1');put(s,1,0,'o4');s.phase='flick';const before=structuredClone(s);
@@ -362,4 +362,11 @@ test('알까기 시간 초과는 던지지 않고 턴을 넘기며, 알까기 �
   assert.equal(s.active,1);assert.notEqual(s.phase,'flick');assert.equal(position(s.players[0].tokens[0]),'o3');
   assert.ok(s.log.some(text=>text.includes('알까기 시간 초과')));
   assert.throws(()=>act(s,{type:'flickTimeout'},fixed),/알까기 차례가 아닙니다/);
+});
+test('알까기로 지름길 위 상대를 잡으면 그 경로를 이어받아 다음 이동도 같은 길로 간다',()=>{
+  const s=fresh();s.active=0;put(s,0,0,'o2');put(s,1,0,['o1','o2','o3','o4','o5','a1','a2']);s.phase='flick';
+  const at=NODES.o2,to=NODES.a2,length=Math.hypot(to.x-at.x,to.y-at.y);
+  act(s,{type:'flick',token:0,pullX:-(to.x-at.x)/length*FLICK_MAX_PULL,pullY:-(to.y-at.y)/length*FLICK_MAX_PULL});
+  assert.equal(s.flick.hit,'a2');
+  assert.equal(position(s.players[0].tokens[0]),'a2');assert.equal(position(walk(s.players[0].tokens[0],1)),'c');assert.equal(position(walk(s.players[0].tokens[0],-1)),'a1');
 });
