@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {AUGMENTS,NODES,act,createGame,walk,position,legalMoves,checkWin,simulateFlick,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL,recruitOptions} from '../public/jeung-yut/engine.mjs';
+import {AUGMENTS,NODES,act,createGame,walk,position,legalMoves,checkWin,simulateFlick,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL,recruitOptions,trapOptions,copyOption,swapReady,swapTargets,quakeReady} from '../public/jeung-yut/engine.mjs';
 const fixed=()=>.4;
 const fresh=()=>createGame(['청','홍'],true,fixed);
 function put(s,p,id,path){s.players[p].tokens[id].path=Array.isArray(path)?path:[path];}
@@ -184,7 +184,7 @@ test('banchan mo grants exactly two additional rolls, including a reroll and a c
   const reroll=fresh();pick(reroll,'banchan');reroll.players[0].augments.push('reroll');pending(reroll,2);act(reroll,{type:'reroll',result:1},()=>0);assert.equal(reroll.throws,2);assert.equal(reroll.pending[0].value,5);
 });
 test('mutually exclusive throw replacements are filtered from drafting and draft rerolls',()=>{
-  assert.equal(AUGMENTS.length,17);
+  assert.equal(AUGMENTS.length,25);
   for(const [owned,excluded] of [['banchan','choice'],['choice','banchan']]){
     const s=createGame(['A','B'],true,()=>0);pick(s,owned);s.players[0].turn=9;s.active=1;act(s,{type:'roll'},()=>1.1/16);
     assert.equal(s.phase,'augment');assert.ok(!s.offers.includes(excluded));act(s,{type:'draftReroll'},()=>.9);assert.ok(!s.offers.includes(excluded));
@@ -369,4 +369,61 @@ test('알까기로 지름길 위 상대를 잡으면 그 경로를 이어받아 
   act(s,{type:'flick',token:0,pullX:-(to.x-at.x)/length*FLICK_MAX_PULL,pullY:-(to.y-at.y)/length*FLICK_MAX_PULL});
   assert.equal(s.flick.hit,'a2');
   assert.equal(position(s.players[0].tokens[0]),'a2');assert.equal(position(walk(s.players[0].tokens[0],1)),'c');assert.equal(position(walk(s.players[0].tokens[0],-1)),'a1');
+});
+test('밤길 조심해: 3의 배수 턴에 내 말 칸에 덫을 놓고, 그 칸에 멈춘 상대 말은 대기로 돌아간다',()=>{
+  const s=fresh();pick(s,'trap');s.players[0].turn=3;put(s,0,0,'o3');
+  assert.deepEqual(trapOptions(s),['o3']);act(s,{type:'trap',node:'o3'},fixed);assert.deepEqual(trapOptions(s),[]);
+  s.players[0].turn=4;assert.deepEqual(trapOptions(s),[]);
+  s.active=1;put(s,1,0,'o1');pending(s,2);move(s);
+  assert.equal(position(s.players[1].tokens[0]),'home');assert.equal(position(s.players[0].tokens[0]),'home');assert.deepEqual(s.traps,[]);
+  const many=fresh();pick(many,'trap');many.traps=[{node:'o7',owner:0},{node:'o8',owner:0}];many.players[0].turn=6;put(many,0,0,'o3');act(many,{type:'trap',node:'o3'},fixed);
+  assert.deepEqual(many.traps.map(trap=>trap.node),['o8','o3']);
+});
+test('비켜 비켜!: 멈춘 칸 바로 앞의 상대 묶음을 2칸 뒤로 밀고, 출발 직후 말은 밀지 않는다',()=>{
+  const s=fresh();pick(s,'shove');put(s,0,0,'o2');put(s,1,0,['o1','o2','o3','o4','o5']);put(s,1,1,['o1','o2','o3','o4','o5']);pending(s,2);move(s);
+  assert.equal(position(s.players[0].tokens[0]),'o4');assert.equal(position(s.players[1].tokens[0]),'o3');assert.equal(position(s.players[1].tokens[1]),'o3');
+  const young=fresh();pick(young,'shove');put(young,1,0,['o1','o2']);pending(young,1);move(young);assert.equal(position(young.players[1].tokens[0]),'o2');
+  const plain=fresh();put(plain,0,0,'o2');put(plain,1,0,['o1','o2','o3','o4','o5']);pending(plain,2);move(plain);assert.equal(position(plain.players[1].tokens[0]),'o5');
+});
+test('징크스: 2인전은 상대에게 바로, 3인 이상은 지목한 상대의 다음 3턴 윷·모가 걸로 바뀐다',()=>{
+  const s=fresh();pick(s,'jinx');assert.equal(s.players[1].jinxUntil,3);assert.notEqual(s.phase,'jinx');
+  s.active=1;s.players[1].turn=1;s.phase='roll';s.throws=1;s.pending=[];act(s,{type:'roll'},()=>15.1/16);assert.equal(s.pending[0].value,3);assert.equal(s.throws,0);
+  s.players[1].turn=4;s.phase='roll';s.throws=1;s.pending=[];act(s,{type:'roll'},()=>15.1/16);assert.equal(s.pending[0].value,4);
+  const three=createGame(['A','B','C'],true,()=>0);pick(three,'jinx');assert.equal(three.phase,'jinx');
+  assert.throws(()=>act(three,{type:'jinx',target:0},fixed));act(three,{type:'jinx',target:2},fixed);
+  assert.equal(three.players[2].jinxUntil,3);assert.equal(three.players[1].jinxUntil,0);assert.equal(three.phase,'roll');
+  assert.equal(botAction(Object.assign(structuredClone(three),{phase:'jinx'})).type,'jinx');
+});
+test('따라쟁이: 직전 플레이어의 마지막 결과를 던지기 대신 쓰고, 추가 던지기 없이 판당 3회',()=>{
+  const s=fresh();pick(s,'copy');assert.equal(copyOption(s),null);
+  s.players[1].lastValue=4;assert.deepEqual(copyOption(s),{from:1,value:4});
+  act(s,{type:'copy'},fixed);assert.equal(s.pending[0].value,4);assert.equal(s.throws,0);assert.equal(s.players[0].copies,2);assert.equal(copyOption(s),null);
+});
+test('자리 바꿔줘: 내 완주가 상대보다 적을 때만, 판당 한 번 자리를 맞바꾸고 턴을 끝낸다',()=>{
+  const s=fresh();pick(s,'swap');put(s,0,0,'o2');put(s,1,0,['o1','o2','o3','o4','o5','a1']);
+  assert.equal(swapReady(s),false);s.players[1].tokens[3].done=true;assert.equal(swapReady(s),true);
+  assert.deepEqual(swapTargets(s,0),[{owner:1,token:0,node:'a1',count:1}]);
+  act(s,{type:'swap',token:0,owner:1,target:0},fixed);
+  assert.equal(position(s.players[0].tokens[0]),'a1');assert.equal(position(s.players[1].tokens[0]),'o2');assert.equal(s.active,1);
+  s.active=0;s.phase='roll';assert.equal(swapReady(s),false);assert.throws(()=>act(s,{type:'swap',token:0,owner:1,target:0},fixed));
+});
+test('지진났다: 판당 한 번 판 위의 모든 말이 1칸 뒤로, 같은 편 묶음은 두 번 밀리지 않는다',()=>{
+  const s=fresh();pick(s,'quake');put(s,0,0,'o3');put(s,0,1,'o4');put(s,1,0,['o1','o2','o3','o4','o5','o6']);
+  assert.equal(quakeReady(s),true);act(s,{type:'quake'},fixed);
+  assert.equal(position(s.players[0].tokens[0]),'o2');assert.equal(position(s.players[0].tokens[1]),'o3');assert.equal(position(s.players[1].tokens[0]),'o5');
+  assert.equal(s.active,0);assert.equal(s.phase,'roll');assert.equal(quakeReady(s),false);
+});
+test('실손보험: 잡힌 말은 판당 2회 3번 칸에서 다시 출발하고, 3번 칸에 다른 말이 있으면 대기로 간다',()=>{
+  const s=fresh();s.active=1;pick(s,'insurance');s.active=0;put(s,0,0,'o2');put(s,1,0,['o1','o2','o3','o4']);pending(s,2);move(s);
+  assert.equal(position(s.players[1].tokens[0]),'o3');assert.equal(s.players[1].insurance,1);assert.equal(s.players[1].tokens[0].returning,false);
+  const busy=fresh();busy.active=1;pick(busy,'insurance');busy.active=0;put(busy,0,0,'o2');put(busy,0,1,'o3');put(busy,1,0,['o1','o2','o3','o4']);pending(busy,2);move(busy);
+  assert.equal(position(busy.players[1].tokens[0]),'home');assert.equal(busy.players[1].insurance,2);
+});
+test('무거운 짐: 업은 묶음은 일반 잡기에 잡히지 않고 1칸 덜 가지만, 알까기는 막지 못한다',()=>{
+  const s=fresh();s.active=1;pick(s,'heavy');s.active=0;put(s,1,0,['o1','o2','o3','o4']);put(s,1,1,['o1','o2','o3','o4']);put(s,0,0,'o2');pending(s,2);move(s);
+  assert.equal(position(s.players[1].tokens[0]),'o4');assert.equal(position(s.players[0].tokens[0]),'o2');
+  const slow=fresh();pick(slow,'heavy');put(slow,0,0,'o2');put(slow,0,1,'o2');pending(slow,3);assert.equal(legalMoves(slow).find(m=>m.token===0).steps,2);
+  pending(slow,1);assert.equal(legalMoves(slow).find(m=>m.token===0).steps,1);
+  const flick=fresh();flick.active=1;pick(flick,'heavy');flick.active=0;put(flick,0,0,'o1');put(flick,1,0,'o4');put(flick,1,1,'o4');flick.phase='flick';
+  act(flick,{type:'flick',token:0,pullX:0,pullY:FLICK_MAX_PULL});assert.equal(flick.flick.outcome,'hit');assert.equal(position(flick.players[1].tokens[0]),'home');
 });

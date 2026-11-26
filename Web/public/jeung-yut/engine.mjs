@@ -15,7 +15,15 @@ export const AUGMENTS = [
   { id:'dopamine', icon:'↟', name:'도파민장아찌', tier:'gold', kind:'선불 쾌감', desc:'선택한 턴부터 내 7턴 동안 전진 이동 +1칸, 이후 10턴 동안 −1칸입니다. 상대 잡기·내 말 완주 한 번마다 디버프가 1턴 줄어듭니다. 버프 중 성공도 미리 차감하며, 디버프 종료 후 정상 이동합니다. 빽도는 그대로입니다.' },
   { id:'aunt', icon:'✋', name:'어쩌라고아줌마', tier:'gold', kind:'잡힘 면역', desc:'잡히려는 순간 “어쩌라고” 하며 잡기·알까기를 총 3회 무시합니다. 업힌 묶음 전체를 보호하며, 한 번의 공격에 1회만 소모합니다.' },
   { id:'banchan', icon:'🍱', name:'반찬맨', tier:'gold', kind:'뜻밖의 한 상', desc:'평소에는 도·개·걸만 나옵니다. 가끔 모가 나오면 두 번 더 던집니다! 윷·빽도는 나오지 않습니다.' },
-  { id:'stutter', icon:'〰', name:'성어말?', tier:'silver', kind:'말 더듬기', desc:'말을 더둠어서 전진 이동을 확정하면 +1칸 15%, −1칸 15%, 정상 이동 70%로 예정 목적지가 달라집니다. 실제 도착 칸에서 잡기·업기·완주를 판정합니다. 빽도는 그대로, 최소 이동은 0칸입니다.' },
+  { id:'stutter', icon:'〰', name:'성어말?', tier:'silver', kind:'말 더듬기', desc:'말을 더듬어서 전진 이동을 확정하면 +1칸 15%, −1칸 15%, 정상 이동 70%로 예정 목적지가 달라집니다. 실제 도착 칸에서 잡기·업기·완주를 판정합니다. 빽도는 그대로, 최소 이동은 0칸입니다.' },
+  { id:'trap', icon:'⚠', name:'밤길 조심해', tier:'gold', kind:'함정', desc:'내 3·6·9…번째 턴에 한 번, 내 말이 서 있는 칸에 덫을 놓습니다. 상대 말이 덫 칸에 멈추면 대기로 돌아가고 덫은 사라집니다. 덫은 최대 2개까지, 더 놓으면 가장 오래된 덫이 사라집니다.' },
+  { id:'shove', icon:'⇇', name:'비켜 비켜!', tier:'silver', kind:'밀치기', desc:'전진을 마친 내 말 바로 앞 칸에 상대 말이 있으면 그 묶음을 2칸 뒤로 밀어냅니다. 출발 직후의 말이나, 밀려날 칸에 다른 플레이어 말이 있으면 밀리지 않습니다.' },
+  { id:'jinx', icon:'☁', name:'징크스', tier:'gold', kind:'저주', desc:'고르는 순간 상대 한 명을 지목합니다. 그 플레이어는 다음 3턴 동안 윷·모가 나오면 걸로 바뀝니다.' },
+  { id:'copy', icon:'⧉', name:'따라쟁이', tier:'silver', kind:'모방', desc:'던지기 1회 대신 직전 플레이어가 마지막으로 던진 결과를 그대로 가져옵니다. 판당 3회, 윷·모를 따라 해도 추가 던지기는 없습니다.' },
+  { id:'swap', icon:'⇄', name:'자리 바꿔줘', tier:'prism', kind:'역전', desc:'내 완주 수가 상대보다 적을 때 판당 한 번! 판 위의 내 말과 상대 말의 자리를 맞바꿉니다. 사용하면 남은 이동·추가 던지기를 포기하고 턴이 끝납니다.' },
+  { id:'quake', icon:'≋', name:'지진났다', tier:'gold', kind:'혼돈', desc:'판당 한 번, 내 차례에 판 위의 모든 말(내 말 포함)을 1칸씩 뒤로 보냅니다. 밀려날 칸에 다른 플레이어 말이 있으면 그 말은 제자리에 남습니다.' },
+  { id:'insurance', icon:'✚', name:'실손보험', tier:'silver', kind:'보험', desc:'내 말이 잡히면 대기 대신 3번 칸에서 다시 출발합니다. 판당 2회, 3번 칸에 다른 플레이어 말이 있으면 보험이 적용되지 않습니다.' },
+  { id:'heavy', icon:'⛰', name:'무거운 짐', tier:'gold', kind:'업기 강화', desc:'2개 이상 업은 내 묶음은 일반 잡기로 잡히지 않습니다(알까기는 못 막음). 대신 업은 묶음은 2칸 이상 전진할 때 1칸 덜 갑니다.' },
   { id:'recruit', icon:'♙', name:'뒹학 사람좀 모아봐', tier:'gold', kind:'일회 집결', desc:'내 말이 정확히 2개 완주한 상태에서 판당 딱 한 번! 창고의 말 하나를 달리고 있는 내 말에 업습니다. 사용하면 남은 이동·추가 던지기를 포기하고 즉시 턴이 끝납니다.' },
 ];
 export const MILESTONES = [5,10,15];
@@ -36,7 +44,7 @@ export const LINES = [
 export const position=t=>t.done?'finish':t.path.at(-1)??'home';
 export const has=(s,p,id)=>s.players[p].augments.includes(id);
 export const label=n=>({'-1':'빽도',1:'도',2:'개',3:'걸',4:'윷',5:'모'})[n];
-const player=name=>({name,turn:0,tokens:Array.from({length:4},(_,id)=>({id,path:[],done:false,returning:false})),augments:[],shields:0,immunity:0,dopamineStart:null,dopamineRelief:0,recruitUsed:false,boost:0,rerolled:false,draftRerolls:1,strideUsed:false,finishUsed:false});
+const player=name=>({name,turn:0,tokens:Array.from({length:4},(_,id)=>({id,path:[],done:false,returning:false})),augments:[],shields:0,immunity:0,dopamineStart:null,dopamineRelief:0,recruitUsed:false,boost:0,lastValue:null,trapTurn:0,jinxUntil:0,copies:0,swapUsed:false,quakeUsed:false,insurance:0,rerolled:false,draftRerolls:1,strideUsed:false,finishUsed:false});
 export function dopamineTurnsLeft(p) {
   return p.augments.includes('dopamine')&&Number.isInteger(p.dopamineStart)?Math.max(0,7-(p.turn-p.dopamineStart)):0;
 }
@@ -53,7 +61,7 @@ function relieveDopamine(s,owner,reason) {
 }
 export function createGame(names=['플레이어 1','플레이어 2'],backdo=true,rng=Math.random) {
   if(!Array.isArray(names)||names.length<2||names.length>4)throw Error('개인전은 2~4명으로 진행합니다.');
-  const s={players:names.map(player),active:Math.floor(rng()*names.length),phase:'roll',round:1,throws:1,pending:[],offers:[],log:[],winner:null,winReason:null,backdo,nextId:1,flick:null,lastRoll:null,revision:0};
+  const s={players:names.map(player),traps:[],active:Math.floor(rng()*names.length),phase:'roll',round:1,throws:1,pending:[],offers:[],log:[],winner:null,winReason:null,backdo,nextId:1,flick:null,lastRoll:null,revision:0};
   beginTurn(s,rng); return s;
 }
 function note(s,msg) {s.log.unshift(msg);s.log=s.log.slice(0,40);}
@@ -82,7 +90,7 @@ export function checkWin(s,p) {
 function rolledValue(s,rng) {
   if(has(s,s.active,'banchan')) {
     const draw=rng(),moChance=.33/16;
-    if(draw<moChance)return 5;
+    if(draw<moChance)return jinxed(s.players[s.active])?3:5;
     const ordinary=(draw-moChance)/(1-moChance);
     return ordinary<4/14?1:ordinary<10/14?2:3;
   }
@@ -90,8 +98,9 @@ function rolledValue(s,rng) {
   let value=count===0?5:count;
   if(s.backdo&&bits===1)value=-1;
   if(value===-1&&has(s,s.active,'forward'))value=1;
-  return value;
+  return jinxed(s.players[s.active])&&value>=4?3:value;
 }
+const jinxed=p=>(p.jinxUntil??0)>=p.turn&&p.turn>0;
 function extraThrows(s,value) {return value===5&&has(s,s.active,'banchan')?2:value>=4?1:0;}
 const NEXT={a1:'a2',a2:'c',a4:'a5',a5:'o15',b1:'b2',b2:'c',b4:'b5',b5:'o0'};
 const BACK={a1:'o5',a2:'a1',c:'a2',a4:'c',a5:'a4',b1:'o10',b2:'b1',b4:'c',b5:'b4'};
@@ -128,6 +137,7 @@ function distance(s,result,g) {
   if(has(s,s.active,'comeback')&&position(g[0])==='home'&&g[0].returning)n+=2;
   if(dopamineTurnsLeft(p)>0)n++;
   else if(dopamineDebuffTurnsLeft(p)>0)n--;
+  if(has(s,s.active,'heavy')&&g.length>1&&n>1)n--;
   return Math.max(0,n+p.boost);
 }
 export function legalMoves(s) {
@@ -151,6 +161,51 @@ export function recruitOptions(s) {
   const reserves=p.tokens.filter(t=>position(t)==='home'),runners=p.tokens.filter(t=>NODES[position(t)]);
   return reserves.flatMap(reserve=>runners.map(target=>({reserve:reserve.id,target:target.id})));
 }
+const occupant=(s,node)=>s.players.findIndex(p=>p.tokens.some(t=>position(t)===node));
+const finished=p=>p.tokens.filter(t=>t.done).length;
+const myTurnPhase=s=>s.winner===null&&['roll','move'].includes(s.phase);
+export function trapOptions(s) {
+  const p=s.players[s.active];
+  if(!myTurnPhase(s)||!has(s,s.active,'trap')||p.turn%3!==0||p.trapTurn===p.turn)return [];
+  return [...new Set(p.tokens.map(position))].filter(node=>NODES[node]&&!(s.traps??[]).some(trap=>trap.node===node));
+}
+export function copyOption(s) {
+  const p=s.players[s.active],previous=s.players[(s.active+s.players.length-1)%s.players.length];
+  if(!myTurnPhase(s)||s.throws<=0||!has(s,s.active,'copy')||(p.copies??0)<=0||previous.lastValue==null)return null;
+  return {from:(s.active+s.players.length-1)%s.players.length,value:previous.lastValue};
+}
+export function swapReady(s) {
+  const p=s.players[s.active];
+  return myTurnPhase(s)&&has(s,s.active,'swap')&&!p.swapUsed&&s.players.some((other,i)=>i!==s.active&&finished(other)>finished(p))
+    &&p.tokens.some(t=>NODES[position(t)])&&s.players.some((other,i)=>i!==s.active&&other.tokens.some(t=>NODES[position(t)]));
+}
+export function swapTargets(s,token) {
+  const mine=s.players[s.active].tokens.find(t=>t.id===token);
+  if(!swapReady(s)||!mine||!NODES[position(mine)])return [];
+  const out=[];
+  s.players.forEach((other,owner)=>{if(owner===s.active)return;const seen=new Set();for(const t of other.tokens){const node=position(t);if(NODES[node]&&!seen.has(node)){seen.add(node);out.push({owner,token:t.id,node,count:other.tokens.filter(x=>position(x)===node).length});}}});
+  return out;
+}
+export function quakeReady(s) {
+  return myTurnPhase(s)&&has(s,s.active,'quake')&&!s.players[s.active].quakeUsed&&s.players.some(p=>p.tokens.some(t=>NODES[position(t)]));
+}
+function jinxTarget(s) {
+  const progress=p=>finished(p)*100+p.tokens.reduce((sum,t)=>sum+t.path.length,0);
+  return s.players.map((p,i)=>i).filter(i=>i!==s.active).sort((a,b)=>progress(s.players[b])-progress(s.players[a]))[0];
+}
+function applyJinx(s,target) {
+  const victim=s.players[target];victim.jinxUntil=victim.turn+3;
+  note(s,`${s.players[s.active].name}의 징크스! ${victim.name}은 다음 3턴 동안 윷·모가 걸로 바뀝니다.`);
+}
+function shove(s,moved) {
+  const ahead=position(walk(moved,1));if(!NODES[ahead])return;
+  const victim=occupant(s,ahead);if(victim<0||victim===s.active)return;
+  const tokens=s.players[victim].tokens.filter(t=>position(t)===ahead);if(tokens[0].path.length<3)return;
+  const back=walk(walk(tokens[0],-1),-1),at=occupant(s,position(back));if(at!==-1&&at!==victim)return;
+  for(const t of tokens)t.path=[...back.path];
+  note(s,`${s.players[s.active].name}: “비켜 비켜!” ${s.players[victim].name}의 말 ${tokens.length}개를 2칸 뒤로 밀었습니다.`);
+}
+function checkAll(s) {for(const i of [s.active,...s.players.map((_,i)=>i).filter(i=>i!==s.active)])if(s.winner===null)checkWin(s,i);}
 function settle(s,rng) {
   if(s.winner!==null)return;
   if(s.throws>0){s.phase='roll';return;}
@@ -159,15 +214,18 @@ function settle(s,rng) {
   if(s.pending.length)note(s,'움직일 말이 없어 빽도를 소모합니다.');
   s.pending=[];s.active=(s.active+1)%s.players.length;s.round++;beginTurn(s,rng);
 }
-function capture(s,owner,at) {
+function capture(s,owner,at,flick=false) {
   const victim=s.players.find((p,i)=>i!==owner&&p.tokens.some(t=>position(t)===at));
   if(!victim)return {caught:0,blocked:false};
   const caught=victim.tokens.filter(t=>position(t)===at);
   if(!caught.length)return {caught:0,blocked:false};
+  if(!flick&&caught.length>1&&victim.augments.includes('heavy')) {note(s,`${victim.name}의 무거운 짐! 업은 묶음은 잡히지 않습니다.`);return {caught:0,blocked:true};}
   if(victim.immunity>0) {victim.immunity--;note(s,`${victim.name}: “어쩌라고!” 잡힘 면역 (${victim.immunity}/3회 남음)`);return {caught:0,blocked:true};}
   if(victim.shields>0) {victim.shields--;note(s,`${victim.name}의 호신부가 잡기를 막았습니다. (${victim.shields}회 남음)`);return {caught:0,blocked:true};}
-  for(const t of caught){t.path=[];t.done=false;t.returning=true;}
+  const insured=victim.augments.includes('insurance')&&(victim.insurance??0)>0&&at!=='o3'&&[-1,s.players.indexOf(victim)].includes(occupant(s,'o3'));
+  for(const t of caught){t.path=insured?['o1','o2','o3']:[];t.done=false;t.returning=!insured;}
   note(s,`${s.players[owner].name}, ${victim.name}의 말 ${caught.length}개 잡기!`);
+  if(insured){victim.insurance--;note(s,`${victim.name}의 실손보험! 잡힌 말이 3번 칸에서 다시 출발합니다. (${victim.insurance}회 남음)`);}
   relieveDopamine(s,owner,'상대 잡기');
   if(has(s,owner,'hunter'))s.players[owner].boost=Math.min(2,s.players[owner].boost+1);
   return {caught:caught.length,blocked:false};
@@ -203,8 +261,47 @@ export function act(s,action,rng=Math.random) {
       if(action.id==='dopamine'){p.dopamineStart=p.turn;p.dopamineRelief=0;}
       if(action.id==='aunt')p.immunity=3;
       if(action.id==='recruit')p.recruitUsed=false;
+      if(action.id==='copy')p.copies=3;
+      if(action.id==='insurance')p.insurance=2;
       note(s,`${p.name}의 증강: ${AUGMENTS.find(a=>a.id===action.id).name}`);s.offers=[];
-      checkWin(s,s.active);if(s.winner===null)afterDraft(s);break;
+      checkWin(s,s.active);if(s.winner!==null)break;
+      if(action.id==='jinx'&&s.players.length>2){s.phase='jinx';break;}
+      if(action.id==='jinx')applyJinx(s,1-s.active);
+      afterDraft(s);break;
+    }
+    case 'jinx': {
+      if(s.phase!=='jinx'||!Number.isInteger(action.target)||action.target===s.active||!s.players[action.target])throw Error('징크스를 걸 상대를 고르세요.');
+      applyJinx(s,action.target);afterDraft(s);break;
+    }
+    case 'trap': {
+      if(!trapOptions(s).includes(action.node))throw Error('지금은 이 칸에 덫을 놓을 수 없습니다.');
+      s.traps=[...(s.traps??[]),{node:action.node,owner:s.active}];
+      const mine=s.traps.filter(trap=>trap.owner===s.active);if(mine.length>2)s.traps.splice(s.traps.indexOf(mine[0]),1);
+      p.trapTurn=p.turn;note(s,`${p.name} · 밤길 조심해! 덫을 놓았습니다.`);break;
+    }
+    case 'copy': {
+      const copy=copyOption(s);if(!copy)throw Error('따라 할 결과가 없습니다.');
+      const value=copy.value===-1&&has(s,s.active,'forward')?1:copy.value;
+      p.copies--;s.throws--;p.lastValue=value;
+      s.lastRoll={id:s.revision+1,owner:s.active,value,extra:0,reroll:false};
+      s.pending.push({id:s.nextId++,value});note(s,`${p.name} · 따라쟁이! ${s.players[copy.from].name}의 ${label(value)} (${p.copies}회 남음)`);settle(s,rng);break;
+    }
+    case 'swap': {
+      const target=swapTargets(s,action.token).find(x=>x.owner===action.owner&&x.token===action.target);
+      if(!target)throw Error('바꿀 수 있는 말이 아닙니다.');
+      const mine=group(s,s.active,action.token),theirs=group(s,target.owner,target.token),myPath=[...mine[0].path],theirPath=[...theirs[0].path];
+      for(const t of mine){t.path=[...theirPath];t.returning=false;}
+      for(const t of theirs){t.path=[...myPath];t.returning=false;}
+      p.swapUsed=true;note(s,`${p.name}: “자리 바꿔줘!” ${s.players[target.owner].name}의 말과 자리를 바꿨습니다. 턴 종료!`);
+      s.pending=[];s.throws=0;checkAll(s);settle(s,rng);break;
+    }
+    case 'quake': {
+      if(!quakeReady(s))throw Error('지진은 판당 한 번, 내 차례에만 쓸 수 있습니다.');
+      // Every group is chosen before any moves, so a group stepping onto its own team's square is not pushed twice.
+      const groups=s.players.flatMap((owner,i)=>[...new Set(owner.tokens.map(position))].filter(node=>NODES[node]).map(node=>{const tokens=owner.tokens.filter(t=>position(t)===node);return {i,tokens,back:walk(tokens[0],-1)};}));
+      for(const {i,tokens,back} of groups){const at=occupant(s,position(back));if(at!==-1&&at!==i)continue;for(const t of tokens)t.path=[...back.path];}
+      p.quakeUsed=true;note(s,`${p.name}: “지진났다!” 판 위의 모든 말이 1칸 뒤로 밀렸습니다.`);
+      checkAll(s);if(s.winner===null)settle(s,rng);break;
     }
     case 'draftReroll':
       if(s.phase!=='augment'||p.draftRerolls<=0)throw Error('증강 재선택을 사용할 수 없습니다.');
@@ -214,14 +311,14 @@ export function act(s,action,rng=Math.random) {
       let value;
       if(has(s,s.active,'choice')) {if(![1,2].includes(action.value))throw Error('도 또는 개를 고르세요.');value=action.value;} else value=rolledValue(s,rng);
       const extra=extraThrows(s,value);s.throws=s.throws-1+extra;
-      s.lastRoll={id:s.revision+1,owner:s.active,value,extra,reroll:false};
+      s.lastRoll={id:s.revision+1,owner:s.active,value,extra,reroll:false};p.lastValue=value;
       s.pending.push({id:s.nextId++,value});note(s,`${p.name} · ${label(value)}${extra===2?'! 반찬맨, 두 번 더!':extra===1?'! 한 번 더':''}`);settle(s,rng);break;
     }
     case 'reroll': {
       const r=s.pending.find(x=>x.id===action.result);
       if(!['roll','move'].includes(s.phase)||!has(s,s.active,'reroll')||p.rerolled||!r||r.value>=4)throw Error('이 결과는 다시 던질 수 없습니다.');
       if(has(s,s.active,'choice')&&![1,2].includes(action.value))throw Error('도 또는 개를 고르세요.');
-      p.rerolled=true;r.value=has(s,s.active,'choice')?action.value:rolledValue(s,rng);const extra=extraThrows(s,r.value);s.throws+=extra;
+      p.rerolled=true;r.value=has(s,s.active,'choice')?action.value:rolledValue(s,rng);p.lastValue=r.value;const extra=extraThrows(s,r.value);s.throws+=extra;
       s.lastRoll={id:s.revision+1,owner:s.active,value:r.value,extra,reroll:true};
       note(s,`${p.name} · 다시 던져 ${label(r.value)}${extra===2?'! 반찬맨, 두 번 더!':''}`);settle(s,rng);break;
     }
@@ -241,6 +338,11 @@ export function act(s,action,rng=Math.random) {
         for(const t of g){t.path=[...moved.path];t.done=moved.done;if(steps>0)t.returning=false;}
         note(s,`${p.name} ${g.map(t=>t.id+1).join('·')}번 말 ${steps===-1?'뒤로 1':steps}칸${stumble}${moved.done?' · 완주!':''}`);
         if(moved.done)relieveDopamine(s,s.active,'말 완주');
+        const trap=(s.traps??[]).find(x=>x.node===to&&x.owner!==s.active);
+        if(trap&&!moved.done) {
+          for(const t of g){t.path=[];t.returning=false;}
+          s.traps.splice(s.traps.indexOf(trap),1);note(s,`${s.players[trap.owner].name}의 덫! ${p.name}의 말 ${g.length}개가 대기로 돌아갑니다.`);
+        }else if(steps>0&&!moved.done&&has(s,s.active,'shove'))shove(s,moved);
         if(outcome.caught&&result.value<4)s.throws++;
         if(moved.done&&has(s,s.active,'finish')&&!p.finishUsed){s.throws++;p.finishUsed=true;note(s,'완주의 기세 · 한 번 더!');}
       }else if(offset)note(s,`${p.name}${stumble} · ${s.log[0]}`);
@@ -267,7 +369,7 @@ export function act(s,action,rng=Math.random) {
       s.flick={...shot,owner:s.active,id:s.revision+1,sourceNode,sourceTokens:shooters.map(t=>t.id),victim,victimTokens,launch,outcome:'miss'};
       if(shot.hit) {
         const taken=[...s.players[victim].tokens.find(t=>position(t)===shot.hit).path];
-        const result=capture(s,s.active,shot.hit);s.flick.outcome=result.blocked?'blocked':'hit';
+        const result=capture(s,s.active,shot.hit,true);s.flick.outcome=result.blocked?'blocked':'hit';
         if(result.caught) {
           // A successful flick takes over the victim's square, route included, and ends the turn without a bonus throw.
           for(const token of shooters){token.path=[...taken];token.returning=false;}
@@ -290,10 +392,13 @@ export function act(s,action,rng=Math.random) {
 }
 export function botAction(s,rng=Math.random) {
   if(s.phase==='augment') {
-    const rank={choice:3,flick:4,tower:2,line:2,shield:7,hunter:8,solo:6,stride:6,finish:8,forward:4,comeback:5,reroll:6,dopamine:5,aunt:8,banchan:6,stutter:3,recruit:6};
+    const rank={choice:3,flick:4,tower:2,line:2,shield:7,hunter:8,solo:6,stride:6,finish:8,forward:4,comeback:5,reroll:6,dopamine:5,aunt:8,banchan:6,stutter:3,recruit:6,trap:5,shove:5,jinx:6,copy:4,swap:5,quake:3,insurance:6,heavy:5};
     return {type:'augment',id:[...s.offers].sort((a,b)=>rank[b]-rank[a])[0]};
   }
+  if(s.phase==='jinx')return {type:'jinx',target:jinxTarget(s)};
   const recruits=recruitOptions(s);if(recruits.length)return {type:'recruit',...recruits[0]};
+  const traps=trapOptions(s);if(traps.length)return {type:'trap',node:traps[0]};
+  const copy=copyOption(s);if(copy&&copy.value>=4)return {type:'copy'};
   if(s.phase==='flick') {
     for(const t of s.players[s.active].tokens)if(NODES[position(t)])for(const e of s.players.flatMap((p,i)=>i===s.active?[]:p.tokens))if(NODES[position(e)]) {
       const a=NODES[position(t)],b=NODES[position(e)],distance=Math.hypot(b.x-a.x,b.y-a.y);

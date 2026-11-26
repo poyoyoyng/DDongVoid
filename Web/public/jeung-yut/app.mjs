@@ -1,4 +1,4 @@
-import {AUGMENTS,MILESTONES,NODES,LINES,createGame,act,legalMoves,position,has,label,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_SECONDS,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL,recruitOptions} from './engine.mjs';
+import {AUGMENTS,MILESTONES,NODES,LINES,createGame,act,legalMoves,position,has,label,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_SECONDS,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL,recruitOptions,trapOptions,copyOption,swapReady,swapTargets,quakeReady} from './engine.mjs';
 import {throwFaces} from './throw-view.mjs';
 import {createChat} from '../chat.js';
 const $=id=>document.getElementById(id);
@@ -39,10 +39,16 @@ function augmentStatus(p,id){
   if(id==='aunt')return `잡힘 면역 ${p.immunity??0}/3회`;
   if(id==='recruit')return p.recruitUsed?'판당 1회 · 사용 완료':'판당 1회 · 미사용';
   if(id==='shield')return `호신부 ${p.shields}/2회`;
+  if(id==='copy')return `따라하기 ${p.copies??0}/3회`;
+  if(id==='insurance')return `보험 ${p.insurance??0}/2회`;
+  if(id==='swap')return p.swapUsed?'판당 1회 · 사용 완료':'판당 1회 · 완주가 뒤질 때';
+  if(id==='quake')return p.quakeUsed?'판당 1회 · 사용 완료':'판당 1회 · 미사용';
+  if(id==='trap')return '3의 배수 턴마다 덫 · 최대 2개';
   return '';
 }
 function currentMoves(){return legalMoves(state).filter(m=>m.result===selectedResult&&m.token===selectedToken);}
 function tokenName(id){return `${id+1}번 말`;}
+function squareName(node){return node==='c'?'중앙':node==='o0'?'출발·도착 칸':node.startsWith('o')?`${node.slice(1)}번 칸`:'지름길 칸';}
 function locationName(node){return node==='finish'?'완주':node==='home'?'대기':node==='c'?'중앙':node==='o0'?'도착 칸':node==='o5'||node==='o10'||node==='o15'?'모서리':'밝게 표시된 칸';}
 function renderPlayers(view=state){
   const state=view;
@@ -50,7 +56,7 @@ function renderPlayers(view=state){
     const p=state.players[i];
     if(!p||online&&!online.ready&&i>=online.names.length)return `<section class="player-card empty-seat"><span class="empty-icon">＋</span><p>플레이어 ${i+1}</p><small>${online&&!online.ready&&i<online.maxPlayers?'참가 대기':'빈 자리'}</small></section>`;
     const done=p.tokens.filter(t=>t.done).length,home=p.tokens.filter(t=>position(t)==='home').length,onBoard=p.tokens.length-done-home;
-    return `<section class="player-card ${['blue','red','purple','golden'][i]} ${state.active===i?'active':''}" aria-label="${esc(p.name)} 상태"><div class="player-head"><div class="avatar">${['◈','◆','✦','◉'][i]}</div><div><div class="player-name">${esc(p.name)}</div><div class="player-tag">PLAYER 0${i+1}${mode==='ai'&&i!==0?' / AI':''}</div></div>${state.active===i?'<span class="turn-chip">● NOW</span>':''}</div><div class="score-row"><span>완주한 말</span><strong>${done} <span>/ 4</span></strong></div><div class="progress-track">${p.tokens.map(t=>`<i class="progress-part ${t.done?'done':''}"></i>`).join('')}</div><div class="token-tray">${p.tokens.map(t=>`<button class="reserve-token ${position(t)==='home'?'home-token':t.done?'finished-token':'on-board-token'} ${i===state.active&&selectedToken===t.id?'selected':''}" data-token="${t.id}" data-owner="${i}" ${!canPlay()||i!==state.active||t.done?'disabled':''} title="${position(t)==='home'?'창고 · 미사용':t.done?'완주':'말판 · 사용 중'}" aria-label="${esc(p.name)} ${t.id+1}번 말, ${position(t)==='home'?'창고 · 미사용':t.done?'완주':'말판 · 사용 중'}">${t.done?'✓':t.id+1}</button>`).join('')}</div><p class="token-count"><span class="home-count">창고 <strong>${home}</strong></span><span>사용 중 <strong>${onBoard}</strong></span></p><div class="augments">${MILESTONES.map((turn,j)=>p.augments[j]?`<button class="aug-slot filled" data-aug-info="${p.augments[j]}" data-aug-owner="${i}" title="${esc(aug(p.augments[j]).desc)} ${esc(augmentStatus(p,p.augments[j]))}"><span class="aug-icon ${aug(p.augments[j]).tier}">${aug(p.augments[j]).icon}</span><span class="aug-desc">${aug(p.augments[j]).name}${augmentStatus(p,p.augments[j])?`<small class="augment-counter">${augmentStatus(p,p.augments[j])}</small>`:''}</span></button>`:`<div class="aug-slot"><span class="aug-icon">◇</span><span class="aug-desc">${turn}턴에 열리는 증강</span></div>`).join('')}</div><p class="player-foot">${p.turn}번째 턴${p.shields?` · 호신부 ${p.shields}회`:''}${p.boost?` · 추격 +${p.boost}칸`:''}${p.augments.includes('aunt')?`<br>${augmentStatus(p,'aunt')}`:''}${p.augments.includes('dopamine')?`<br>도파민 ${augmentStatus(p,'dopamine')}`:''}${p.augments.includes('recruit')?`<br>집결 ${p.recruitUsed?'사용 완료':'1회 남음'}`:''}</p></section>`;
+    return `<section class="player-card ${['blue','red','purple','golden'][i]} ${state.active===i?'active':''}" aria-label="${esc(p.name)} 상태"><div class="player-head"><div class="avatar">${['◈','◆','✦','◉'][i]}</div><div><div class="player-name">${esc(p.name)}</div><div class="player-tag">PLAYER 0${i+1}${mode==='ai'&&i!==0?' / AI':''}</div></div>${state.active===i?'<span class="turn-chip">● NOW</span>':''}</div><div class="score-row"><span>완주한 말</span><strong>${done} <span>/ 4</span></strong></div><div class="progress-track">${p.tokens.map(t=>`<i class="progress-part ${t.done?'done':''}"></i>`).join('')}</div><div class="token-tray">${p.tokens.map(t=>`<button class="reserve-token ${position(t)==='home'?'home-token':t.done?'finished-token':'on-board-token'} ${i===state.active&&selectedToken===t.id?'selected':''}" data-token="${t.id}" data-owner="${i}" ${!canPlay()||i!==state.active||t.done?'disabled':''} title="${position(t)==='home'?'창고 · 미사용':t.done?'완주':'말판 · 사용 중'}" aria-label="${esc(p.name)} ${t.id+1}번 말, ${position(t)==='home'?'창고 · 미사용':t.done?'완주':'말판 · 사용 중'}">${t.done?'✓':t.id+1}</button>`).join('')}</div><p class="token-count"><span class="home-count">창고 <strong>${home}</strong></span><span>사용 중 <strong>${onBoard}</strong></span></p><div class="augments">${MILESTONES.map((turn,j)=>p.augments[j]?`<button class="aug-slot filled" data-aug-info="${p.augments[j]}" data-aug-owner="${i}" title="${esc(aug(p.augments[j]).desc)} ${esc(augmentStatus(p,p.augments[j]))}"><span class="aug-icon ${aug(p.augments[j]).tier}">${aug(p.augments[j]).icon}</span><span class="aug-desc">${aug(p.augments[j]).name}${augmentStatus(p,p.augments[j])?`<small class="augment-counter">${augmentStatus(p,p.augments[j])}</small>`:''}</span></button>`:`<div class="aug-slot"><span class="aug-icon">◇</span><span class="aug-desc">${turn}턴에 열리는 증강</span></div>`).join('')}</div><p class="player-foot">${p.turn}번째 턴${p.shields?` · 호신부 ${p.shields}회`:''}${p.boost?` · 추격 +${p.boost}칸`:''}${p.augments.includes('aunt')?`<br>${augmentStatus(p,'aunt')}`:''}${p.augments.includes('dopamine')?`<br>도파민 ${augmentStatus(p,'dopamine')}`:''}${p.augments.includes('recruit')?`<br>집결 ${p.recruitUsed?'사용 완료':'1회 남음'}`:''}${(p.jinxUntil??0)>p.turn||(p.jinxUntil??0)===p.turn&&state.active===i?`<br><span class="jinx-note">☁ 징크스 · ${p.jinxUntil}번째 턴까지 윷·모→걸</span>`:''}</p></section>`;
   });
   $('players-left').innerHTML=[cards[0],cards[2]].join('');
   $('players-right').innerHTML=[cards[1],cards[3]].join('');
@@ -76,6 +82,7 @@ function renderBoard(view=state){
       svg+=`<g class="piece ${['blue','red','purple','golden'][owner]} ${selected?'selected':''}" data-piece="${id}" data-owner="${owner}" role="button" tabindex="0" aria-label="${esc(state.players[owner].name)} ${tokens.map(t=>t.id+1).join('·')}번 말, ${tokens.length}개 묶음" transform="translate(${n.x} ${n.y})">${selected?'<circle class="selection-ring" r="29"/>':''}${tokens.length>1?'<circle class="stack-ring" r="26"/>':''}<circle r="21"/><text>${tokens.length>1?'×'+tokens.length:id+1}</text><text class="piece-label">${tokens.length>1?tokens.map(t=>t.id+1).join(' · '):''}</text></g>`;
     }
   }
+  for(const trap of state.traps??[]){const n=NODES[trap.node];svg+=`<g class="trap ${['blue','red','purple','golden'][trap.owner]}" transform="translate(${n.x} ${n.y})" aria-hidden="true"><circle r="30"/><text x="23" y="-23">⚠</text></g>`;}
   if(canPlay())for(const [idx,m] of currentMoves().entries()) {
     const n=NODES[m.to]??(m.to==='finish'?{x:603,y:587}:{x:604,y:529});
     svg+=`<g class="destination" data-move="${idx}" role="button" tabindex="0" aria-label="${m.steps}칸 이동, ${locationName(m.to)}, ${m.route==='shortcut'?'지름길':m.route==='long'?'긴 길':'이동'}"><circle cx="${n.x}" cy="${n.y}" r="26"/><text x="${n.x}" y="${n.y}">${m.to==='finish'?'⚑':'✓'}</text></g>`;
@@ -92,7 +99,7 @@ function renderAction(view=state){
   const state=view;
   const p=state.players[state.active],mine=canPlay(),phase=state.phase;
   $('action-content').hidden=Boolean(throwAnimation);
-  $('phase-badge').textContent=!online?.ready&&online?'대기 중':phase==='won'?'게임 종료':phase==='augment'?'증강 선택':phase==='flick'?'알까기':state.throws>0?'던지기':'말 이동';
+  $('phase-badge').textContent=!online?.ready&&online?'대기 중':phase==='won'?'게임 종료':phase==='augment'?'증강 선택':phase==='flick'?'알까기':phase==='jinx'?'징크스':state.throws>0?'던지기':'말 이동';
   let html='';
   if(siteRoomId&&!siteRoom)html='<h2 class="action-title">대전방에 연결하고 있어요</h2><p class="action-hint">현재 계정과 판을 확인합니다.</p>';
   else if(siteRoom?.paused)html='<h2 class="action-title">빈 자리를 기다려요</h2><p class="action-hint">대전방에서 빈자리에 참가하면 이어집니다.</p>';
@@ -101,6 +108,7 @@ function renderAction(view=state){
   else if(online&&!online.ready)html=`<h2 class="action-title">${online.names.length}명이 모였어요.</h2><p class="action-hint">초대 코드로 최대 ${online.maxPlayers}명까지 참가할 수 있어요.<br>${online.player===0?'2명 이상 모이면 원하는 때 시작하세요.':'방장이 시작하면 개인전이 시작됩니다.'}</p>${online.player===0?`<button class="primary full" data-action="startRoom" ${online.names.length<2||busy?'disabled':''}>${online.names.length}명으로 시작하기 →</button>`:''}`;
   else if(phase==='won')html=`<h2 class="action-title">${esc(state.players[state.winner].name)} 승리!</h2><p class="action-hint">${esc(state.winReason)}</p><button class="primary full" data-action="new">다음 판 열기 →</button>`;
   else if(phase==='augment')html=`<div class="waiting-mark">✧</div><h2 class="action-title">전략이 바뀌는 순간</h2><p class="action-hint">${esc(p.name)}의 ${p.turn}번째 턴.<br>${mine?'세 가지 증강 중 하나를 선택하세요.':'상대가 증강을 고르고 있습니다.'}</p>${mine?'<button class="primary full" data-action="draft">증강 선택하기 →</button>':''}`;
+  else if(phase==='jinx')html=`<div class="waiting-mark">☁</div><h2 class="action-title">징크스를 걸 상대는?</h2><p class="action-hint">${mine?'지목한 상대는 다음 3턴 동안 윷·모가 나오면 걸로 바뀝니다.':`${esc(p.name)}이(가) 징크스 대상을 고르고 있습니다.`}</p>${mine?state.players.map((o,i)=>i===state.active?'':`<button class="primary full" data-jinx="${i}">${esc(o.name)}에게 징크스 →</button>`).join(''):''}`;
   else if(phase==='flick') {
     html=`<h2 class="action-title">당기고, 놓고, 날려요!</h2><p id="flick-help" class="action-hint">${mine?'내 알을 뒤로 당겼다 놓으면 반대 방향으로 날아갑니다. 길게 당길수록 강해져요. 빗나가면 내 묶음이 탈락합니다!':'상대가 알까기를 조준하고 있습니다.'}</p>`;
     html=flickTimer(state)+html;
@@ -115,6 +123,7 @@ function renderAction(view=state){
     if(mine&&state.throws>0&&state.pending.length)html+=`<p class="inline-help">추가 던지기 ${state.throws}회 · 결과를 모으거나 먼저 이동할 수 있어요.</p>`;
     if(mine&&selectedToken!==null&&state.pending.length){html+=`<p class="inline-help">${tokenName(selectedToken)} 선택됨</p>`;for(const [i,m] of currentMoves().entries())html+=`<button class="move-option" data-move="${i}"><span>${m.route==='shortcut'?'지름길':m.route==='short'?'빠른 출구':m.route==='long'?'왼쪽 경유':'이동'} · ${m.steps===-1?'뒤로 1':m.steps}칸</span><span>${m.to==='finish'?'완주 ⚑':m.to==='home'?'대기로':'이동 →'}</span></button>`;}
   }
+  if(mine)html+=skillPanel(state);
   if(mine){const options=recruitOptions(state);if(options.length)html+=`<section class="recruit-skill"><strong>♙ 뒹학 사람좀 모아봐</strong><p>완주 2개! 창고 말을 업고 이번 턴을 끝낼 수 있어요.</p>${options.map(o=>`<button class="primary full" data-recruit-reserve="${o.reserve}" data-recruit-target="${o.target}">${o.reserve+1}번 → ${o.target+1}번에 업고 턴 종료</button>`).join('')}<small>판당 한 번 · 남은 이동과 추가 던지기는 사라집니다.</small></section>`;}
   const event=state.log.find(text=>!text.endsWith('번째 턴'));
   $('action-content').innerHTML=(event&&(!online||online.ready)?`<p class="action-event">${esc(event)}</p>`:'')+html;
@@ -136,6 +145,20 @@ function tickFlick(){
   // A request already in flight (a shot being sent) gets to finish before the clock decides.
   if(left>0||!clock.sent&&busy){clock.frame=requestAnimationFrame(tickFlick);return;}
   if(!clock.sent&&canPlay()){clock.sent=true;drag=null;send({type:'flickTimeout'});}
+}
+function skillPanel(state){
+  const p=state.players[state.active],groupName=node=>p.tokens.filter(t=>position(t)===node).map(t=>t.id+1).join('·')+'번 말';
+  let html='';
+  const traps=trapOptions(state);
+  if(traps.length)html+=`<section class="recruit-skill"><strong>⚠ 밤길 조심해</strong><p>내 말이 선 칸에 덫을 놓아요. 상대가 그 칸에 멈추면 대기로 돌아가요.</p>${traps.map(node=>`<button class="primary full" data-trap="${node}">${groupName(node)} 자리에 덫 놓기</button>`).join('')}</section>`;
+  const copy=copyOption(state);
+  if(copy)html+=`<section class="recruit-skill"><strong>⧉ 따라쟁이</strong><p>${esc(state.players[copy.from].name)}의 마지막 결과를 그대로 가져와요. 추가 던지기는 없어요.</p><button class="primary full" data-action="copyRoll">${label(copy.value)} 따라 하기 (${p.copies}/3회)</button></section>`;
+  if(quakeReady(state))html+='<section class="recruit-skill"><strong>≋ 지진났다</strong><p>판 위의 모든 말이 1칸씩 뒤로! 판당 한 번이에요.</p><button class="primary full" data-action="quake">지진 일으키기</button></section>';
+  if(swapReady(state)) {
+    const ready=selectedToken!==null&&NODES[position(p.tokens[selectedToken])],targets=ready?swapTargets(state,selectedToken):[];
+    html+=`<section class="recruit-skill"><strong>⇄ 자리 바꿔줘</strong><p>${ready?`${tokenName(selectedToken)}과 자리를 바꿀 상대 말을 고르세요. 바꾸면 턴이 끝나요.`:'판 위의 내 말을 먼저 고르면 바꿀 상대 말이 나와요.'}</p>${targets.map(x=>`<button class="primary full" data-swap-owner="${x.owner}" data-swap-target="${x.token}">${esc(state.players[x.owner].name)} ${x.count>1?`${x.count}개 묶음`:`${x.token+1}번 말`} · ${squareName(x.node)}</button>`).join('')}</section>`;
+  }
+  return html;
 }
 function render(){
   clearTimeout(botTimer);
@@ -218,6 +241,11 @@ async function handleClick(e){
   if(b.dataset.action==='draft'){$('augment-dialog').showModal();return;}
   if(b.dataset.action==='new')return openSetup();
   if(b.dataset.action==='chat')return toggleChat();
+  if(b.dataset.trap)return send({type:'trap',node:b.dataset.trap});
+  if(b.dataset.jinx!==undefined)return send({type:'jinx',target:+b.dataset.jinx});
+  if(b.dataset.swapOwner!==undefined)return send({type:'swap',token:selectedToken,owner:+b.dataset.swapOwner,target:+b.dataset.swapTarget});
+  if(b.dataset.action==='copyRoll')return send({type:'copy'});
+  if(b.dataset.action==='quake')return send({type:'quake'});
   if(b.dataset.action==='copy'){
     const link=new URL(location.href);link.hash=`room=${online.code}`;
     try{await navigator.clipboard.writeText(link.href);toast('초대 링크를 복사했습니다.');}catch{toast(`초대 코드: ${online.code}`);}return;
