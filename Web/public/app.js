@@ -174,7 +174,7 @@ async function navigate() {
     if (section === 'lobby') {
       await refreshLobby(token);
       if (token === generation) {
-        chat = mountChat('/lobby', '로비 채팅', token, { members: true });
+        chat = mountChat('/lobby', '로비 채팅', token, { members: true, dateSeparators: true });
         live = connectSocket('/lobby', { status: chat.setConnected, receive: packet => {
           chat.receive(packet);
           const presence = app.querySelector('#lobby-presence');

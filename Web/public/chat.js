@@ -1,4 +1,11 @@
 const clock = new Intl.DateTimeFormat('ko-KR', { hour: 'numeric', minute: '2-digit' });
+const lobbyClock = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', hour: 'numeric', minute: '2-digit' });
+const calendar = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
+
+function messageDate(sentAt) {
+  const parts = Object.fromEntries(calendar.formatToParts(sentAt).map(part => [part.type, part.value]));
+  return `${parts.year}.${parts.month}.${parts.day}`;
+}
 
 function memberGroup(title, names, playing) {
   const group = document.createElement('section');
@@ -27,7 +34,7 @@ function memberGroup(title, names, playing) {
   return group;
 }
 
-export function createChat(host, title, accountId, send, { members = false } = {}) {
+export function createChat(host, title, accountId, send, { members = false, dateSeparators = false } = {}) {
   const membersButton = members ? `<button type="button" class="button button-small button-quiet" data-members-toggle
     aria-expanded="false" aria-controls="chat-members">참가자 <span data-members-count></span></button>` : '';
   host.innerHTML = `<section class="panel chat-panel" aria-labelledby="chat-title">
@@ -57,6 +64,33 @@ export function createChat(host, title, accountId, send, { members = false } = {
     membersToggle.setAttribute('aria-expanded', String(!membersPanel.hidden));
   });
 
+  function updateDates() {
+    let previousDate;
+    for (const item of log.querySelectorAll('.chat-message')) {
+      const date = item.dataset.date;
+      const before = item.previousElementSibling;
+      if (date !== previousDate && !(before?.classList.contains('chat-date') && before.dataset.date === date)) {
+        const separator = document.createElement('div');
+        separator.className = 'chat-date';
+        separator.dataset.date = date;
+        separator.setAttribute('role', 'separator');
+        separator.setAttribute('aria-label', date);
+        const time = document.createElement('time');
+        time.dateTime = date.replaceAll('.', '-');
+        time.textContent = date;
+        separator.append(time);
+        log.insertBefore(separator, item);
+      } else if (date === previousDate && before?.classList.contains('chat-date')) {
+        before.remove();
+      }
+      previousDate = date;
+    }
+    for (const separator of log.querySelectorAll('.chat-date')) {
+      const next = separator.nextElementSibling;
+      if (!next?.classList.contains('chat-message') || next.dataset.date !== separator.dataset.date) separator.remove();
+    }
+  }
+
   function append(entry) {
     const items = Array.from(log.querySelectorAll('.chat-message'));
     if (items.some(item => Number(item.dataset.id) === entry.id)) return;
@@ -67,18 +101,21 @@ export function createChat(host, title, accountId, send, { members = false } = {
     const item = document.createElement('article');
     item.className = own ? 'chat-message mine' : 'chat-message';
     item.dataset.id = entry.id;
+    if (dateSeparators) item.dataset.date = messageDate(entry.sentAt);
     const header = document.createElement('div');
     const name = document.createElement('strong');
     const time = document.createElement('time');
     const body = document.createElement('p');
     name.textContent = entry.name;
     time.dateTime = new Date(entry.sentAt).toISOString();
-    time.textContent = clock.format(entry.sentAt);
+    time.textContent = (dateSeparators ? lobbyClock : clock).format(entry.sentAt);
     body.textContent = entry.text;
     header.append(name, time);
     item.append(header, body);
     log.insertBefore(item, next ?? null);
-    if (log.childElementCount > 50) log.firstElementChild.remove();
+    // Date separators do not count toward the 50-message history limit.
+    for (const old of Array.from(log.querySelectorAll('.chat-message')).slice(0, -50)) old.remove();
+    if (dateSeparators) updateDates();
     if (pinned || own && !next) log.scrollTop = log.scrollHeight;
   }
 
