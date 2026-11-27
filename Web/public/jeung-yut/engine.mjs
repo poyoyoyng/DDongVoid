@@ -80,7 +80,7 @@ export const AUGMENTS = [
   { id:'cannibal', icon:'☗', name:'카니발리즘', tier:'silver', kind:'공격', desc:'내 말끼리 업지 못하는 대신, 내 말이 있는 칸에 멈추면 그 말을 대기로 보내고 한 번 더 던집니다.' },
   { id:'recruit', icon:'♙', name:'뒹학 사람좀 모아봐', tier:'gold', kind:'일회 집결', desc:'내 말이 정확히 2개 완주한 상태에서 판당 딱 한 번! 창고의 말 하나를 달리고 있는 내 말에 업습니다. 사용하면 남은 이동·추가 던지기를 포기하고 즉시 턴이 끝납니다.' },
 ];
-export const MILESTONES = [5,10,15];
+export const MILESTONES = [3,7,11];
 export const FLICK_SECONDS = 3;
 export const NODES = {};
 for(let i=0;i<20;i++) {
@@ -174,7 +174,7 @@ function beginTurn(s,rng) {
   startOfTurn(s);
   // Another player's move can leave the board to me alone.
   checkAll(s);if(s.winner!==null)return;
-  // The first player's 5·10·15th turn opens a draft for everyone who has not had that one yet.
+  // The first player's 3·7·11th turn opens a draft for everyone who has not had that one yet.
   // Drafts are counted apart from augments, since 역전 찬스 hands out extra ones.
   const round=MILESTONES.indexOf(p.turn)+1;
   if(round&&s.active===(s.first??s.active)&&s.players.some(q=>draftsOf(q)<round))startDraft(s,round,rng); else afterDraft(s);

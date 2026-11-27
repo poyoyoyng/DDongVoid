@@ -62,7 +62,7 @@ test('special wins require the corresponding augment, four distinct consecutive 
 });
 test('the first player\'s 5·10·15th turn opens one draft everyone picks at once, each with a fresh reroll',()=>{
   const s=fresh();const rounds=[];let guard=0;
-  while(s.players[s.first].turn<16&&s.winner===null&&guard++<300){
+  while(s.players[s.first].turn<12&&s.winner===null&&guard++<300){
     if(s.phase==='draft'){
       rounds.push(s.players[s.first].turn);assert.equal(s.active,s.first);
       // The second player picks first: picks need not follow the turn order.
@@ -82,7 +82,7 @@ test('the first player\'s 5·10·15th turn opens one draft everyone picks at onc
     if(s.throws>0){const action={type:'roll',value:1};act(s,action,()=>1.1/16);}
     else if(s.pending.length){const a=legalMoves(s)[0];act(s,{type:'move',token:a.token,result:a.result,route:a.route},fixed);}
   }
-  assert.ok(guard<300);assert.equal(s.winner,null);assert.deepEqual(rounds,[5,10,15]);assert.ok(s.players.every(p=>p.drafts===3));
+  assert.ok(guard<300);assert.equal(s.winner,null);assert.deepEqual(rounds,[3,7,11]);assert.ok(s.players.every(p=>p.drafts===3));
 });
 test('choice replaces randomness and rejects values other than do/gae',()=>{
   const s=fresh();s.players[0].augments=['choice'];assert.throws(()=>act(s,{type:'roll',value:5}));act(s,{type:'roll',value:2},()=>0);assert.equal(s.pending[0].value,2);
@@ -124,10 +124,10 @@ test('seeded complete 2, 3 and 4 player AI matches terminate with valid states a
 });
 test('four players take independent turns in cyclic order and only the owner wins',()=>{
   const s=createGame(['A','B','C','D'],true,()=>0);
-  for(let turn=0;turn<12;turn++){
+  for(let turn=0;turn<8;turn++){
     assert.equal(s.active,turn%4);act(s,{type:'roll'},()=>1.1/16);
   }
-  assert.deepEqual(s.players.map(p=>p.turn),[4,3,3,3]);
+  assert.deepEqual(s.players.map(p=>p.turn),[3,2,2,2]);assert.equal(s.phase,'draft');
   s.players[2].augments=['tower'];for(let i=0;i<4;i++)put(s,2,i,'c');checkWin(s,0);assert.equal(s.winner,null);checkWin(s,2);assert.equal(s.winner,2);
   assert.throws(()=>createGame(['only one']));assert.throws(()=>createGame(['a','b','c','d','e']));
 });
@@ -195,7 +195,7 @@ test('banchan mo grants exactly two additional rolls, including a reroll and a c
 test('mutually exclusive throw replacements are filtered from drafting and draft rerolls',()=>{
   assert.equal(AUGMENTS.length,79);
   for(const [owned,excluded] of [['banchan','choice'],['choice','banchan']]){
-    const s=createGame(['A','B'],true,()=>0);pick(s,owned);s.players[0].turn=9;s.active=1;act(s,{type:'roll'},()=>1.1/16);
+    const s=createGame(['A','B'],true,()=>0);pick(s,owned);s.players[0].turn=6;s.active=1;act(s,{type:'roll'},()=>1.1/16);
     assert.equal(s.phase,'draft');assert.ok(!s.draft[0].offers.includes(excluded));act(s,{type:'draftReroll',player:0},()=>.9);assert.ok(!s.draft[0].offers.includes(excluded));
   }
 });
