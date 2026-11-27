@@ -83,7 +83,7 @@ export const AUGMENTS = [
 export const MILESTONES = [3,7,11];
 export const FLICK_SECONDS = 3;
 // A shared draft waits this long; then everyone still choosing gets their first offer. Online the room adds a short grace for slow connections.
-export const DRAFT_SECONDS = 40;
+export const DRAFT_SECONDS = 90;
 export const DRAFT_GRACE_MS = 2000;
 export const NODES = {};
 for(let i=0;i<20;i++) {
