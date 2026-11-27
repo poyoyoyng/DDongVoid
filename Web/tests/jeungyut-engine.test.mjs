@@ -184,7 +184,7 @@ test('banchan mo grants exactly two additional rolls, including a reroll and a c
   const reroll=fresh();pick(reroll,'banchan');reroll.players[0].augments.push('reroll');pending(reroll,2);act(reroll,{type:'reroll',result:1},()=>0);assert.equal(reroll.throws,2);assert.equal(reroll.pending[0].value,5);
 });
 test('mutually exclusive throw replacements are filtered from drafting and draft rerolls',()=>{
-  assert.equal(AUGMENTS.length,25);
+  assert.equal(AUGMENTS.length,32);
   for(const [owned,excluded] of [['banchan','choice'],['choice','banchan']]){
     const s=createGame(['A','B'],true,()=>0);pick(s,owned);s.players[0].turn=9;s.active=1;act(s,{type:'roll'},()=>1.1/16);
     assert.equal(s.phase,'augment');assert.ok(!s.offers.includes(excluded));act(s,{type:'draftReroll'},()=>.9);assert.ok(!s.offers.includes(excluded));
@@ -426,4 +426,45 @@ test('무거운 짐: 업은 묶음은 일반 잡기에 잡히지 않고 1칸 덜
   pending(slow,1);assert.equal(legalMoves(slow).find(m=>m.token===0).steps,1);
   const flick=fresh();flick.active=1;pick(flick,'heavy');flick.active=0;put(flick,0,0,'o1');put(flick,1,0,'o4');put(flick,1,1,'o4');flick.phase='flick';
   act(flick,{type:'flick',token:0,pullX:0,pullY:FLICK_MAX_PULL});assert.equal(flick.flick.outcome,'hit');assert.equal(position(flick.players[1].tokens[0]),'home');
+});
+test('이리 오너라 업고 놀자: 대기 말이 모두 업은 채 도 칸에 서고, 도 칸의 상대는 잡힌다',()=>{
+  const s=fresh();put(s,0,0,'o5');put(s,1,0,'o1');pick(s,'piggy');
+  assert.deepEqual(s.players[0].tokens.map(position),['o5','o1','o1','o1']);assert.equal(position(s.players[1].tokens[0]),'home');
+});
+test('웅녀: 마늘 4개가 빈 칸에 놓이고, 모두 주우면 승리한다',()=>{
+  const s=fresh();pick(s,'garlic');const garlic=s.players[0].garlic;
+  assert.equal(new Set(garlic).size,4);assert.ok(garlic.every(node=>NODES[node]&&node!=='o0'));
+  s.players[0].garlic=['o3'];put(s,0,0,'o1');pending(s,2);move(s);
+  assert.equal(s.winner,0);assert.match(s.winReason,/웅녀/);
+});
+test('천상천하 유아독존: 판 위가 내 업은 묶음 하나뿐이면 승리, 상대 말이 있거나 혼자면 아니다',()=>{
+  const s=fresh();pick(s,'alone');put(s,0,0,'o3');put(s,0,1,'o3');put(s,1,0,'o9');checkWin(s,0);assert.equal(s.winner,null);
+  put(s,1,0,[]);put(s,0,1,[]);checkWin(s,0);assert.equal(s.winner,null);
+  put(s,0,1,'o3');checkWin(s,0);assert.equal(s.winner,0);
+});
+test('김첨지: 가장 앞선 말이 김첨지가 되고, 내 6턴 안에 완주하면 승리한다',()=>{
+  const s=fresh();s.players[0].turn=5;put(s,0,2,['o1','o2','o3','o4','o5','o6','o7','o8','o9','o10','o11','o12','o13','o14','o15','o16','o17','o18','o19']);pick(s,'kim');
+  assert.equal(s.players[0].kimToken,2);assert.equal(s.players[0].kimUntil,10);
+  pending(s,2);move(s,2);assert.equal(s.winner,0);assert.match(s.winReason,/김첨지/);
+  const late=fresh();late.players[0].turn=5;pick(late,'kim');late.players[0].turn=11;put(late,0,0,['o19']);pending(late,2);move(late);assert.equal(late.winner,null);
+});
+test('말이오? 파티: 함정 6개·보상 4개, 함정은 상대만 잡고 보상은 누구든 한 번 더 던진다',()=>{
+  const s=fresh();pick(s,'party');
+  assert.equal(s.traps.filter(x=>x.kind==='party').length,6);assert.equal(s.traps.filter(x=>x.kind==='reward').length,4);
+  s.traps=[{node:'o2',owner:0,kind:'party'},{node:'o3',owner:0,kind:'reward'}];
+  put(s,0,0,'o1');pending(s,1);move(s);assert.equal(position(s.players[0].tokens[0]),'o2');
+  s.active=1;put(s,1,0,'o1');pending(s,2);move(s);assert.equal(position(s.players[1].tokens[0]),'o3');assert.equal(s.throws,1);assert.equal(s.traps.length,1);
+  s.active=1;put(s,1,1,'o1');pending(s,1);move(s,1);assert.equal(position(s.players[1].tokens[1]),'home');assert.equal(s.traps.length,0);
+});
+test('등가교환·짐덩이와 복덩이: 말 수와 윷가락 수가 바뀌고, 승리 조건과 던지기 분포가 따라간다',()=>{
+  const s=fresh();put(s,0,0,'o4');pick(s,'trade');
+  assert.equal(s.players[0].tokens.length,3);assert.deepEqual(s.players[0].tokens.map(t=>t.id),[0,1,2]);assert.equal(position(s.players[0].tokens[0]),'o4');
+  const values=new Set();for(let bits=0;bits<8;bits++){const t=fresh();pick(t,'trade');t.phase='roll';t.throws=1;t.pending=[];act(t,{type:'roll'},()=>(bits+.1)/8);values.add(t.lastRoll.value);}
+  assert.ok(!values.has(4));assert.ok(values.has(5));
+  for(const t of s.players[0].tokens)t.done=true;checkWin(s,0);assert.equal(s.winner,0);assert.match(s.winReason,/3개/);
+  const b=fresh();pick(b,'bundle');assert.equal(b.players[0].tokens.length,5);assert.equal(b.players[0].sticks,5);
+  for(const t of b.players[0].tokens.slice(0,4))t.done=true;checkWin(b,0);assert.equal(b.winner,null);
+  const all=fresh();pick(all,'bundle');all.phase='roll';all.throws=1;all.pending=[];act(all,{type:'roll'},()=>31.1/32);assert.equal(all.pending[0].value,5);
+  const both=fresh();pick(both,'trade');both.players[0].turn=9;both.active=1;act(both,{type:'roll'},()=>1.1/16);
+  for(let i=0;i<20&&both.phase==='augment';i++){assert.ok(!both.offers.includes('bundle'));both.players[0].draftRerolls=1;act(both,{type:'draftReroll'},()=>i/20);}
 });

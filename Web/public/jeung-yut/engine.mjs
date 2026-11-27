@@ -24,6 +24,13 @@ export const AUGMENTS = [
   { id:'quake', icon:'≋', name:'지진났다', tier:'gold', kind:'혼돈', desc:'판당 한 번, 내 차례에 판 위의 모든 말(내 말 포함)을 1칸씩 뒤로 보냅니다. 밀려날 칸에 다른 플레이어 말이 있으면 그 말은 제자리에 남습니다.' },
   { id:'insurance', icon:'✚', name:'실손보험', tier:'silver', kind:'보험', desc:'내 말이 잡히면 대기 대신 3번 칸에서 다시 출발합니다. 판당 2회, 3번 칸에 다른 플레이어 말이 있으면 보험이 적용되지 않습니다.' },
   { id:'heavy', icon:'⛰', name:'무거운 짐', tier:'gold', kind:'업기 강화', desc:'2개 이상 업은 내 묶음은 일반 잡기로 잡히지 않습니다(알까기는 못 막음). 대신 업은 묶음은 2칸 이상 전진할 때 1칸 덜 갑니다.' },
+  { id:'piggy', icon:'♞', name:'이리 오너라 업고 놀자', tier:'gold', kind:'집결', desc:'고르는 순간 대기 중인 내 말을 모두 업은 채 도 칸에 세웁니다. 도 칸의 상대 말은 잡습니다.' },
+  { id:'garlic', icon:'❦', name:'웅녀', tier:'prism', kind:'특수 승리', desc:'고르는 순간 판의 무작위 칸 4곳에 내 마늘이 놓입니다. 내 말이 마늘 칸에 정확히 멈추면 줍고, 4개를 모두 모으면 즉시 승리합니다.' },
+  { id:'alone', icon:'☝', name:'천상천하 유아독존', tier:'prism', kind:'특수 승리', desc:'판 위의 말뭉치가 내 말 2개 이상을 업은 묶음 하나뿐이면 즉시 승리합니다. 상대 말이 판 위에 하나라도 있으면 안 됩니다.' },
+  { id:'kim', icon:'☂', name:'시작 변환: 김첨지', tier:'prism', kind:'특수 승리', desc:'고르는 순간 가장 앞선 내 말(없으면 대기 말)이 김첨지가 됩니다. 김첨지가 이번 턴을 포함해 내 6턴 안에 완주하면 즉시 승리합니다.' },
+  { id:'party', icon:'✪', name:'말이오? 파티', tier:'gold', kind:'함정', desc:'고르는 순간 판의 무작위 칸에 함정 6개와 보상 4개를 깝니다. 함정 칸에 멈춘 상대 말은 대기로 돌아가고(나는 안전), 보상 칸에 멈춘 말은 누구든 한 번 더 던집니다. 한 번 밟으면 사라집니다.' },
+  { id:'trade', icon:'⚖', name:'등가교환', tier:'gold', kind:'교환', desc:'고르는 순간 내 말 1개와 윷가락 1개를 없앱니다. 말 3개만 완주하면 이기지만, 윷가락 3개로 던져 윷은 나오지 않습니다(모 1/8 · 도 3/8 · 개 3/8 · 걸 1/8).' },
+  { id:'bundle', icon:'✤', name:'짐덩이와 복덩이', tier:'gold', kind:'교환', desc:'고르는 순간 대기에 내 말 1개와 윷가락 1개를 더합니다. 말 5개를 모두 완주해야 하지만, 윷가락 5개로 던져 모가 자주 나옵니다(5개가 모두 같은 면이면 모).' },
   { id:'recruit', icon:'♙', name:'뒹학 사람좀 모아봐', tier:'gold', kind:'일회 집결', desc:'내 말이 정확히 2개 완주한 상태에서 판당 딱 한 번! 창고의 말 하나를 달리고 있는 내 말에 업습니다. 사용하면 남은 이동·추가 던지기를 포기하고 즉시 턴이 끝납니다.' },
 ];
 export const MILESTONES = [5,10,15];
@@ -66,14 +73,17 @@ export function createGame(names=['플레이어 1','플레이어 2'],backdo=true
 }
 function note(s,msg) {s.log.unshift(msg);s.log=s.log.slice(0,40);}
 function sample(pool,n,rng) {const a=[...pool],out=[];while(out.length<n&&a.length)out.push(a.splice(Math.floor(rng()*a.length),1)[0]);return out;}
+const exclusive=[['choice','banchan'],['trade','bundle']];
 function availableAugments(s) {
-  return AUGMENTS.filter(a=>!has(s,s.active,a.id)&&!(a.id==='choice'&&has(s,s.active,'banchan'))&&!(a.id==='banchan'&&has(s,s.active,'choice')));
+  return AUGMENTS.filter(a=>!has(s,s.active,a.id)&&!exclusive.some(pair=>pair.includes(a.id)&&pair.some(other=>other!==a.id&&has(s,s.active,other))));
 }
 // Every draft comes with its own reroll; an unused one does not carry over.
 function draft(s,rng) {s.players[s.active].draftRerolls=1;s.offers=sample(availableAugments(s).map(a=>a.id),3,rng);s.phase='augment';}
 function beginTurn(s,rng) {
   const p=s.players[s.active];p.turn++;p.rerolled=false;p.strideUsed=false;p.finishUsed=false;s.throws=1;s.pending=[];s.flick=null;
   note(s,`${p.name} · ${p.turn}번째 턴`);
+  // Another player's move can leave the board to me alone.
+  checkWin(s,s.active);if(s.winner!==null)return;
   if(MILESTONES.includes(p.turn)&&p.augments.length<MILESTONES.indexOf(p.turn)+1) draft(s,rng); else afterDraft(s);
 }
 function afterDraft(s) {
@@ -83,9 +93,14 @@ function afterDraft(s) {
 function win(s,p,reason) {s.winner=p;s.winReason=reason;s.phase='won';note(s,`${s.players[p].name} 승리! ${reason}`);}
 export function checkWin(s,p) {
   const tokens=s.players[p].tokens;
-  if(tokens.every(t=>t.done)) return win(s,p,'말 4개 모두 완주');
+  if(tokens.every(t=>t.done)) return win(s,p,`말 ${tokens.length}개 모두 완주`);
+  const player=s.players[p];
+  if(has(s,p,'garlic')&&player.garlic?.length===0)return win(s,p,'웅녀 · 마늘 4개 모으기');
+  if(has(s,p,'kim')&&player.kimDoneTurn&&player.kimDoneTurn<=player.kimUntil)return win(s,p,'김첨지 · 6턴 안에 완주');
+  const board=s.players.flatMap((x,i)=>x.tokens.filter(t=>NODES[position(t)]).map(t=>({i,node:position(t)})));
+  if(has(s,p,'alone')&&board.length>1&&board.every(x=>x.i===p&&x.node===board[0].node))return win(s,p,'천상천하 유아독존');
   const pos=tokens.map(position);
-  if(has(s,p,'tower')&&NODES[pos[0]]&&pos.every(x=>x===pos[0]))return win(s,p,'사단 합체 · 말 4개 업기');
+  if(has(s,p,'tower')&&NODES[pos[0]]&&pos.every(x=>x===pos[0]))return win(s,p,`사단 합체 · 말 ${tokens.length}개 업기`);
   if(has(s,p,'line')&&new Set(pos).size===4&&pos.every(x=>NODES[x])&&LINES.some(l=>l.some((_,i)=>i+4<=l.length&&l.slice(i,i+4).every(x=>pos.includes(x)))))return win(s,p,'일렬횡대 · 연속 4칸');
 }
 function rolledValue(s,rng) {
@@ -95,8 +110,8 @@ function rolledValue(s,rng) {
     const ordinary=(draw-moChance)/(1-moChance);
     return ordinary<4/14?1:ordinary<10/14?2:3;
   }
-  const bits=Math.floor(rng()*16); const count=bits.toString(2).replaceAll('0','').length;
-  let value=count===0?5:count;
+  const sticks=s.players[s.active].sticks??4,bits=Math.floor(rng()*2**sticks),count=bits.toString(2).replaceAll('0','').length;
+  let value=count===0||count===5?5:count;
   if(s.backdo&&bits===1)value=-1;
   if(value===-1&&has(s,s.active,'forward'))value=1;
   return jinxed(s.players[s.active])&&value>=4?3:value;
@@ -206,6 +221,35 @@ function shove(s,moved) {
   for(const t of tokens)t.path=[...back.path];
   note(s,`${s.players[s.active].name}: “비켜 비켜!” ${s.players[victim].name}의 말 ${tokens.length}개를 2칸 뒤로 밀었습니다.`);
 }
+function freeNodes(s) {return Object.keys(NODES).filter(node=>node!=='o0'&&!(s.traps??[]).some(x=>x.node===node));}
+function startAugment(s,id,rng) {
+  const p=s.players[s.active];
+  if(id==='piggy') {
+    const reserves=p.tokens.filter(t=>position(t)==='home');
+    if(reserves.length&&!capture(s,s.active,'o1').blocked){for(const t of reserves){t.path=['o1'];t.returning=false;}note(s,`${p.name}: “이리 오너라 업고 놀자!” 말 ${reserves.length}개가 업고 도 칸에 섰습니다.`);}
+  }
+  if(id==='garlic'){p.garlic=sample(freeNodes(s).filter(node=>!p.tokens.some(t=>position(t)===node)),4,rng);note(s,`${p.name}의 마늘 4개가 판에 흩어졌습니다.`);}
+  if(id==='kim') {
+    const runner=p.tokens.filter(t=>!t.done).sort((a,b)=>b.path.length-a.path.length||a.id-b.id)[0];
+    if(runner){p.kimToken=runner.id;p.kimUntil=p.turn+5;note(s,`${p.name}의 ${runner.id+1}번 말이 김첨지가 됐습니다. ${p.kimUntil}번째 턴까지 완주하면 승리!`);}
+  }
+  if(id==='party') {
+    const nodes=sample(freeNodes(s),10,rng);
+    s.traps=[...(s.traps??[]),...nodes.map((node,i)=>({node,owner:s.active,kind:i<6?'party':'reward'}))];
+    note(s,`${p.name}: “말이오? 파티!” 함정 6개와 보상 4개가 깔렸습니다.`);
+  }
+  if(id==='trade') {
+    // The piece left behind is a waiting one when possible; pieces are renumbered so their numbers stay their places.
+    const keep=t=>t.id===p.kimToken?1:0,gone=[...p.tokens].filter(t=>!t.done).sort((a,b)=>keep(a)-keep(b)||(position(a)==='home'?0:1)-(position(b)==='home'?0:1)||a.path.length-b.path.length||b.id-a.id)[0];
+    if(gone) {
+      p.tokens=p.tokens.filter(t=>t!==gone);
+      const renumber=new Map(p.tokens.map((t,i)=>[t.id,i]));if(Number.isInteger(p.kimToken))p.kimToken=renumber.get(p.kimToken);
+      p.tokens.forEach((t,i)=>{t.id=i;});
+    }
+    p.sticks=3;note(s,`${p.name}: “등가교환!” 말 1개와 윷가락 1개를 내려놓았습니다.`);
+  }
+  if(id==='bundle'){p.tokens.push({id:p.tokens.length,path:[],done:false,returning:false});p.sticks=5;note(s,`${p.name}: 짐덩이와 복덩이! 말 1개와 윷가락 1개가 늘었습니다.`);}
+}
 function checkAll(s) {for(const i of [s.active,...s.players.map((_,i)=>i).filter(i=>i!==s.active)])if(s.winner===null)checkWin(s,i);}
 function settle(s,rng) {
   if(s.winner!==null)return;
@@ -264,6 +308,7 @@ export function act(s,action,rng=Math.random) {
       if(action.id==='recruit')p.recruitUsed=false;
       if(action.id==='copy')p.copies=3;
       if(action.id==='insurance')p.insurance=2;
+      startAugment(s,action.id,rng);
       note(s,`${p.name}의 증강: ${AUGMENTS.find(a=>a.id===action.id).name}`);s.offers=[];
       checkWin(s,s.active);if(s.winner!==null)break;
       if(action.id==='jinx'&&s.players.length>2){s.phase='jinx';break;}
@@ -277,7 +322,7 @@ export function act(s,action,rng=Math.random) {
     case 'trap': {
       if(!trapOptions(s).includes(action.node))throw Error('지금은 이 칸에 덫을 놓을 수 없습니다.');
       s.traps=[...(s.traps??[]),{node:action.node,owner:s.active}];
-      const mine=s.traps.filter(trap=>trap.owner===s.active);if(mine.length>2)s.traps.splice(s.traps.indexOf(mine[0]),1);
+      const mine=s.traps.filter(trap=>trap.owner===s.active&&!trap.kind);if(mine.length>2)s.traps.splice(s.traps.indexOf(mine[0]),1);
       p.trapTurn=p.turn;note(s,`${p.name} · 밤길 조심해! 덫을 놓았습니다.`);break;
     }
     case 'copy': {
@@ -339,10 +384,14 @@ export function act(s,action,rng=Math.random) {
         for(const t of g){t.path=[...moved.path];t.done=moved.done;if(steps>0)t.returning=false;}
         note(s,`${p.name} ${g.map(t=>t.id+1).join('·')}번 말 ${steps===-1?'뒤로 1':steps}칸${stumble}${moved.done?' · 완주!':''}`);
         if(moved.done)relieveDopamine(s,s.active,'말 완주');
-        const trap=(s.traps??[]).find(x=>x.node===to&&x.owner!==s.active);
+        if(g.some(t=>t.id===p.kimToken)&&moved.done&&!p.kimDoneTurn)p.kimDoneTurn=p.turn;
+        if(!moved.done&&p.garlic?.includes(to)){p.garlic=p.garlic.filter(node=>node!==to);note(s,`${p.name} · 마늘 줍기! (${4-p.garlic.length}/4)`);}
+        const reward=(s.traps??[]).find(x=>x.node===to&&x.kind==='reward');
+        if(reward&&!moved.done){s.traps.splice(s.traps.indexOf(reward),1);s.throws++;note(s,`${p.name} · 파티 보상! 한 번 더 던집니다.`);}
+        const trap=(s.traps??[]).find(x=>x.node===to&&x.kind!=='reward'&&x.owner!==s.active);
         if(trap&&!moved.done) {
           for(const t of g){t.path=[];t.returning=false;}
-          s.traps.splice(s.traps.indexOf(trap),1);note(s,`${s.players[trap.owner].name}의 덫! ${p.name}의 말 ${g.length}개가 대기로 돌아갑니다.`);
+          s.traps.splice(s.traps.indexOf(trap),1);note(s,`${s.players[trap.owner].name}의 ${trap.kind==='party'?'파티 함정':'덫'}! ${p.name}의 말 ${g.length}개가 대기로 돌아갑니다.`);
         }else if(steps>0&&!moved.done&&has(s,s.active,'shove'))shove(s,moved);
         if(outcome.caught&&result.value<4)s.throws++;
         if(moved.done&&has(s,s.active,'finish')&&!p.finishUsed){s.throws++;p.finishUsed=true;note(s,'완주의 기세 · 한 번 더!');}
@@ -393,7 +442,7 @@ export function act(s,action,rng=Math.random) {
 }
 export function botAction(s,rng=Math.random) {
   if(s.phase==='augment') {
-    const rank={choice:3,flick:4,tower:2,line:2,shield:7,hunter:8,solo:6,stride:6,finish:8,forward:4,comeback:5,reroll:6,dopamine:5,aunt:8,banchan:6,stutter:3,recruit:6,trap:5,shove:5,jinx:6,copy:4,swap:5,quake:3,insurance:6,heavy:5};
+    const rank={choice:3,flick:4,tower:2,line:2,shield:7,hunter:8,solo:6,stride:6,finish:8,forward:4,comeback:5,reroll:6,dopamine:5,aunt:8,banchan:6,stutter:3,recruit:6,trap:5,shove:5,jinx:6,copy:4,swap:5,quake:3,insurance:6,heavy:5,piggy:5,garlic:4,alone:2,kim:4,party:5,trade:3,bundle:3};
     return {type:'augment',id:[...s.offers].sort((a,b)=>rank[b]-rank[a])[0]};
   }
   if(s.phase==='jinx')return {type:'jinx',target:jinxTarget(s)};
