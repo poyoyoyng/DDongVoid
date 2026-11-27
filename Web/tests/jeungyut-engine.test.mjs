@@ -122,10 +122,10 @@ test('seeded complete 2, 3 and 4 player AI matches terminate with valid states a
     assert.ok(s.winner!==null,`${count} players, seed ${seed} did not finish`);
   }
 });
-test('four players take independent turns in cyclic order and only the owner wins',()=>{
+test('four players take turns clockwise around the board (1 → 2 → 4 → 3) and only the owner wins',()=>{
   const s=createGame(['A','B','C','D'],true,()=>0);
   for(let turn=0;turn<8;turn++){
-    assert.equal(s.active,turn%4);act(s,{type:'roll'},()=>1.1/16);
+    assert.equal(s.active,[0,1,3,2][turn%4]);act(s,{type:'roll'},()=>1.1/16);
   }
   assert.deepEqual(s.players.map(p=>p.turn),[3,2,2,2]);assert.equal(s.phase,'draft');
   s.players[2].augments=['tower'];for(let i=0;i<4;i++)put(s,2,i,'c');checkWin(s,0);assert.equal(s.winner,null);checkWin(s,2);assert.equal(s.winner,2);
@@ -593,4 +593,15 @@ test('증강 선택 시간 초과: 안 고른 사람은 맨 앞 증강(이의있
   assert.equal(s.draft,null);assert.notEqual(s.phase,'draft');assert.equal(s.active,0);
   assert.ok(s.players[1].augments.includes('tower'));assert.ok(s.players[2].augments.includes('jinx'));
   assert.ok(s.players.some((p,i)=>i!==2&&p.jinxUntil>0));assert.ok(s.players.every(p=>p.drafts===1));
+});
+test('첫 차례는 무작위로 정해지고 "OO님 선!"을 알린 뒤, 그 사람부터 시계 방향으로 돈다',()=>{
+  const firsts=new Set();
+  for(let k=0;k<4;k++){const s=createGame(['A','B','C','D'],true,()=>(k+.5)/4);firsts.add(s.first);assert.equal(s.active,s.first);assert.ok(s.log.includes(`${s.players[s.first].name}님 선! 시계 방향으로 차례가 돌아갑니다.`));}
+  assert.equal(firsts.size,4);
+  const s=createGame(['A','B','C','D'],true,()=>.6);assert.equal(s.first,2);const seen=[];
+  for(let k=0;k<4;k++){seen.push(s.active);act(s,{type:'roll'},()=>1.1/16);}
+  assert.deepEqual(seen,[2,0,1,3]);
+  const three=createGame(['A','B','C'],true,()=>.9);assert.equal(three.first,2);act(three,{type:'roll'},()=>1.1/16);assert.equal(three.active,0);
+  const copy=createGame(['A','B','C','D'],true,()=>0);copy.active=2;copy.players[2].augments=['copy'];copy.players[2].copies=3;copy.players[3].lastValue=4;copy.players[1].lastValue=2;
+  assert.equal(copyOption(copy).from,3);
 });

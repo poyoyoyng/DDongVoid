@@ -1,4 +1,4 @@
-import {AUGMENTS,MILESTONES,NODES,LINES,createGame,act,legalMoves,position,has,label,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_SECONDS,DRAFT_SECONDS,DRAFT_GRACE_MS,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL,recruitOptions,trapOptions,copyOption,swapReady,swapTargets,quakeReady,skillActions,squareLabel} from './engine.mjs';
+import {AUGMENTS,MILESTONES,NODES,LINES,createGame,act,legalMoves,position,has,label,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_SECONDS,DRAFT_SECONDS,DRAFT_GRACE_MS,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL,recruitOptions,trapOptions,copyOption,swapReady,swapTargets,quakeReady,skillActions,squareLabel,firstCall} from './engine.mjs';
 import {throwFaces} from './throw-view.mjs';
 import {createChat} from '../chat.js';
 const $=id=>document.getElementById(id);
@@ -7,7 +7,7 @@ const requestedRoom=new URLSearchParams(location.search).get('room');
 const siteRoomId=/^[0-9a-f-]{36}$/.test(requestedRoom??'')?requestedRoom:null;
 let siteRoom=null,siteAccount=null,siteSyncing=false,chat=null;
 let mode=siteRoomId?'site':'ai',state=createGame(['나','AI 여우','AI 고양이','AI 토끼']),online=null,selectedToken=null,selectedResult=null,busy=Boolean(siteRoomId),botTimer,pollTimer,toastTimer,lastWinner=null,drag=null,onlineError=false,shotAnimation=null,flightFrame=null,seenShot=null,aimAngle=-Math.PI/2,aimPull=FLICK_MAX_PULL/2;
-let flickClock=null,draftClock=null,draftTicker=null,throwAnimation=null,seenRoll=null,throwRevealTimer,throwEndTimer,renderedState=state;
+let gameNo=1,shownStart=null,startTimer,flickClock=null,draftClock=null,draftTicker=null,throwAnimation=null,seenRoll=null,throwRevealTimer,throwEndTimer,renderedState=state;
 const storage={get(key){try{return JSON.parse(localStorage.getItem(key));}catch{return null;}},set(key,value){try{localStorage.setItem(key,JSON.stringify(value));}catch{}}};
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4000);}
 // The seat this page picks for in the shared draft: my own seat online, player 1 against AI, everyone in turn on one device.
@@ -186,7 +186,17 @@ function skillPanel(state){
   for(const [id,list] of groups){const a=aug(id);html+=`<section class="recruit-skill"><strong>${a.icon} ${esc(a.name)}</strong>${list.map(o=>o.action?`<button class="primary full" data-skill="${o.k}">${esc(o.label)}</button>`:`<p>${esc(o.label)}</p>`).join('')}</section>`;}
   return html;
 }
+// Each new game opens with a short announcement of who goes first.
+function announceStart(){
+  const key=siteRoomId?(siteRoom&&['playing','finished'].includes(siteRoom.status)?`site:${siteRoom.match}`:null):`local:${gameNo}`;
+  if(!key||key===shownStart||!Number.isInteger(state.first)||state.round!==1)return;
+  shownStart=key;const banner=$('start-banner');
+  banner.innerHTML=`<strong>${esc(firstCall(state.players[state.first].name))} 선!</strong><span>시계 방향으로 차례가 돌아갑니다</span>`;
+  banner.hidden=false;banner.classList.remove('show');void banner.offsetWidth;banner.classList.add('show');
+  clearTimeout(startTimer);startTimer=setTimeout(()=>{banner.hidden=true;},2800);
+}
 function render(){
+  announceStart();
   clearTimeout(botTimer);
   if(state.lastRoll&&state.lastRoll.id!==seenRoll){seenRoll=state.lastRoll.id;showThrow(state.lastRoll);}
   if(!state.flick&&shotAnimation)stopFlight();
@@ -222,7 +232,7 @@ function playAgain(){
   if(siteRoomId){if(online?.player>=0&&!siteRoom?.players[online.player]?.ready)send({type:'siteReady'});else render();return;}
   if(online)return openSetup();
   stopFlight();stopThrow();clearTimeout(botTimer);seenRoll=null;seenShot=null;drag=null;selectedToken=null;selectedResult=null;lastWinner=null;
-  state=createGame(state.players.map(p=>p.name),state.backdo);render();
+  state=createGame(state.players.map(p=>p.name),state.backdo);gameNo++;render();
 }
 // Draft countdown: online it follows the room's deadline (the room picks when it runs out); offline this page keeps the time and picks itself.
 function draftLeft(){
@@ -342,7 +352,7 @@ $('setup-form').addEventListener('submit',async e=>{
       nextState=data.state??createGame([...data.names,...Array.from({length:Math.max(0,2-data.names.length)},()=>'참가 대기')],form.has('backdo'),()=>0);
     }else nextState=createGame(Array.from({length:Number(form.get('count'))},(_,i)=>i===0?name:nextMode==='ai'?['','AI 여우','AI 고양이','AI 토끼'][i]:String(form.get('name'+(i+1))).trim()||`플레이어 ${i+1}`),form.has('backdo'));
     stopFlight();stopThrow();seenRoll=null;seenShot=null;drag=null;aimAngle=-Math.PI/2;aimPull=FLICK_MAX_PULL/2;
-    clearInterval(pollTimer);online=nextOnline;mode=nextMode;state=nextState;selectedToken=null;selectedResult=null;lastWinner=null;onlineError=false;
+    clearInterval(pollTimer);online=nextOnline;mode=nextMode;state=nextState;gameNo++;selectedToken=null;selectedResult=null;lastWinner=null;onlineError=false;
     if(online){history.replaceState(null,'',`#room=${online.code}`);startPolling();}else history.replaceState(null,'',location.pathname+location.search);
     $('setup-dialog').close();render();
   }catch(error){$('setup-error').textContent=error.name==='AbortError'?'서버에 연결하지 못했습니다. 잠시 후 다시 시도하세요.':error.message;}

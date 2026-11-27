@@ -102,6 +102,11 @@ const ADJ={};for(const line of LINES)for(let i=0;i+1<line.length;i++){(ADJ[line[
 const DIAGONAL=['a1','a2','c','a4','a5','b1','b2','b4','b5'];
 export const USES={dogs:3,loan:2,doberman:1,baduk:1,hand:1,sneak:2,timetravel:1,assassin:2,loner:3,throwhit:1,heaven:1,bonfire:1,sacrifice:1,truck:1,combo:1,lastdance:1,domain:1};
 export const squareLabel=node=>node==='c'?'중앙':node==='o0'?'출발·도착 칸':node.startsWith('o')?`${node.slice(1)}번 칸`:'지름길 칸';
+// Player cards sit 1 top-left, 2 top-right, 3 bottom-left, 4 bottom-right, so clockwise around the board is 1 → 2 → 4 → 3.
+export const firstCall=name=>name==='나'?'내가':`${name}님`;
+export const turnOrder=n=>n===4?[0,1,3,2]:Array.from({length:n},(_,i)=>i);
+export function nextSeat(s,i) {const order=turnOrder(s.players.length);return order[(order.indexOf(i)+1)%order.length];}
+function previousSeat(s,i) {const order=turnOrder(s.players.length);return order[(order.indexOf(i)+order.length-1)%order.length];}
 export const position=t=>t.done?'finish':t.path.at(-1)??'home';
 export const has=(s,p,id)=>s.players[p].augments.includes(id);
 export const label=n=>({'-1':'빽도',0:'꽝',1:'도',2:'개',3:'걸',4:'윷',5:'모'})[n];
@@ -123,6 +128,7 @@ function relieveDopamine(s,owner,reason) {
 export function createGame(names=['플레이어 1','플레이어 2'],backdo=true,rng=Math.random) {
   if(!Array.isArray(names)||names.length<2||names.length>4)throw Error('개인전은 2~4명으로 진행합니다.');
   const first=Math.floor(rng()*names.length),s={players:names.map(player),traps:[],first,active:first,phase:'roll',round:1,throws:1,pending:[],offers:[],log:[],winner:null,winReason:null,backdo,nextId:1,flick:null,lastRoll:null,revision:0};
+  note(s,`${firstCall(s.players[first].name)} 선! 시계 방향으로 차례가 돌아갑니다.`);
   beginTurn(s,rng); return s;
 }
 function note(s,msg) {s.log.unshift(msg);s.log=s.log.slice(0,40);}
@@ -190,7 +196,7 @@ function draftAct(s,action,rng) {
 // Every draft comes with its own reroll; an unused one does not carry over.
 function draft(s,rng) {s.players[s.active].draftRerolls=1;s.offers=sample(availableAugments(s).map(a=>a.id),3,rng);forceCat(s);s.phase='augment';}
 function beginTurn(s,rng) {
-  for(let guard=0;(s.players[s.active].skip??0)>0&&guard<12;guard++){const q=s.players[s.active];q.skip--;note(s,`${q.name} · 차례를 건너뜁니다.`);s.active=(s.active+1)%s.players.length;s.round++;}
+  for(let guard=0;(s.players[s.active].skip??0)>0&&guard<12;guard++){const q=s.players[s.active];q.skip--;note(s,`${q.name} · 차례를 건너뜁니다.`);s.active=nextSeat(s,s.active);s.round++;}
   const p=s.players[s.active];p.turn++;p.rerolled=false;p.strideUsed=false;p.finishUsed=false;p.turnValues=[];s.throws=1;s.pending=[];s.flick=null;
   note(s,`${p.name} · ${p.turn}번째 턴`);
   startOfTurn(s);
@@ -338,9 +344,9 @@ export function trapOptions(s) {
   return [...new Set(p.tokens.map(position))].filter(node=>NODES[node]&&!(s.traps??[]).some(trap=>trap.node===node));
 }
 export function copyOption(s) {
-  const p=s.players[s.active],previous=s.players[(s.active+s.players.length-1)%s.players.length];
+  const p=s.players[s.active],from=previousSeat(s,s.active),previous=s.players[from];
   if(!myTurnPhase(s)||s.throws<=0||!has(s,s.active,'copy')||(p.copies??0)<=0||previous.lastValue==null)return null;
-  return {from:(s.active+s.players.length-1)%s.players.length,value:previous.lastValue};
+  return {from,value:previous.lastValue};
 }
 export function swapReady(s) {
   const p=s.players[s.active];
@@ -604,7 +610,7 @@ function endTurn(s,rng) {
   s.pending=[];
   // 메아리의 형상: each player plays twice in a row.
   const repeat=Boolean(s.echo)&&!s.echoRepeat;s.echoRepeat=repeat;
-  if(!repeat)s.active=(s.active+1)%s.players.length;
+  if(!repeat)s.active=nextSeat(s,s.active);
   s.round++;beginTurn(s,rng);
 }
 function capture(s,owner,at,flick=false) {
