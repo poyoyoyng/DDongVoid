@@ -119,7 +119,7 @@ function relieveDopamine(s,owner,reason) {
 }
 export function createGame(names=['플레이어 1','플레이어 2'],backdo=true,rng=Math.random) {
   if(!Array.isArray(names)||names.length<2||names.length>4)throw Error('개인전은 2~4명으로 진행합니다.');
-  const s={players:names.map(player),traps:[],active:Math.floor(rng()*names.length),phase:'roll',round:1,throws:1,pending:[],offers:[],log:[],winner:null,winReason:null,backdo,nextId:1,flick:null,lastRoll:null,revision:0};
+  const first=Math.floor(rng()*names.length),s={players:names.map(player),traps:[],first,active:first,phase:'roll',round:1,throws:1,pending:[],offers:[],log:[],winner:null,winReason:null,backdo,nextId:1,flick:null,lastRoll:null,revision:0};
   beginTurn(s,rng); return s;
 }
 function note(s,msg) {s.log.unshift(msg);s.log=s.log.slice(0,40);}
@@ -131,7 +131,40 @@ function availableAugments(s) {
     &&!(a.id==='score'&&!s.backdo)&&!(a.id==='marathon'&&!p.tokens.some(t=>position(t)==='home')));
 }
 // 간택: whoever is offered the cat while 간택 is in play has to take it.
-function forceCat(s) {if(s.offers.includes('cat')&&s.players.some(p=>p.augments.includes('chosen')))s.offers=['cat'];}
+function forceCat(s) {s.offers=forcedCat(s,s.offers);}
+const forcedCat=(s,offers)=>offers.includes('cat')&&s.players.some(p=>p.augments.includes('chosen'))?['cat']:offers;
+// Runs fn as if seat i were the active player, so augment code written for "my turn" works during the shared draft.
+function as(s,i,fn) {const previous=s.active;s.active=i;try{return fn();}finally{s.active=previous;}}
+const draftsOf=p=>p.drafts??p.augments.length;
+function draftOffers(s,i,rng,exclude=[]) {return as(s,i,()=>forcedCat(s,sample(availableAugments(s).map(a=>a.id).filter(id=>!exclude.includes(id)),3,rng)));}
+function startDraft(s,round,rng) {
+  s.draft=s.players.map((p,i)=>draftsOf(p)<round?{offers:draftOffers(s,i,rng),rerolls:1,done:false,stage:null}:null);
+  s.phase='draft';note(s,`${round}번째 증강 선택! 모두 동시에 고릅니다.`);
+}
+// Picks, rerolls and jinx targets during the shared draft; each player acts for their own seat.
+function draftAct(s,action,rng) {
+  const i=Number.isInteger(action.player)?action.player:s.active,entry=s.draft?.[i],p=s.players[i];
+  if(!entry)throw Error('이번 증강 선택에 참여하지 않습니다.');
+  if(entry.done)throw Error('이미 증강을 골랐습니다. 다른 플레이어를 기다려 주세요.');
+  as(s,i,()=>{
+    if(action.type==='draftReroll') {
+      if(entry.stage||entry.rerolls<=0)throw Error('증강 재선택을 사용할 수 없습니다.');
+      entry.rerolls--;entry.offers=draftOffers(s,i,rng,entry.offers);
+    }else if(action.type==='jinx') {
+      if(entry.stage!=='jinx'||!Number.isInteger(action.target)||action.target===i||!s.players[action.target])throw Error('징크스를 걸 상대를 고르세요.');
+      applyJinx(s,action.target);entry.stage=null;entry.done=true;
+    }else if(action.type==='augment') {
+      if(entry.stage||!entry.offers.includes(action.id))throw Error('선택할 수 없는 증강입니다.');
+      if(action.id==='objection'){note(s,`${p.name} · 이의있음! 증강을 다시 고릅니다.`);entry.offers=draftOffers(s,i,rng);entry.rerolls=1;return;}
+      p.drafts=draftsOf(p)+1;gainAugment(s,action.id,rng);note(s,`${p.name}의 증강: ${AUGMENTS.find(a=>a.id===action.id).name}`);
+      if(action.id==='jinx'&&s.players.length>2)entry.stage='jinx';
+      else {if(action.id==='jinx')applyJinx(s,1-i);entry.done=true;}
+    }else throw Error('모두 증강을 고르는 중입니다. 고른 뒤 이어서 진행합니다.');
+  });
+  checkAll(s);
+  if(s.winner===null&&s.draft.every(x=>!x||x.done)){s.draft=null;note(s,'모두 증강을 골랐습니다. 게임을 이어갑니다.');afterDraft(s);}
+  s.revision++;return s;
+}
 // Every draft comes with its own reroll; an unused one does not carry over.
 function draft(s,rng) {s.players[s.active].draftRerolls=1;s.offers=sample(availableAugments(s).map(a=>a.id),3,rng);forceCat(s);s.phase='augment';}
 function beginTurn(s,rng) {
@@ -141,8 +174,10 @@ function beginTurn(s,rng) {
   startOfTurn(s);
   // Another player's move can leave the board to me alone.
   checkAll(s);if(s.winner!==null)return;
+  // The first player's 5·10·15th turn opens a draft for everyone who has not had that one yet.
   // Drafts are counted apart from augments, since 역전 찬스 hands out extra ones.
-  if(MILESTONES.includes(p.turn)&&(p.drafts??p.augments.length)<MILESTONES.indexOf(p.turn)+1) draft(s,rng); else afterDraft(s);
+  const round=MILESTONES.indexOf(p.turn)+1;
+  if(round&&s.active===(s.first??s.active)&&s.players.some(q=>draftsOf(q)<round))startDraft(s,round,rng); else afterDraft(s);
 }
 function startOfTurn(s) {
   const i=s.active,p=s.players[i];
@@ -597,6 +632,7 @@ export function simulateFlick(source,dx,dy,power,targets) {
 }
 export function act(s,action,rng=Math.random) {
   if(s.phase==='won')throw Error('이미 끝난 게임입니다.');
+  if(s.phase==='draft')return draftAct(s,action,rng);
   const p=s.players[s.active];
   switch(action.type) {
     case 'augment': {
@@ -765,7 +801,13 @@ export function act(s,action,rng=Math.random) {
   }
   s.revision++;return s;
 }
-export function botAction(s,rng=Math.random) {
+export function botAction(s,rng=Math.random,seat) {
+  if(s.phase==='draft') {
+    const i=s.draft.findIndex((x,k)=>x&&!x.done&&(seat===undefined||k===seat));if(i<0)return null;
+    const entry=s.draft[i];
+    if(entry.stage==='jinx')return {type:'jinx',player:i,target:as(s,i,()=>jinxTarget(s))};
+    return {...as(s,i,()=>botAction({...s,phase:'augment',offers:entry.offers},rng)),player:i};
+  }
   if(s.phase==='augment') {
     const rank={choice:3,flick:4,tower:2,line:2,shield:7,hunter:8,solo:6,stride:6,finish:8,forward:4,comeback:5,reroll:6,dopamine:5,aunt:8,banchan:6,stutter:3,recruit:6,trap:5,shove:5,jinx:6,copy:4,swap:5,quake:3,insurance:6,heavy:5,piggy:5,garlic:4,alone:2,kim:4,party:5,trade:3,bundle:3};
     return {type:'augment',id:[...s.offers].sort((a,b)=>(rank[b]??3)-(rank[a]??3))[0]};

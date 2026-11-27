@@ -30,9 +30,17 @@ function applyYut(room, move, roll, now) {
 
 export function jeungYutAction(room, player, input, roll, now) {
   requireThat(input.action === 'yut', '증윷 행동을 선택해 주세요.');
-  requireThat(room.players[room.yut.active].id === player.id, '내 차례가 아닙니다.', 403);
-  requireThat(input.gameRevision === room.yut.revision, '판이 바뀌었습니다. 최신 화면에서 다시 선택해 주세요.', 409);
-  try { applyYut(room, input.move ?? {}, roll, now); }
+  const move = { ...(input.move ?? {}) };
+  if (room.yut.phase === 'draft') {
+    // Everyone picks at once, so a pick is checked against the picker's own seat instead of the turn or revision.
+    const seat = room.players.findIndex(entry => entry.id === player.id && !entry.vacant);
+    requireThat(seat >= 0 && room.yut.draft?.[seat], '이번 증강 선택에 참여하지 않습니다.', 403);
+    move.player = seat;
+  } else {
+    requireThat(room.players[room.yut.active].id === player.id, '내 차례가 아닙니다.', 403);
+    requireThat(input.gameRevision === room.yut.revision, '판이 바뀌었습니다. 최신 화면에서 다시 선택해 주세요.', 409);
+  }
+  try { applyYut(room, move, roll, now); }
   catch (error) { requireThat(false, error.message); }
 }
 

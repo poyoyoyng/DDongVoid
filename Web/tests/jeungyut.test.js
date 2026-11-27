@@ -26,7 +26,7 @@ for (const count of [2, 3, 4]) test(`기존 대기방의 ${count}인 증윷: 준
   let actions = 0;
   while (room.status === 'playing' && actions++ < 2500) {
     const move = botAction(room.yut, () => .8);
-    play(room.index, { action: 'yut', move });
+    play(room.yut.phase === 'draft' ? move.player : room.index, { action: 'yut', move });
     assert.equal(room.index, room.yut.active);
     assert.equal(room.turn, room.yut.round);
   }
@@ -121,4 +121,21 @@ test('대전방 알까기는 시간 제한이 걸리고, 지나면 서버가 턴
   assert.equal(room.index, other);
   assert.notEqual(room.yut.phase, 'flick');
   assert.equal(room.deadline, null);
+});
+
+test('증윷 동시 증강 선택: 각자 자기 자리로만 고르고, 차례·판 번호와 상관없이 받는다', () => {
+  const { room, play } = match(3);
+  for (let guard = 0; room.yut.phase !== 'draft' && guard < 1000; guard++) {
+    const move = botAction(room.yut, () => .8);
+    play(room.index, { action: 'yut', move });
+  }
+  assert.equal(room.yut.phase, 'draft');
+  const active = room.yut.active, other = (active + 1) % 3;
+  const id = room.yut.draft[other].offers.find(x => !['objection', 'jinx', 'cat', 'catlover', 'chance'].includes(x));
+  // Claiming another seat is ignored: the pick lands on the sender's own seat.
+  play(other, { action: 'yut', move: { type: 'augment', id, player: active }, gameRevision: -1 });
+  assert.equal(room.yut.draft[other].done, true);
+  assert.equal(room.yut.draft[active].done, false);
+  assert.ok(room.yut.players[other].augments.includes(id));
+  assert.throws(() => play(other, { action: 'yut', move: { type: 'roll' } }), /이미/);
 });

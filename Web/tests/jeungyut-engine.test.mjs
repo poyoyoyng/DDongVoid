@@ -60,13 +60,21 @@ test('special wins require the corresponding augment, four distinct consecutive 
   const l=fresh();for(let i=0;i<4;i++)put(l,0,i,'o'+(i+1));checkWin(l,0);assert.equal(l.winner,null);l.players[0].augments=['line'];checkWin(l,0);assert.equal(l.winner,0);
   const gap=fresh();gap.players[0].augments=['line'];['o1','o2','o4','o5'].forEach((n,i)=>put(gap,0,i,n));checkWin(gap,0);assert.equal(gap.winner,null);
 });
-test('each player independently drafts at turn 5, 10, 15, with a fresh reroll at every draft',()=>{
-  const s=fresh();const history=[[],[]];let guard=0;
-  while(s.players.some(p=>p.turn<16)&&guard++<200){
-    if(s.phase==='augment'){
-      const p=s.players[s.active];history[s.active].push(p.turn);assert.equal(s.offers.length,3);
-      assert.equal(p.draftRerolls,1);{const old=[...s.offers];act(s,{type:'draftReroll'},fixed);assert.ok(s.offers.every(x=>!old.includes(x)));assert.throws(()=>act(s,{type:'draftReroll'},fixed));}
-      act(s,{type:'augment',id:s.offers.find(x=>x!=='choice')??s.offers[0]},fixed);
+test('the first player\'s 5·10·15th turn opens one draft everyone picks at once, each with a fresh reroll',()=>{
+  const s=fresh();const rounds=[];let guard=0;
+  while(s.players[s.first].turn<16&&s.winner===null&&guard++<300){
+    if(s.phase==='draft'){
+      rounds.push(s.players[s.first].turn);assert.equal(s.active,s.first);
+      // The second player picks first: picks need not follow the turn order.
+      for(const i of [1,0]) {
+        const entry=s.draft[i];assert.equal(entry.offers.length,3);assert.equal(entry.rerolls,1);
+        const old=[...entry.offers];act(s,{type:'draftReroll',player:i},fixed);assert.ok(s.draft[i].offers.every(x=>!old.includes(x)));
+        assert.throws(()=>act(s,{type:'draftReroll',player:i},fixed));assert.throws(()=>act(s,{type:'roll'},fixed),/증강/);
+        const id=s.draft[i].offers.find(x=>!['choice','objection','catlover','cat','chance'].includes(x))??s.draft[i].offers[0];act(s,{type:'augment',id,player:i},fixed);
+        if(i===1&&s.winner===null){assert.equal(s.phase,'draft');assert.throws(()=>act(s,{type:'augment',id,player:1},fixed),/이미/);}
+      }
+      if(s.winner!==null)break;
+      assert.notEqual(s.phase,'draft');assert.equal(s.draft,null);
     }
     // Advance only through real legal rolls/moves; force all pieces back each turn so no accidental finish wins.
     for(const p of s.players)for(const t of p.tokens){t.path=[];t.done=false;}
@@ -74,7 +82,7 @@ test('each player independently drafts at turn 5, 10, 15, with a fresh reroll at
     if(s.throws>0){const action={type:'roll',value:1};act(s,action,()=>1.1/16);}
     else if(s.pending.length){const a=legalMoves(s)[0];act(s,{type:'move',token:a.token,result:a.result,route:a.route},fixed);}
   }
-  assert.ok(guard<200);assert.deepEqual(history,[[5,10,15],[5,10,15]]);assert.ok(s.players.every(p=>p.augments.length===3));
+  assert.ok(guard<300);assert.equal(s.winner,null);assert.deepEqual(rounds,[5,10,15]);assert.ok(s.players.every(p=>p.drafts===3));
 });
 test('choice replaces randomness and rejects values other than do/gae',()=>{
   const s=fresh();s.players[0].augments=['choice'];assert.throws(()=>act(s,{type:'roll',value:5}));act(s,{type:'roll',value:2},()=>0);assert.equal(s.pending[0].value,2);
@@ -188,7 +196,7 @@ test('mutually exclusive throw replacements are filtered from drafting and draft
   assert.equal(AUGMENTS.length,79);
   for(const [owned,excluded] of [['banchan','choice'],['choice','banchan']]){
     const s=createGame(['A','B'],true,()=>0);pick(s,owned);s.players[0].turn=9;s.active=1;act(s,{type:'roll'},()=>1.1/16);
-    assert.equal(s.phase,'augment');assert.ok(!s.offers.includes(excluded));act(s,{type:'draftReroll'},()=>.9);assert.ok(!s.offers.includes(excluded));
+    assert.equal(s.phase,'draft');assert.ok(!s.draft[0].offers.includes(excluded));act(s,{type:'draftReroll',player:0},()=>.9);assert.ok(!s.draft[0].offers.includes(excluded));
   }
 });
 test('pull direction reverses on release and drag length scales power to a server-side cap',()=>{
