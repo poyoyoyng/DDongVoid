@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {AUGMENTS,NODES,act,createGame,walk,position,legalMoves,checkWin,simulateFlick,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL,recruitOptions,trapOptions,copyOption,swapReady,swapTargets,quakeReady} from '../public/jeung-yut/engine.mjs';
+import {AUGMENTS,NODES,act,createGame,walk,position,legalMoves,checkWin,simulateFlick,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL,recruitOptions,trapOptions,copyOption,swapReady,swapTargets,quakeReady,skillActions} from '../public/jeung-yut/engine.mjs';
 const fixed=()=>.4;
 const fresh=()=>createGame(['청','홍'],true,fixed);
 function put(s,p,id,path){s.players[p].tokens[id].path=Array.isArray(path)?path:[path];}
@@ -109,7 +109,8 @@ test('illegal moves, duplicate picks and inactive phase actions are rejected',()
 test('seeded complete 2, 3 and 4 player AI matches terminate with valid states and at most three augments',()=>{
   for(const count of [2,3,4])for(let seed=1;seed<=60;seed++){
     let n=seed;const random=()=>{n=(Math.imul(n,1664525)+1013904223)>>>0;return n/4294967296;};const s=createGame(Array.from({length:count},(_,i)=>`P${i+1}`),true,random);let actions=0;
-    while(s.winner===null&&actions++<2500){const action=botAction(s,random);assert.ok(action,`stuck at ${s.phase}`);act(s,action,random);for(const p of s.players){assert.ok(p.augments.length<=3);for(const t of p.tokens)assert.ok(['home','finish',...Object.keys(NODES)].includes(position(t)));}}
+    while(s.winner===null&&actions++<2500){const action=botAction(s,random);assert.ok(action,`stuck at ${s.phase}`);act(s,action,random);const owners=new Map();for(const [i,p] of s.players.entries())for(const t of p.tokens){const at=position(t);if(NODES[at]){assert.ok(!owners.has(at)||owners.get(at)===i,`two players share ${at}`);owners.set(at,i);}}
+    for(const p of s.players){assert.ok((p.drafts??p.augments.length)<=3);for(const t of p.tokens)assert.ok(['home','finish',...Object.keys(NODES)].includes(position(t)));}}
     assert.ok(s.winner!==null,`${count} players, seed ${seed} did not finish`);
   }
 });
@@ -184,7 +185,7 @@ test('banchan mo grants exactly two additional rolls, including a reroll and a c
   const reroll=fresh();pick(reroll,'banchan');reroll.players[0].augments.push('reroll');pending(reroll,2);act(reroll,{type:'reroll',result:1},()=>0);assert.equal(reroll.throws,2);assert.equal(reroll.pending[0].value,5);
 });
 test('mutually exclusive throw replacements are filtered from drafting and draft rerolls',()=>{
-  assert.equal(AUGMENTS.length,32);
+  assert.equal(AUGMENTS.length,79);
   for(const [owned,excluded] of [['banchan','choice'],['choice','banchan']]){
     const s=createGame(['A','B'],true,()=>0);pick(s,owned);s.players[0].turn=9;s.active=1;act(s,{type:'roll'},()=>1.1/16);
     assert.equal(s.phase,'augment');assert.ok(!s.offers.includes(excluded));act(s,{type:'draftReroll'},()=>.9);assert.ok(!s.offers.includes(excluded));
@@ -467,4 +468,112 @@ test('등가교환·짐덩이와 복덩이: 말 수와 윷가락 수가 바뀌�
   const all=fresh();pick(all,'bundle');all.phase='roll';all.throws=1;all.pending=[];act(all,{type:'roll'},()=>31.1/32);assert.equal(all.pending[0].value,5);
   const both=fresh();pick(both,'trade');both.players[0].turn=9;both.active=1;act(both,{type:'roll'},()=>1.1/16);
   for(let i=0;i<20&&both.phase==='augment';i++){assert.ok(!both.offers.includes('bundle'));both.players[0].draftRerolls=1;act(both,{type:'draftReroll'},()=>i/20);}
+});
+
+// ---------- 나무위키 범용·중간·마무리 증강 ----------
+const lane=n=>Array.from({length:n},(_,i)=>'o'+(i+1));
+const rollWith=(id,draw)=>{const t=fresh();pick(t,id);t.phase='roll';t.throws=1;t.pending=[];act(t,{type:'roll'},typeof draw==='function'?draw:()=>draw);return t;};
+// Ends the other player's turn so player 0's next turn starts (start-of-turn effects run then).
+const nextTurnOf0=s=>{s.active=1;s.phase='flick';act(s,{type:'flickTimeout'},fixed);};
+test('고양이·간택·애묘인: 고양이를 고른 사람이 생기면 애묘인이 이기고, 간택이 있으면 고양이를 꼭 골라야 한다',()=>{
+  const s=createGame(['A','B','C'],true,()=>0);s.active=1;pick(s,'catlover');s.active=0;pick(s,'cat');assert.equal(s.winner,1);
+  const forced=fresh();forced.active=1;pick(forced,'chosen');forced.active=0;let seen=false;
+  for(let k=0;k<100&&!seen;k++){forced.phase='augment';forced.offers=['tower'];forced.players[0].draftRerolls=1;act(forced,{type:'draftReroll'},()=>k/100);if(forced.offers.includes('cat')){assert.deepEqual(forced.offers,['cat']);seen=true;}}
+  assert.ok(seen);
+});
+test('과유불급·모 아니면 도·이도류: 윷가락과 결과 분포가 바뀐다',()=>{
+  assert.equal(rollWith('excess',63.1/64).lastRoll.value,0);assert.equal(rollWith('excess',31.1/64).lastRoll.value,4);assert.equal(rollWith('excess',0).lastRoll.value,5);
+  assert.equal(rollWith('moordo',.1).lastRoll.value,5);assert.equal(rollWith('moordo',.5).lastRoll.value,1);
+  const yut=rollWith('dual',15.1/16);assert.deepEqual(yut.pending.map(r=>r.value),[4,4]);assert.equal(yut.throws,2);
+  assert.deepEqual(rollWith('dual',0).pending.map(r=>r.value),[1,1]);
+});
+test('개들을 풀어라·도베르만·외톨이·손은 눈보다 빠르다·슬쩍!: 결과를 얻거나 바꾼다',()=>{
+  const dogs=fresh();pick(dogs,'dogs');act(dogs,{type:'dogs'},fixed);assert.deepEqual(dogs.pending.map(r=>r.value),[2]);assert.equal(dogs.throws,1);assert.equal(dogs.players[0].uses.dogs,2);
+  const dob=fresh();pick(dob,'doberman');dob.players[0].gaeCount=5;act(dob,{type:'doberman'},fixed);assert.deepEqual(dob.pending.map(r=>r.value),[5,5,5]);
+  const lone=fresh();pick(lone,'loner');act(lone,{type:'loner'},fixed);assert.deepEqual(lone.pending.map(r=>r.value),[3]);
+  const hand=fresh();pick(hand,'hand');act(hand,{type:'hand',value:4},fixed);assert.deepEqual(hand.pending.map(r=>r.value),[4]);assert.equal(hand.throws,1);
+  assert.throws(()=>act(hand,{type:'hand',value:5},fixed));
+  const sneak=fresh();pick(sneak,'sneak');pending(sneak,3);act(sneak,{type:'sneak',result:1,value:4},fixed);assert.equal(sneak.pending[0].value,4);
+  assert.throws(()=>act(sneak,{type:'sneak',result:1,value:1},fixed));
+  assert.throws(()=>act(fresh(),{type:'dogs'},fixed),/쓸 수 없는/);
+});
+test('대출·윷을 잘 던져봐·메아리의 형상: 차례를 건너뛰거나 두 번 한다',()=>{
+  const loan=fresh();pick(loan,'loan');act(loan,{type:'loan'},fixed);assert.equal(loan.throws,2);assert.equal(loan.players[0].skip,1);
+  const skip=fresh();skip.players[1].skip=1;act(skip,{type:'roll'},()=>1.1/16);assert.equal(skip.active,0);assert.equal(skip.players[1].skip,0);assert.equal(skip.players[0].turn,2);
+  const three=createGame(['A','B','C'],true,()=>0);pick(three,'throwhit');act(three,{type:'throwhit',target:2},fixed);assert.equal(three.players[2].skip,2);
+  const echo=fresh();pick(echo,'echo');act(echo,{type:'roll'},()=>1.1/16);assert.equal(echo.active,0);assert.equal(echo.players[0].turn,2);
+  act(echo,{type:'roll'},()=>1.1/16);assert.equal(echo.active,1);
+});
+test('명사수·사신·마신 소환·영역 전개: 내 차례가 시작될 때 발동한다',()=>{
+  const snipe=fresh();pick(snipe,'sniper');put(snipe,1,0,'o7');act(snipe,{type:'snipe',node:'o7'},fixed);assert.equal(snipe.active,1);
+  nextTurnOf0(snipe);assert.equal(position(snipe.players[1].tokens[0]),'home');
+  const reaper=fresh();pick(reaper,'reaper');put(reaper,1,0,[...lane(5),'a1','a2']);nextTurnOf0(reaper);assert.equal(reaper.reaper.node,'a2');assert.equal(position(reaper.players[1].tokens[0]),'home');
+  const cult=fresh();pick(cult,'cult');put(cult,0,0,'o3');put(cult,0,1,'o5');cult.players[0].coins=10;nextTurnOf0(cult);assert.equal(cult.winner,0);
+  const domain=fresh();pick(domain,'domain');put(domain,0,0,'o3');act(domain,{type:'domain',token:0},fixed);
+  domain.active=0;pending(domain,2);assert.ok(!legalMoves(domain).some(m=>m.token===0));
+  domain.players[0].turn=domain.players[0].domain.until-1;nextTurnOf0(domain);assert.equal(domain.winner,0);assert.match(domain.winReason,/영역 전개/);
+});
+test('바둑·시간 여행·8톤 트럭·3단 합체 필살기: 판 위 기술',()=>{
+  const baduk=fresh();pick(baduk,'baduk');put(baduk,0,0,'o1');put(baduk,0,1,'o5');put(baduk,1,0,'o3');act(baduk,{type:'baduk'},fixed);
+  assert.equal(position(baduk.players[1].tokens[0]),'home');assert.equal(baduk.throws,2);
+  const travel=fresh();pick(travel,'timetravel');put(travel,0,0,lane(4));put(travel,1,0,'o2');act(travel,{type:'timetravel',token:0,steps:2},fixed);
+  assert.equal(position(travel.players[0].tokens[0]),'o2');assert.equal(position(travel.players[1].tokens[0]),'home');
+  const truck=fresh();pick(truck,'truck');put(truck,0,0,'o2');put(truck,0,1,'o2');put(truck,1,0,'o7');
+  assert.ok(skillActions(truck,0).some(o=>o.action?.type==='truck'));act(truck,{type:'truck',token:0},fixed);
+  assert.equal(position(truck.players[0].tokens[0]),'o6');assert.equal(position(truck.players[0].tokens[1]),'o6');assert.equal(truck.active,1);
+  const combo=fresh();pick(combo,'combo');for(const id of [0,1,2])put(combo,0,id,lane(4));put(combo,0,3,'o8');put(combo,1,0,'o10');act(combo,{type:'combo',token:0},fixed);
+  assert.equal(position(combo.players[1].tokens[0]),'home');assert.equal(position(combo.players[0].tokens[3]),'home');assert.equal(position(combo.players[0].tokens[0]),'o4');assert.equal(combo.active,1);
+});
+test('암살자의 영혼·히히 똥!·천상의 보호막·희생: 지나가거나 잡힐 때 발동한다',()=>{
+  const soul=fresh();soul.active=1;pick(soul,'assassin');put(soul,1,0,'o3');act(soul,{type:'assassin',token:0},fixed);
+  soul.active=0;put(soul,0,0,'o1');pending(soul,4);move(soul);assert.equal(position(soul.players[0].tokens[0]),'home');assert.equal(soul.players[1].tokens[0].soul,false);
+  const poop=fresh();poop.active=1;pick(poop,'poop');assert.equal(poop.traps.filter(x=>x.kind==='poop').length,3);poop.traps=[{node:'o3',owner:1,kind:'poop'}];
+  poop.active=0;put(poop,0,0,'o1');pending(poop,4);move(poop);assert.equal(position(poop.players[0].tokens[0]),'o3');assert.deepEqual(poop.traps,[]);
+  const heaven=fresh();heaven.active=1;pick(heaven,'heaven');put(heaven,1,0,'o3');act(heaven,{type:'heaven',token:0},fixed);
+  heaven.active=0;put(heaven,0,0,'o1');pending(heaven,2);move(heaven);assert.equal(position(heaven.players[1].tokens[0]),'o3');assert.equal(position(heaven.players[0].tokens[0]),'o1');assert.equal(heaven.players[1].tokens[0].shielded,false);
+  const sac=fresh();pick(sac,'sacrifice');put(sac,0,0,'o3');put(sac,0,1,'o5');act(sac,{type:'sacrifice',token:0},fixed);
+  assert.equal(position(sac.players[0].tokens[0]),'home');assert.equal(sac.players[0].tokens[1].shielded,true);
+});
+test('프렌드 실드·화톳불·카니발리즘: 잡힘과 업기가 바뀐다',()=>{
+  const friend=fresh();friend.active=1;pick(friend,'friend');put(friend,1,0,lane(4));put(friend,1,1,lane(4));
+  friend.active=0;put(friend,0,0,'o2');pending(friend,2);move(friend);
+  assert.equal(position(friend.players[1].tokens[0]),'home');assert.equal(position(friend.players[1].tokens[1]),'o3');assert.equal(position(friend.players[0].tokens[0]),'o4');
+  const fire=fresh();fire.active=1;pick(fire,'bonfire');put(fire,1,0,lane(6));act(fire,{type:'bonfire',token:0},fixed);put(fire,1,0,lane(8));
+  fire.active=0;put(fire,0,0,lane(5));pending(fire,3);move(fire);assert.equal(position(fire.players[1].tokens[0]),'o6');assert.equal(fire.players[1].bonfire,null);
+  const eat=fresh();pick(eat,'cannibal');put(eat,0,0,'o1');put(eat,0,1,'o3');pending(eat,2);move(eat);
+  assert.equal(position(eat.players[0].tokens[1]),'home');assert.equal(position(eat.players[0].tokens[0]),'o3');assert.equal(eat.throws,1);
+});
+test('크고 빨간 버튼·나만 아니면 돼~·잠깐!·평화 협정: 상대 말에 바로 작용한다',()=>{
+  const red=fresh();put(red,0,0,[...lane(5),'a1']);put(red,1,0,[...lane(10),'b1','b2','c']);put(red,1,1,'o7');pick(red,'redbutton');
+  assert.equal(position(red.players[0].tokens[0]),'home');assert.equal(position(red.players[1].tokens[0]),'home');assert.equal(position(red.players[1].tokens[1]),'o7');
+  const nme=fresh();put(nme,1,0,'o4');put(nme,1,1,'o9');pick(nme,'nme');assert.ok(nme.players[1].tokens.every(t=>position(t)==='home'));
+  const wait=fresh();put(wait,1,0,lane(6));put(wait,1,1,'o2');pick(wait,'wait');wait.active=1;wait.players[1].turn=1;pending(wait,1);
+  assert.ok(!legalMoves(wait).some(m=>m.token===0));assert.ok(legalMoves(wait).some(m=>m.token===1));
+  const peace=fresh();peace.active=1;pick(peace,'peace');peace.active=0;put(peace,0,0,'o1');put(peace,1,0,'o3');pending(peace,2);
+  assert.ok(!legalMoves(peace).some(m=>m.to==='o3'));
+});
+test('독이 든 성배·라스트 댄스: 던지기를 더 얻는 대신 대가를 치른다',()=>{
+  const cup=fresh();pick(cup,'chalice');put(cup,0,0,'o3');act(cup,{type:'chalice'},fixed);assert.equal(cup.throws,4);
+  act(cup,{type:'roll'},()=>0);assert.equal(position(cup.players[0].tokens[0]),'home');assert.equal(cup.active,1);
+  const dance=fresh();pick(dance,'lastdance');put(dance,0,0,'o1');act(dance,{type:'lastdance'},fixed);assert.equal(dance.throws,3);
+  dance.pending=[{id:1,value:2}];dance.throws=0;dance.phase='move';dance.nextId=2;assert.equal(legalMoves(dance).find(m=>m.token===0).steps,4);
+  move(dance);assert.equal(position(dance.players[0].tokens[0]),'home');assert.equal(dance.active,1);
+});
+test('777·악보·소 뒷걸음질·마라토너·무신정변·나만 친구 없어: 특수 승리',()=>{
+  const seven=fresh();pick(seven,'lucky7');seven.throws=3;for(let k=0;k<3;k++)act(seven,{type:'roll'},()=>.5);assert.equal(seven.winner,0);
+  const score=fresh();pick(score,'score');score.players[0].thrown=[-1,1,2,3,4];act(score,{type:'roll'},()=>0);assert.equal(score.winner,0);
+  const cow=fresh();pick(cow,'backcow');put(cow,0,0,lane(4));put(cow,1,0,lane(3));pending(cow,-1);move(cow);assert.equal(cow.winner,0);
+  const run=fresh();pick(run,'marathon');assert.equal(run.players[0].marathon,3);put(run,0,3,['o19']);pending(run,2);move(run,3);assert.equal(run.winner,0);
+  const coup=fresh();pick(coup,'coup');coup.players[0].coupKills=3;put(coup,0,0,'o1');put(coup,1,0,'o3');pending(coup,2);move(coup);assert.equal(coup.winner,0);
+  const alone=createGame(['A','B','C'],true,()=>0);pick(alone,'lonely');
+  alone.active=1;put(alone,0,0,'o3');put(alone,1,0,'o1');pending(alone,2);move(alone);assert.equal(alone.winner,null);
+  alone.active=2;put(alone,0,0,'o3');put(alone,2,0,'o1');pending(alone,2);move(alone);assert.equal(alone.winner,0);
+});
+test('역모·자진모리 장단·어부지리·선봉장·역전 찬스·이의있음!',()=>{
+  const treason=fresh();pick(treason,'treason');treason.players[1].tokens[3].done=true;put(treason,0,0,'o1');put(treason,1,0,'o3');pending(treason,2);move(treason);assert.equal(treason.throws,2);
+  const beat=fresh();pick(beat,'jajinmori');beat.throws=2;act(beat,{type:'roll'},()=>7.1/16);act(beat,{type:'roll'},()=>7.1/16);assert.deepEqual(beat.pending.map(r=>r.value).sort(),[2,3,3]);
+  const fish=createGame(['A','B','C'],true,()=>0);fish.active=2;pick(fish,'fisher');fish.active=0;put(fish,1,0,'o3');put(fish,1,1,'o3');put(fish,0,0,'o1');pending(fish,2);move(fish);assert.equal(fish.players[2].fishBonus,1);
+  const van=fresh();put(van,0,0,'o3');pick(van,'vanguard');assert.equal(van.players[0].vanguard,0);pending(van,2);assert.equal(legalMoves(van).find(m=>m.token===1).steps,3);
+  const chance=fresh();pick(chance,'chance');assert.equal(chance.players[0].augments.length,5);assert.equal(chance.players[0].drafts,1);
+  const redo=fresh();pick(redo,'objection');assert.equal(redo.phase,'augment');assert.equal(redo.offers.length,3);assert.ok(!redo.players[0].augments.includes('objection'));
 });

@@ -1,4 +1,4 @@
-import {AUGMENTS,MILESTONES,NODES,LINES,createGame,act,legalMoves,position,has,label,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_SECONDS,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL,recruitOptions,trapOptions,copyOption,swapReady,swapTargets,quakeReady} from './engine.mjs';
+import {AUGMENTS,MILESTONES,NODES,LINES,createGame,act,legalMoves,position,has,label,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_SECONDS,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL,recruitOptions,trapOptions,copyOption,swapReady,swapTargets,quakeReady,skillActions,squareLabel} from './engine.mjs';
 import {throwFaces} from './throw-view.mjs';
 import {createChat} from '../chat.js';
 const $=id=>document.getElementById(id);
@@ -46,7 +46,16 @@ function augmentStatus(p,id){
   if(id==='trap')return '3의 배수 턴마다 덫 · 최대 2개';
   if(id==='garlic')return `마늘 ${4-(p.garlic?.length??4)}/4개`;
   if(id==='kim')return p.kimDoneTurn?(p.kimDoneTurn<=p.kimUntil?'김첨지 완주!':'김첨지 시간 초과'):Number.isInteger(p.kimToken)?`${p.kimToken+1}번 말 · ${p.kimUntil}번째 턴까지 완주`:'';
-  if(id==='trade'||id==='bundle')return `말 ${p.tokens.length}개 · 윷가락 ${p.sticks??4}개`;
+  if(id==='trade'||id==='bundle'||id==='excess')return `말 ${p.tokens.length}개 · 윷가락 ${p.sticks??4}개`;
+  if(p.uses&&id in p.uses)return `${p.uses[id]}회 남음`;
+  if(id==='cult')return `의식 코인 ${p.coins??0}/12`;
+  if(id==='coup')return `잡은 말 ${p.coupKills??0}/4`;
+  if(id==='lonely')return `${(p.caughtBy??[]).length}명에게 잡힘`;
+  if(id==='score')return `악보 ${[-1,1,2,3,4,5].filter(v=>p.thrown?.includes(v)).length}/6`;
+  if(id==='fisher')return `다음 차례 개 ${p.fishBonus??0} · ${p.fishCount??0}/2`;
+  if(id==='vanguard'&&Number.isInteger(p.vanguard))return `선봉장 ${p.vanguard+1}번 말`;
+  if(id==='marathon'&&Number.isInteger(p.marathon))return `마라토너 ${p.marathon+1}번 말`;
+  if(id==='chalice')return p.chaliceTurn===p.turn?'이번 차례에 마심 · 모 조심!':'차례마다 1회';
   return '';
 }
 function currentMoves(){return legalMoves(state).filter(m=>m.result===selectedResult&&m.token===selectedToken);}
@@ -59,7 +68,7 @@ function renderPlayers(view=state){
     const p=state.players[i];
     if(!p||online&&!online.ready&&i>=online.names.length)return `<section class="player-card empty-seat"><span class="empty-icon">＋</span><p>플레이어 ${i+1}</p><small>${online&&!online.ready&&i<online.maxPlayers?'참가 대기':'빈 자리'}</small></section>`;
     const done=p.tokens.filter(t=>t.done).length,home=p.tokens.filter(t=>position(t)==='home').length,onBoard=p.tokens.length-done-home;
-    return `<section class="player-card ${['blue','red','purple','golden'][i]} ${state.active===i?'active':''}" aria-label="${esc(p.name)} 상태"><div class="player-head"><div class="avatar">${['◈','◆','✦','◉'][i]}</div><div><div class="player-name">${esc(p.name)}</div><div class="player-tag">PLAYER 0${i+1}${mode==='ai'&&i!==0?' / AI':''}</div></div>${state.active===i?'<span class="turn-chip">● NOW</span>':''}</div><div class="score-row"><span>완주한 말</span><strong>${done} <span>/ ${p.tokens.length}</span></strong></div><div class="progress-track">${p.tokens.map(t=>`<i class="progress-part ${t.done?'done':''}"></i>`).join('')}</div><div class="token-tray">${p.tokens.map(t=>`<button class="reserve-token ${position(t)==='home'?'home-token':t.done?'finished-token':'on-board-token'} ${i===state.active&&selectedToken===t.id?'selected':''}" data-token="${t.id}" data-owner="${i}" ${!canPlay()||i!==state.active||t.done?'disabled':''} title="${position(t)==='home'?'창고 · 미사용':t.done?'완주':'말판 · 사용 중'}" aria-label="${esc(p.name)} ${t.id+1}번 말, ${position(t)==='home'?'창고 · 미사용':t.done?'완주':'말판 · 사용 중'}">${t.done?'✓':t.id+1}</button>`).join('')}</div><p class="token-count"><span class="home-count">창고 <strong>${home}</strong></span><span>사용 중 <strong>${onBoard}</strong></span></p><div class="augments">${MILESTONES.map((turn,j)=>p.augments[j]?`<button class="aug-slot filled" data-aug-info="${p.augments[j]}" data-aug-owner="${i}" title="${esc(aug(p.augments[j]).desc)} ${esc(augmentStatus(p,p.augments[j]))}"><span class="aug-icon ${aug(p.augments[j]).tier}">${aug(p.augments[j]).icon}</span><span class="aug-desc">${aug(p.augments[j]).name}${augmentStatus(p,p.augments[j])?`<small class="augment-counter">${augmentStatus(p,p.augments[j])}</small>`:''}</span></button>`:`<div class="aug-slot"><span class="aug-icon">◇</span><span class="aug-desc">${turn}턴에 열리는 증강</span></div>`).join('')}</div><p class="player-foot">${p.turn}번째 턴${p.shields?` · 호신부 ${p.shields}회`:''}${p.boost?` · 추격 +${p.boost}칸`:''}${p.augments.includes('aunt')?`<br>${augmentStatus(p,'aunt')}`:''}${p.augments.includes('dopamine')?`<br>도파민 ${augmentStatus(p,'dopamine')}`:''}${p.augments.includes('recruit')?`<br>집결 ${p.recruitUsed?'사용 완료':'1회 남음'}`:''}${(p.jinxUntil??0)>p.turn||(p.jinxUntil??0)===p.turn&&state.active===i?`<br><span class="jinx-note">☁ 징크스 · ${p.jinxUntil}번째 턴까지 윷·모→걸</span>`:''}${p.augments.includes('kim')&&Number.isInteger(p.kimToken)&&!p.kimDoneTurn&&p.turn<=p.kimUntil?`<br><span class="kim-note">☂ 김첨지 ${p.kimToken+1}번 말 · ${p.kimUntil}번째 턴까지</span>`:''}</p></section>`;
+    return `<section class="player-card ${['blue','red','purple','golden'][i]} ${state.active===i?'active':''}" aria-label="${esc(p.name)} 상태"><div class="player-head"><div class="avatar">${['◈','◆','✦','◉'][i]}</div><div><div class="player-name">${esc(p.name)}</div><div class="player-tag">PLAYER 0${i+1}${mode==='ai'&&i!==0?' / AI':''}</div></div>${state.active===i?'<span class="turn-chip">● NOW</span>':''}</div><div class="score-row"><span>완주한 말</span><strong>${done} <span>/ ${p.tokens.length}</span></strong></div><div class="progress-track">${p.tokens.map(t=>`<i class="progress-part ${t.done?'done':''}"></i>`).join('')}</div><div class="token-tray">${p.tokens.map(t=>`<button class="reserve-token ${position(t)==='home'?'home-token':t.done?'finished-token':'on-board-token'} ${i===state.active&&selectedToken===t.id?'selected':''}" data-token="${t.id}" data-owner="${i}" ${!canPlay()||i!==state.active||t.done?'disabled':''} title="${position(t)==='home'?'창고 · 미사용':t.done?'완주':'말판 · 사용 중'}" aria-label="${esc(p.name)} ${t.id+1}번 말, ${position(t)==='home'?'창고 · 미사용':t.done?'완주':'말판 · 사용 중'}">${t.done?'✓':t.id+1}</button>`).join('')}</div><p class="token-count"><span class="home-count">창고 <strong>${home}</strong></span><span>사용 중 <strong>${onBoard}</strong></span></p><div class="augments">${Array.from({length:Math.max(MILESTONES.length,p.augments.length)},(_,j)=>MILESTONES[j]).map((turn,j)=>p.augments[j]?`<button class="aug-slot filled" data-aug-info="${p.augments[j]}" data-aug-owner="${i}" title="${esc(aug(p.augments[j]).desc)} ${esc(augmentStatus(p,p.augments[j]))}"><span class="aug-icon ${aug(p.augments[j]).tier}">${aug(p.augments[j]).icon}</span><span class="aug-desc">${aug(p.augments[j]).name}${augmentStatus(p,p.augments[j])?`<small class="augment-counter">${augmentStatus(p,p.augments[j])}</small>`:''}</span></button>`:`<div class="aug-slot"><span class="aug-icon">◇</span><span class="aug-desc">${turn}턴에 열리는 증강</span></div>`).join('')}</div><p class="player-foot">${p.turn}번째 턴${p.shields?` · 호신부 ${p.shields}회`:''}${p.boost?` · 추격 +${p.boost}칸`:''}${p.augments.includes('aunt')?`<br>${augmentStatus(p,'aunt')}`:''}${p.augments.includes('dopamine')?`<br>도파민 ${augmentStatus(p,'dopamine')}`:''}${p.augments.includes('recruit')?`<br>집결 ${p.recruitUsed?'사용 완료':'1회 남음'}`:''}${p.skip?`<br><span class="jinx-note">⏸ 차례 ${p.skip}번 쉼</span>`:''}${p.domain?`<br><span class="kim-note">⬚ 영역 전개 ${p.domain.token+1}번 말 · ${p.domain.until}번째 턴 시작까지</span>`:''}${(p.jinxUntil??0)>p.turn||(p.jinxUntil??0)===p.turn&&state.active===i?`<br><span class="jinx-note">☁ 징크스 · ${p.jinxUntil}번째 턴까지 윷·모→걸</span>`:''}${p.augments.includes('kim')&&Number.isInteger(p.kimToken)&&!p.kimDoneTurn&&p.turn<=p.kimUntil?`<br><span class="kim-note">☂ 김첨지 ${p.kimToken+1}번 말 · ${p.kimUntil}번째 턴까지</span>`:''}</p></section>`;
   });
   $('players-left').innerHTML=[cards[0],cards[2]].join('');
   $('players-right').innerHTML=[cards[1],cards[3]].join('');
@@ -82,10 +91,13 @@ function renderBoard(view=state){
   for(let owner=0;owner<state.players.length;owner++) {
     const groups=new Map();for(const t of state.players[owner].tokens){const node=position(t);if(NODES[node])groups.set(node,[...(groups.get(node)||[]),t]);}
     for(const [node,tokens] of groups){if(shotAnimation&&owner===shotAnimation.shot.owner&&(node===shotAnimation.shot.sourceNode||shotAnimation.shot.outcome==='hit'&&node===shotAnimation.shot.hit))continue;const n=NODES[node],id=tokens[0].id,selected=owner===state.active&&selectedToken!==null&&tokens.some(t=>t.id===selectedToken);
-      svg+=`<g class="piece ${['blue','red','purple','golden'][owner]} ${selected?'selected':''}" data-piece="${id}" data-owner="${owner}" role="button" tabindex="0" aria-label="${esc(state.players[owner].name)} ${tokens.map(t=>t.id+1).join('·')}번 말, ${tokens.length}개 묶음" transform="translate(${n.x} ${n.y})">${selected?'<circle class="selection-ring" r="29"/>':''}${tokens.length>1?'<circle class="stack-ring" r="26"/>':''}<circle r="21"/><text>${tokens.length>1?'×'+tokens.length:id+1}</text><text class="piece-label">${tokens.length>1?tokens.map(t=>t.id+1).join(' · '):''}</text></g>`;
+      svg+=`<g class="piece ${['blue','red','purple','golden'][owner]} ${selected?'selected':''}" data-piece="${id}" data-owner="${owner}" role="button" tabindex="0" aria-label="${esc(state.players[owner].name)} ${tokens.map(t=>t.id+1).join('·')}번 말, ${tokens.length}개 묶음" transform="translate(${n.x} ${n.y})">${selected?'<circle class="selection-ring" r="29"/>':''}${tokens.some(t=>t.shielded)?'<circle class="shield-ring" r="27"/>':''}${tokens.some(t=>t.soul)?'<circle class="soul-ring" r="31"/>':''}${tokens.some(t=>(t.frozenUntil??0)>0&&t.frozenUntil>=state.players[owner].turn||state.players[owner].domain?.token===t.id)?'<circle class="frozen-ring" r="24"/>':''}${tokens.length>1?'<circle class="stack-ring" r="26"/>':''}<circle r="21"/><text>${tokens.length>1?'×'+tokens.length:id+1}</text><text class="piece-label">${tokens.length>1?tokens.map(t=>t.id+1).join(' · '):''}</text></g>`;
     }
   }
-  for(const trap of state.traps??[]){const n=NODES[trap.node];svg+=`<g class="trap ${['blue','red','purple','golden'][trap.owner]} ${trap.kind??''}" transform="translate(${n.x} ${n.y})" aria-hidden="true"><circle r="30"/><text x="23" y="-23">${trap.kind==='reward'?'★':'⚠'}</text></g>`;}
+  for(const shot of state.snipes??[]){const n=NODES[shot.node];svg+=`<g class="snipe" transform="translate(${n.x} ${n.y})" aria-hidden="true"><circle r="35"/><text y="-36">⌖</text></g>`;}
+  if(state.reaper){const n=NODES[state.reaper.node];svg+=`<g class="reaper" transform="translate(${n.x} ${n.y})" aria-hidden="true"><text x="23" y="23">☠</text></g>`;}
+  state.players.forEach((p,owner)=>{if(p.bonfire){const n=NODES[p.bonfire.node];svg+=`<g class="bonfire" transform="translate(${n.x} ${n.y})" aria-hidden="true"><text x="-23" y="23">♨</text></g>`;}});
+  for(const trap of state.traps??[]){const n=NODES[trap.node];if(trap.kind==='poop'){svg+=`<g class="poop" transform="translate(${n.x} ${n.y})" aria-hidden="true"><text x="-23" y="-23">◉</text></g>`;continue;}svg+=`<g class="trap ${['blue','red','purple','golden'][trap.owner]} ${trap.kind??''}" transform="translate(${n.x} ${n.y})" aria-hidden="true"><circle r="30"/><text x="23" y="-23">${trap.kind==='reward'?'★':'⚠'}</text></g>`;}
   state.players.forEach((p,owner)=>{for(const node of p.garlic??[]){const n=NODES[node];svg+=`<g class="garlic ${['blue','red','purple','golden'][owner]}" transform="translate(${n.x} ${n.y})" aria-hidden="true"><text x="-22" y="-22">❦</text></g>`;}});
   if(canPlay())for(const [idx,m] of currentMoves().entries()) {
     const n=NODES[m.to]??(m.to==='finish'?{x:603,y:587}:{x:604,y:529});
@@ -162,6 +174,9 @@ function skillPanel(state){
     const ready=selectedToken!==null&&NODES[position(p.tokens[selectedToken])],targets=ready?swapTargets(state,selectedToken):[];
     html+=`<section class="recruit-skill"><strong>⇄ 자리 바꿔줘</strong><p>${ready?`${tokenName(selectedToken)}과 자리를 바꿀 상대 말을 고르세요. 바꾸면 턴이 끝나요.`:'판 위의 내 말을 먼저 고르면 바꿀 상대 말이 나와요.'}</p>${targets.map(x=>`<button class="primary full" data-swap-owner="${x.owner}" data-swap-target="${x.token}">${esc(state.players[x.owner].name)} ${x.count>1?`${x.count}개 묶음`:`${x.token+1}번 말`} · ${squareName(x.node)}</button>`).join('')}</section>`;
   }
+  const skills=skillActions(state,selectedToken),groups=new Map();
+  skills.forEach((o,k)=>groups.set(o.id,[...(groups.get(o.id)??[]),{...o,k}]));
+  for(const [id,list] of groups){const a=aug(id);html+=`<section class="recruit-skill"><strong>${a.icon} ${esc(a.name)}</strong>${list.map(o=>o.action?`<button class="primary full" data-skill="${o.k}">${esc(o.label)}</button>`:`<p>${esc(o.label)}</p>`).join('')}</section>`;}
   return html;
 }
 function render(){
@@ -189,7 +204,7 @@ function render(){
   scheduleBot();
 }
 function renderDraft(){
-  const p=state.players[state.active];$('draft-subtitle').textContent=`${p.name} · ${p.turn}번째 턴 · ${p.augments.length+1} / 3 증강`;
+  const p=state.players[state.active];$('draft-subtitle').textContent=`${p.name} · ${p.turn}번째 턴 · ${(p.drafts??p.augments.length)+1} / 3 증강`;
   $('augment-options').innerHTML=state.offers.map(id=>{const a=aug(id);return `<button class="augment-choice ${a.tier}" data-augment="${a.id}"><span class="aug-icon">${a.icon}</span><span class="aug-kind">${a.tier==='prism'?'PRISMATIC':a.tier==='gold'?'GOLD':'SILVER'} / ${a.kind}</span><strong>${a.name}</strong><p>${a.desc}</p><span class="pick-label">이 증강 선택하기 ↗</span></button>`;}).join('');
   $('draft-reroll').disabled=busy||p.draftRerolls<=0;$('draft-reroll').textContent=`⟳ 다시 제안받기 (${p.draftRerolls}/1)`;
 }
@@ -245,6 +260,7 @@ async function handleClick(e){
   if(b.dataset.action==='draft'){$('augment-dialog').showModal();return;}
   if(b.dataset.action==='new')return openSetup();
   if(b.dataset.action==='chat')return toggleChat();
+  if(b.dataset.skill!==undefined){const o=skillActions(state,selectedToken)[+b.dataset.skill];if(o?.action)send(o.action);return;}
   if(b.dataset.trap)return send({type:'trap',node:b.dataset.trap});
   if(b.dataset.jinx!==undefined)return send({type:'jinx',target:+b.dataset.jinx});
   if(b.dataset.swapOwner!==undefined)return send({type:'swap',token:selectedToken,owner:+b.dataset.swapOwner,target:+b.dataset.swapTarget});
