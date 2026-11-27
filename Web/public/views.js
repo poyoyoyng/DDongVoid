@@ -205,7 +205,7 @@ function roomRoster(room, user, ranks) {
 
 // Every room follows the desktop app's dialog: eyebrow, big status title, the game, then full-width buttons.
 const waitingNotes = {
-  jeungyut: '2~4인 개인전입니다. 참가자 모두 준비 완료를 누르면 시작합니다.<br>3·7·11턴에 모두 함께 증강을 고르고, 증윷 게임판에서 드래그 알까기를 즐기세요.',
+  jeungyut: '2~4인 개인전입니다. 참가자 모두 준비 완료를 누르면 시작합니다.<br>3·6·9턴에 모두 함께 증강을 고르고, 증윷 게임판에서 드래그 알까기를 즐기세요.',
   slap: '두 사람 모두 준비 완료를 누르면 바로 시작합니다.<br>방을 만든 사람(P1)이 먼저 공격합니다.',
   ciao: '2~4명이 참가하고 모두 준비하면 시작합니다.',
   onecard: '2~4명이 참가하고 모두 준비하면 시작합니다.',

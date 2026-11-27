@@ -60,9 +60,9 @@ test('special wins require the corresponding augment, four distinct consecutive 
   const l=fresh();for(let i=0;i<4;i++)put(l,0,i,'o'+(i+1));checkWin(l,0);assert.equal(l.winner,null);l.players[0].augments=['line'];checkWin(l,0);assert.equal(l.winner,0);
   const gap=fresh();gap.players[0].augments=['line'];['o1','o2','o4','o5'].forEach((n,i)=>put(gap,0,i,n));checkWin(gap,0);assert.equal(gap.winner,null);
 });
-test('the first player\'s 5·10·15th turn opens one draft everyone picks at once, each with a fresh reroll',()=>{
+test('the first player\'s 3·6·9th turn opens one draft everyone picks at once, each with a fresh reroll',()=>{
   const s=fresh();const rounds=[];let guard=0;
-  while(s.players[s.first].turn<12&&s.winner===null&&guard++<300){
+  while(s.players[s.first].turn<10&&s.winner===null&&guard++<300){
     if(s.phase==='draft'){
       rounds.push(s.players[s.first].turn);assert.equal(s.active,s.first);
       // The second player picks first: picks need not follow the turn order.
@@ -82,7 +82,7 @@ test('the first player\'s 5·10·15th turn opens one draft everyone picks at onc
     if(s.throws>0){const action={type:'roll',value:1};act(s,action,()=>1.1/16);}
     else if(s.pending.length){const a=legalMoves(s)[0];act(s,{type:'move',token:a.token,result:a.result,route:a.route},fixed);}
   }
-  assert.ok(guard<300);assert.equal(s.winner,null);assert.deepEqual(rounds,[3,7,11]);assert.ok(s.players.every(p=>p.drafts===3));
+  assert.ok(guard<300);assert.equal(s.winner,null);assert.deepEqual(rounds,[3,6,9]);assert.ok(s.players.every(p=>p.drafts===3));
 });
 test('choice replaces randomness and rejects values other than do/gae',()=>{
   const s=fresh();s.players[0].augments=['choice'];assert.throws(()=>act(s,{type:'roll',value:5}));act(s,{type:'roll',value:2},()=>0);assert.equal(s.pending[0].value,2);
@@ -195,7 +195,7 @@ test('banchan mo grants exactly two additional rolls, including a reroll and a c
 test('mutually exclusive throw replacements are filtered from drafting and draft rerolls',()=>{
   assert.equal(AUGMENTS.length,79);
   for(const [owned,excluded] of [['banchan','choice'],['choice','banchan']]){
-    const s=createGame(['A','B'],true,()=>0);pick(s,owned);s.players[0].turn=6;s.active=1;act(s,{type:'roll'},()=>1.1/16);
+    const s=createGame(['A','B'],true,()=>0);pick(s,owned);s.players[0].turn=5;s.active=1;act(s,{type:'roll'},()=>1.1/16);
     assert.equal(s.phase,'draft');assert.ok(!s.draft[0].offers.includes(excluded));act(s,{type:'draftReroll',player:0},()=>.9);assert.ok(!s.draft[0].offers.includes(excluded));
   }
 });
