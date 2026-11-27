@@ -1,4 +1,4 @@
-import {AUGMENTS,MILESTONES,NODES,LINES,createGame,act,legalMoves,position,has,label,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_SECONDS,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL,recruitOptions,trapOptions,copyOption,swapReady,swapTargets,quakeReady,skillActions,squareLabel} from './engine.mjs';
+import {AUGMENTS,MILESTONES,NODES,LINES,createGame,act,legalMoves,position,has,label,botAction,dopamineTurnsLeft,dopamineDebuffTurnsLeft,flickFromPull,FLICK_SECONDS,DRAFT_SECONDS,DRAFT_GRACE_MS,FLICK_MAX_PULL,FLICK_MAX_TRAVEL,FLICK_MIN_PULL,recruitOptions,trapOptions,copyOption,swapReady,swapTargets,quakeReady,skillActions,squareLabel} from './engine.mjs';
 import {throwFaces} from './throw-view.mjs';
 import {createChat} from '../chat.js';
 const $=id=>document.getElementById(id);
@@ -7,7 +7,7 @@ const requestedRoom=new URLSearchParams(location.search).get('room');
 const siteRoomId=/^[0-9a-f-]{36}$/.test(requestedRoom??'')?requestedRoom:null;
 let siteRoom=null,siteAccount=null,siteSyncing=false,chat=null;
 let mode=siteRoomId?'site':'ai',state=createGame(['나','AI 여우','AI 고양이','AI 토끼']),online=null,selectedToken=null,selectedResult=null,busy=Boolean(siteRoomId),botTimer,pollTimer,toastTimer,lastWinner=null,drag=null,onlineError=false,shotAnimation=null,flightFrame=null,seenShot=null,aimAngle=-Math.PI/2,aimPull=FLICK_MAX_PULL/2;
-let flickClock=null,throwAnimation=null,seenRoll=null,throwRevealTimer,throwEndTimer,renderedState=state;
+let flickClock=null,draftClock=null,draftTicker=null,throwAnimation=null,seenRoll=null,throwRevealTimer,throwEndTimer,renderedState=state;
 const storage={get(key){try{return JSON.parse(localStorage.getItem(key));}catch{return null;}},set(key,value){try{localStorage.setItem(key,JSON.stringify(value));}catch{}}};
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4000);}
 // The seat this page picks for in the shared draft: my own seat online, player 1 against AI, everyone in turn on one device.
@@ -130,7 +130,7 @@ function renderAction(view=state){
   else if(online&&!online.ready)html=`<h2 class="action-title">${online.names.length}명이 모였어요.</h2><p class="action-hint">초대 코드로 최대 ${online.maxPlayers}명까지 참가할 수 있어요.<br>${online.player===0?'2명 이상 모이면 원하는 때 시작하세요.':'방장이 시작하면 개인전이 시작됩니다.'}</p>${online.player===0?`<button class="primary full" data-action="startRoom" ${online.names.length<2||busy?'disabled':''}>${online.names.length}명으로 시작하기 →</button>`:''}`;
   else if(phase==='won')html=`<h2 class="action-title">${esc(state.players[state.winner].name)} 승리!</h2><p class="action-hint">${esc(state.winReason)}</p>${againPanel()}`;
   else if(phase==='augment')html=`<div class="waiting-mark">✧</div><h2 class="action-title">전략이 바뀌는 순간</h2><p class="action-hint">${esc(p.name)}의 ${p.turn}번째 턴.<br>${mine?'세 가지 증강 중 하나를 선택하세요.':'상대가 증강을 고르고 있습니다.'}</p>${mine?'<button class="primary full" data-action="draft">증강 선택하기 →</button>':''}`;
-  else if(phase==='draft')html=`<div class="waiting-mark">✧</div><h2 class="action-title">모두 증강을 고르는 중</h2><p class="action-hint">모두 고르면 ${esc(p.name)}의 차례로 이어집니다.</p><ul class="draft-status">${state.players.map((o,i)=>state.draft?.[i]?`<li class="${state.draft[i].done?'done':''}">${esc(o.name)} · ${state.draft[i].done?'선택 완료 ✓':state.draft[i].stage==='jinx'?'징크스 대상 고르는 중…':'고르는 중…'}</li>`:'').join('')}</ul>${draftSeat()!==null?'<button class="primary full" data-action="draft">증강 선택하기 →</button>':''}`;
+  else if(phase==='draft')html=`<div class="waiting-mark">✧</div><h2 class="action-title">모두 증강을 고르는 중</h2><p class="action-hint">모두 고르면 ${esc(p.name)}의 차례로 이어집니다.</p><p class="draft-timer" data-draft-timer role="timer"></p><ul class="draft-status">${state.players.map((o,i)=>state.draft?.[i]?`<li class="${state.draft[i].done?'done':''}">${esc(o.name)} · ${state.draft[i].done?'선택 완료 ✓':state.draft[i].stage==='jinx'?'징크스 대상 고르는 중…':'고르는 중…'}</li>`:'').join('')}</ul>${draftSeat()!==null?'<button class="primary full" data-action="draft">증강 선택하기 →</button>':''}`;
   else if(phase==='jinx')html=`<div class="waiting-mark">☁</div><h2 class="action-title">징크스를 걸 상대는?</h2><p class="action-hint">${mine?'지목한 상대는 다음 3턴 동안 윷·모가 나오면 걸로 바뀝니다.':`${esc(p.name)}이(가) 징크스 대상을 고르고 있습니다.`}</p>${mine?state.players.map((o,i)=>i===state.active?'':`<button class="primary full" data-jinx="${i}">${esc(o.name)}에게 징크스 →</button>`).join(''):''}`;
   else if(phase==='flick') {
     html=`<h2 class="action-title">당기고, 놓고, 날려요!</h2><p id="flick-help" class="action-hint">${mine?'내 알을 뒤로 당겼다 놓으면 반대 방향으로 날아갑니다. 길게 당길수록 강해져요. 빗나가면 내 묶음이 탈락합니다!':'상대가 알까기를 조준하고 있습니다.'}</p>`;
@@ -195,7 +195,7 @@ function render(){
   if(!throwAnimation)renderedState=state;
   if(!view.pending.some(r=>r.id===selectedResult))selectedResult=view.pending[0]?.id??null;
   if(selectedToken!==null){const t=view.players[view.active].tokens[selectedToken];if(!t||t.done)selectedToken=null;}
-  renderPlayers(view);renderBoard(view);renderAction(view);
+  renderPlayers(view);renderBoard(view);renderAction(view);syncDraftClock();
   if(throwAnimation)$('phase-badge').textContent=throwAnimation.event&&$('throw-stage').classList.contains('is-revealed')?`${label(throwAnimation.event.value)} · 결과`:'윷 던지는 중';
   if(shotAnimation){$('phase-badge').textContent='알까기 비행 중';if(!flightFrame)flightFrame=requestAnimationFrame(animateFlight);}else if(view.phase==='flick'&&selectedToken!==null&&canPlay())showAim(-Math.cos(aimAngle)*aimPull,-Math.sin(aimAngle)*aimPull);
   $('board-status').textContent=view.phase==='won'?'A BEAUTIFUL FINISH':online&&!online.ready?'WAITING FOR A FRIEND':`${view.players[view.active].name}의 차례`;
@@ -223,6 +223,27 @@ function playAgain(){
   if(online)return openSetup();
   stopFlight();stopThrow();clearTimeout(botTimer);seenRoll=null;seenShot=null;drag=null;selectedToken=null;selectedResult=null;lastWinner=null;
   state=createGame(state.players.map(p=>p.name),state.backdo);render();
+}
+// Draft countdown: online it follows the room's deadline (the room picks when it runs out); offline this page keeps the time and picks itself.
+function draftLeft(){
+  if(siteRoomId)return siteRoom?.deadline?Math.max(0,siteRoom.deadline-DRAFT_GRACE_MS-Date.now()):null;
+  return draftClock?Math.max(0,draftClock.endsAt-Date.now()):null;
+}
+function syncDraftClock(){
+  if(state.phase!=='draft'){clearInterval(draftTicker);draftTicker=null;draftClock=null;return;}
+  const key=`${state.round}:${state.players[state.first??state.active].turn}`;
+  if(!siteRoomId&&draftClock?.key!==key)draftClock={key,endsAt:Date.now()+DRAFT_SECONDS*1000,sent:false};
+  if(!draftTicker)draftTicker=setInterval(tickDraft,250);
+  tickDraft();
+}
+function tickDraft(){
+  if(state.phase!=='draft')return syncDraftClock();
+  const left=draftLeft();
+  for(const el of document.querySelectorAll('[data-draft-timer]')) {
+    el.classList.toggle('urgent',left!==null&&left<=5000);
+    el.innerHTML=left===null?'':`⏱ <strong>${Math.ceil(left/1000)}</strong>초 안에 고르지 않으면 맨 앞 증강이 자동으로 골라져요`;
+  }
+  if(!siteRoomId&&left===0&&!draftClock.sent&&!busy){draftClock.sent=true;send({type:'draftTimeout'},true);}
 }
 function renderDraft(){
   const seat=state.phase==='draft'?draftSeat():state.active,entry=state.phase==='draft'?state.draft[seat]:{offers:state.offers,rerolls:state.players[seat].draftRerolls},p=state.players[seat];

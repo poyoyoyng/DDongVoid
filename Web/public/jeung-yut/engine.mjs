@@ -82,6 +82,9 @@ export const AUGMENTS = [
 ];
 export const MILESTONES = [3,7,11];
 export const FLICK_SECONDS = 3;
+// A shared draft waits this long; then everyone still choosing gets their first offer. Online the room adds a short grace for slow connections.
+export const DRAFT_SECONDS = 20;
+export const DRAFT_GRACE_MS = 2000;
 export const NODES = {};
 for(let i=0;i<20;i++) {
   let x,y;
@@ -143,6 +146,25 @@ function startDraft(s,round,rng) {
 }
 // Picks, rerolls and jinx targets during the shared draft; each player acts for their own seat.
 function draftAct(s,action,rng) {
+  if(action.type==='draftTimeout') {
+    // Time is up: whoever is still choosing gets their first offer (skipping 이의있음!, which would only redraw), and a pending jinx lands on the leader.
+    s.draft.forEach((entry,i)=>{
+      if(!entry||entry.done||s.winner!==null)return;
+      const p=s.players[i];
+      as(s,i,()=>{
+        if(!entry.stage) {
+          const id=entry.offers.find(x=>x!=='objection')??entry.offers[0];
+          p.drafts=draftsOf(p)+1;gainAugment(s,id,rng);note(s,`${p.name} · 시간 초과! ${AUGMENTS.find(a=>a.id===id).name} 자동 선택`);
+          if(id==='jinx')entry.stage='jinx';
+        }
+        if(entry.stage==='jinx'){applyJinx(s,s.players.length>2?jinxTarget(s):1-i);entry.stage=null;}
+        entry.done=true;
+      });
+      checkAll(s);
+    });
+    if(s.winner===null){s.draft=null;note(s,'시간이 다 되어 남은 증강을 자동으로 골랐습니다. 게임을 이어갑니다.');afterDraft(s);}
+    s.revision++;return s;
+  }
   const i=Number.isInteger(action.player)?action.player:s.active,entry=s.draft?.[i],p=s.players[i];
   if(!entry)throw Error('이번 증강 선택에 참여하지 않습니다.');
   if(entry.done)throw Error('이미 증강을 골랐습니다. 다른 플레이어를 기다려 주세요.');

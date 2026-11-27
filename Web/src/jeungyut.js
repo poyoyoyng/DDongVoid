@@ -1,4 +1,4 @@
-import { FLICK_SECONDS, act, createGame } from '../public/jeung-yut/engine.mjs';
+import { DRAFT_GRACE_MS, DRAFT_SECONDS, FLICK_SECONDS, act, createGame } from '../public/jeung-yut/engine.mjs';
 import { requireThat } from './http.js';
 
 const random = roll => () => roll(0x1000000) / 0x1000000;
@@ -13,14 +13,17 @@ export function startJeungYut(room, roll) {
 }
 
 function applyYut(room, move, roll, now) {
-  const next = structuredClone(room.yut);
+  const next = structuredClone(room.yut), drafting = room.yut.phase === 'draft';
   next.players.forEach((entry, seat) => { entry.name = room.players[seat].name; });
   act(next, move, random(roll));
   room.yut = next;
   room.index = next.active;
   room.turn = next.round;
   room.last = next.log[0];
-  room.deadline = next.phase === 'flick' ? now + FLICK_SECONDS * 1000 + flickGrace : null;
+  // A draft keeps the clock it started with while players pick one by one.
+  if (next.phase === 'flick') room.deadline = now + FLICK_SECONDS * 1000 + flickGrace;
+  else if (next.phase === 'draft') room.deadline = drafting && room.deadline ? room.deadline : now + DRAFT_SECONDS * 1000 + DRAFT_GRACE_MS;
+  else room.deadline = null;
   if (next.winner !== null) {
     room.status = 'finished';
     room.winners = [room.players[next.winner].id];
@@ -31,6 +34,7 @@ function applyYut(room, move, roll, now) {
 export function jeungYutAction(room, player, input, roll, now) {
   requireThat(input.action === 'yut', '증윷 행동을 선택해 주세요.');
   const move = { ...(input.move ?? {}) };
+  requireThat(move.type !== 'draftTimeout', '증강 자동 선택은 시간이 다 되면 방에서 처리합니다.', 403);
   if (room.yut.phase === 'draft') {
     // Everyone picks at once, so a pick is checked against the picker's own seat instead of the turn or revision.
     const seat = room.players.findIndex(entry => entry.id === player.id && !entry.vacant);
@@ -46,6 +50,7 @@ export function jeungYutAction(room, player, input, roll, now) {
 
 export function expireJeungYut(room, now, roll) {
   if (room.yut?.phase === 'flick') applyYut(room, { type: 'flickTimeout' }, roll, now);
+  else if (room.yut?.phase === 'draft') applyYut(room, { type: 'draftTimeout' }, roll, now);
   else room.deadline = null;
 }
 

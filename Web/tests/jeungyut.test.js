@@ -139,3 +139,19 @@ test('증윷 동시 증강 선택: 각자 자기 자리로만 고르고, 차례�
   assert.ok(room.yut.players[other].augments.includes(id));
   assert.throws(() => play(other, { action: 'yut', move: { type: 'roll' } }), /이미/);
 });
+
+test('증윷 증강 선택 제한 시간: 시작할 때 시간이 정해지고, 지나면 방이 남은 사람 증강을 자동으로 고른다', () => {
+  const { room, play, roll } = match(2);
+  for (let guard = 0; room.yut.phase !== 'draft' && guard < 1000; guard++) play(room.index, { action: 'yut', move: botAction(room.yut, () => .8) });
+  assert.equal(room.yut.phase, 'draft');
+  assert.equal(room.deadline, 1000 + 20_000 + 2000);
+  assert.throws(() => play(0, { action: 'yut', move: { type: 'draftTimeout' } }), /자동 선택/);
+  const seat = room.yut.draft.findIndex(entry => entry && !entry.done);
+  const id = room.yut.draft[seat].offers.find(x => !['objection', 'jinx', 'cat', 'catlover', 'chance'].includes(x));
+  play(seat, { action: 'yut', move: { type: 'augment', id } });
+  assert.equal(room.deadline, 1000 + 20_000 + 2000);
+  assert.equal(expireRoom(room, 22_999, roll), false);
+  assert.equal(expireRoom(room, 23_000, roll), true);
+  assert.notEqual(room.yut.phase, 'draft');
+  assert.ok(room.yut.players.every(p => p.drafts === 1));
+});

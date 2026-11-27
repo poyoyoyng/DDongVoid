@@ -585,3 +585,12 @@ test('역모·자진모리 장단·어부지리·선봉장·역전 찬스·이�
   const chance=fresh();pick(chance,'chance');assert.equal(chance.players[0].augments.length,5);assert.equal(chance.players[0].drafts,1);
   const redo=fresh();pick(redo,'objection');assert.equal(redo.phase,'augment');assert.equal(redo.offers.length,3);assert.ok(!redo.players[0].augments.includes('objection'));
 });
+test('증강 선택 시간 초과: 안 고른 사람은 맨 앞 증강(이의있음! 제외)이 자동으로 골라지고 게임이 이어진다',()=>{
+  const s=createGame(['A','B','C'],true,()=>0);s.players[0].turn=2;s.active=2;act(s,{type:'roll'},()=>1.1/16);assert.equal(s.phase,'draft');
+  s.draft[1].offers=['objection','tower','line'];s.draft[2].offers=['jinx','tower','line'];
+  act(s,{type:'augment',id:s.draft[0].offers.find(x=>!['objection','jinx','cat','catlover','chance'].includes(x)),player:0},fixed);
+  act(s,{type:'draftTimeout'},fixed);
+  assert.equal(s.draft,null);assert.notEqual(s.phase,'draft');assert.equal(s.active,0);
+  assert.ok(s.players[1].augments.includes('tower'));assert.ok(s.players[2].augments.includes('jinx'));
+  assert.ok(s.players.some((p,i)=>i!==2&&p.jinxUntil>0));assert.ok(s.players.every(p=>p.drafts===1));
+});
