@@ -128,7 +128,7 @@ function renderAction(view=state){
   else if(siteRoom?.status==='waiting')html=`<h2 class="action-title">준비되면 시작!</h2><p class="action-hint">2~4명 개인전 · 모두 준비 완료를 누르면 시작합니다.</p>${online.player>=0?`<button class="primary full" data-action="siteReady">${siteRoom.players[online.player].ready?'준비 취소':'준비 완료'} →</button>`:siteRoom.players.length<4?'<button class="primary full" data-action="siteJoin">참가하기 →</button>':'<p class="action-hint">관전 중입니다.</p>'}`;
   else if(shotAnimation)html=`<h2 class="action-title">${shotAnimation.shot.outcome==='miss'?'앗, 빗나갔어요!':shotAnimation.shot.outcome==='blocked'?'상대가 막았어요!':'제대로 맞았다!'}</h2><p class="action-hint">${shotAnimation.shot.outcome==='miss'?'날아간 내 말이 대기로 돌아갑니다.':shotAnimation.shot.outcome==='blocked'?'양쪽 말은 제자리에 남습니다.':'상대 묶음 탈락! 그 자리를 차지하고 턴이 끝나요.'}</p>`;
   else if(online&&!online.ready)html=`<h2 class="action-title">${online.names.length}명이 모였어요.</h2><p class="action-hint">초대 코드로 최대 ${online.maxPlayers}명까지 참가할 수 있어요.<br>${online.player===0?'2명 이상 모이면 원하는 때 시작하세요.':'방장이 시작하면 개인전이 시작됩니다.'}</p>${online.player===0?`<button class="primary full" data-action="startRoom" ${online.names.length<2||busy?'disabled':''}>${online.names.length}명으로 시작하기 →</button>`:''}`;
-  else if(phase==='won')html=`<h2 class="action-title">${esc(state.players[state.winner].name)} 승리!</h2><p class="action-hint">${esc(state.winReason)}</p><button class="primary full" data-action="new">다음 판 열기 →</button>`;
+  else if(phase==='won')html=`<h2 class="action-title">${esc(state.players[state.winner].name)} 승리!</h2><p class="action-hint">${esc(state.winReason)}</p>${againPanel()}`;
   else if(phase==='augment')html=`<div class="waiting-mark">✧</div><h2 class="action-title">전략이 바뀌는 순간</h2><p class="action-hint">${esc(p.name)}의 ${p.turn}번째 턴.<br>${mine?'세 가지 증강 중 하나를 선택하세요.':'상대가 증강을 고르고 있습니다.'}</p>${mine?'<button class="primary full" data-action="draft">증강 선택하기 →</button>':''}`;
   else if(phase==='draft')html=`<div class="waiting-mark">✧</div><h2 class="action-title">모두 증강을 고르는 중</h2><p class="action-hint">모두 고르면 ${esc(p.name)}의 차례로 이어집니다.</p><ul class="draft-status">${state.players.map((o,i)=>state.draft?.[i]?`<li class="${state.draft[i].done?'done':''}">${esc(o.name)} · ${state.draft[i].done?'선택 완료 ✓':state.draft[i].stage==='jinx'?'징크스 대상 고르는 중…':'고르는 중…'}</li>`:'').join('')}</ul>${draftSeat()!==null?'<button class="primary full" data-action="draft">증강 선택하기 →</button>':''}`;
   else if(phase==='jinx')html=`<div class="waiting-mark">☁</div><h2 class="action-title">징크스를 걸 상대는?</h2><p class="action-hint">${mine?'지목한 상대는 다음 3턴 동안 윷·모가 나오면 걸로 바뀝니다.':`${esc(p.name)}이(가) 징크스 대상을 고르고 있습니다.`}</p>${mine?state.players.map((o,i)=>i===state.active?'':`<button class="primary full" data-jinx="${i}">${esc(o.name)}에게 징크스 →</button>`).join(''):''}`;
@@ -210,6 +210,20 @@ function render(){
   if(view.phase==='won'&&lastWinner!==view.winner){lastWinner=view.winner;$('winner-name').textContent=`${view.players[view.winner].name}, 승리!`;$('winner-reason').textContent=view.winReason;$('winner-dialog').showModal();}
   scheduleBot();
 }
+// After a finished game: online everyone presses 다시하기 (ready) and the room starts the next match; offline it restarts at once.
+function againPanel(){
+  if(!siteRoomId)return '<button class="primary full" data-action="again">다시하기 →</button><button class="secondary full" data-action="new">설정 바꿔 새 판 열기</button>';
+  if(!siteRoom||online?.player<0)return '<p class="action-hint">관전 중입니다. 참가자들이 다시하기를 누르면 다음 판이 시작됩니다.</p>';
+  const ready=siteRoom.players[online.player].ready;
+  return `<button class="primary full" data-action="siteReady">${ready?'다시하기 취소':'다시하기 →'}</button><ul class="draft-status">${siteRoom.players.map(p=>`<li class="${p.ready?'done':''}">${esc(p.name)} · ${p.ready?'다시하기 ✓':'기다리는 중'}</li>`).join('')}</ul><p class="action-hint">모두 다시하기를 누르면 바로 다음 판이 시작됩니다.</p>`;
+}
+function playAgain(){
+  $('winner-dialog').close();
+  if(siteRoomId){if(online?.player>=0&&!siteRoom?.players[online.player]?.ready)send({type:'siteReady'});else render();return;}
+  if(online)return openSetup();
+  stopFlight();stopThrow();clearTimeout(botTimer);seenRoll=null;seenShot=null;drag=null;selectedToken=null;selectedResult=null;lastWinner=null;
+  state=createGame(state.players.map(p=>p.name),state.backdo);render();
+}
 function renderDraft(){
   const seat=state.phase==='draft'?draftSeat():state.active,entry=state.phase==='draft'?state.draft[seat]:{offers:state.offers,rerolls:state.players[seat].draftRerolls},p=state.players[seat];
   $('draft-subtitle').textContent=`${p.name} · ${(p.drafts??p.augments.length)+(entry.stage?0:1)} / 3 증강${state.phase==='draft'?' · 모두 동시에 고르는 중':''}`;
@@ -271,6 +285,7 @@ async function handleClick(e){
   if(b.dataset.action==='skipFlick')return send({type:'skipFlick'});
   if(b.dataset.action==='draft'){$('augment-dialog').showModal();return;}
   if(b.dataset.action==='new')return openSetup();
+  if(b.dataset.action==='again')return playAgain();
   if(b.dataset.action==='chat')return toggleChat();
   if(b.dataset.skill!==undefined){const o=skillActions(state,selectedToken)[+b.dataset.skill];if(o?.action)send(o.action);return;}
   if(b.dataset.trap)return send({type:'trap',node:b.dataset.trap});
@@ -288,7 +303,7 @@ $('board').addEventListener('keydown',e=>{if(state.phase==='flick')return;if((e.
 $('draft-reroll').onclick=()=>send({type:'draftReroll',...(state.phase==='draft'?{player:draftSeat()}:{})});
 $('augment-dialog').addEventListener('cancel',e=>e.preventDefault());
 function openSetup(){if(siteRoomId){location.href=`/#room/${siteRoomId}`;return;}clearTimeout(botTimer);$('winner-dialog').close();$('augment-dialog').close();$('setup-error').textContent='';$('setup-dialog').showModal();}
-$('new-button').onclick=openSetup;$('play-again').onclick=openSetup;
+$('new-button').onclick=openSetup;$('play-again').onclick=playAgain;
 $('setup-dialog').addEventListener('close',()=>render());
 $('info-dialog').addEventListener('close',()=>scheduleBot());
 function setupMode(){const f=new FormData($('setup-form')),m=f.get('mode'),count=Number(f.get('count'));for(let i=2;i<=4;i++)$('name'+i+'-field').hidden=m!=='local'||i>count;$('online-setup').hidden=m!=='online';}
